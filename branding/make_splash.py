@@ -1,97 +1,86 @@
 #!/usr/bin/env python3
 """
-Regenerates the panel startup splash (picture 6) for all theme/variant
-picture sets in docker/HMI_files/hmi_pictures/ using the NSPanel Core brand:
-neon circuit-N icon + 'NSPanel Core' + 'SMART WALL OS' tagline on near-black.
+Panel startup splash built STRICTLY from the user's own artwork pixels:
+- icon region crop (with its real glow) pasted at top-center
+- the real wordmark crop ("NSPanel Core") below it
+- the real tagline crop ("SMART WALL OS") below that
+on a background matched to the artwork's own dark color.
 
-EU picture sets are 455x320 (landscape project), US sets are 320x455
-(portrait project - US panels are mounted vertically).
+No redrawing, no tracing, no generated shapes — only crops of the original.
 """
 from PIL import Image, ImageDraw, ImageFilter
+import glob
 import os
-import sys
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from make_logo import CYAN, CYAN_GLOW, WHITE, GRAY, rounded_rect, draw_circuit_n, font  # noqa
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PICS = os.path.join(REPO, "docker", "HMI_files", "hmi_pictures")
+REF = sorted(glob.glob(os.path.join(REPO, "branding", "uploads", "image_*")))[0]
 
-BG = (10, 13, 18, 255)
+# Crop regions in the 395x395 reference (measured earlier from the pixels)
+ICON_BOX = (86, 20, 312, 250)      # rounded square + glow
+WORD_BOX = (30, 262, 370, 308)     # "NSPanel Core"
+TAG_BOX = (80, 322, 318, 344)      # "SMART WALL OS"
+
+
+def feather_paste(canvas, crop, box):
+    """Paste a crop at box (x, y, target_w) with softly feathered edges."""
+    tw = box[2]
+    th = int(crop.height * tw / crop.width)
+    c = crop.resize((tw, th), Image.LANCZOS)
+    mask = Image.new("L", (tw, th), 0)
+    md = ImageDraw.Draw(mask)
+    inset = max(3, tw // 40)
+    md.rounded_rectangle([inset, inset, tw - inset, th - inset],
+                         radius=inset, fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(inset * 0.7))
+    canvas.paste(c, (box[0], box[1]), mask)
+    return th  # returns rendered height for layout
 
 
 def make_splash(w, h):
-    S = 4
-    px, py = w * S, h * S
-    img = Image.new("RGBA", (px, py), BG)
-    d = ImageDraw.Draw(img)
+    ref = Image.open(REF).convert("RGB")
 
-    icon_cx, icon_cy = px / 2, py * 0.30
-    icon_size = min(px, py) * 0.42
+    # Background: the artwork's own bottom-edge color (matches seamlessly)
+    bg_bottom = ref.getpixel((w // 2 if w < ref.width else ref.width - 10, ref.height - 8))
+    bg_top = ref.getpixel((ref.width - 10, 8))
+    canvas = Image.new("RGB", (w, h))
+    # subtle vertical gradient from top color to bottom color
+    for y in range(h):
+        t = y / max(1, h - 1)
+        col = tuple(int(bg_top[i] + (bg_bottom[i] - bg_top[i]) * t) for i in range(3))
+        d = ImageDraw.Draw(canvas)
+        d.line([(0, y), (w, y)], fill=col)
 
-    glow = Image.new("RGBA", (px, py), (0, 0, 0, 0))
-    gd = ImageDraw.Draw(glow)
-    rounded_rect(gd, icon_cx, icon_cy, icon_size, 0.18, 0.03, CYAN_GLOW)
-    draw_circuit_n(gd, icon_cx, icon_cy, icon_size, CYAN_GLOW, 0.03)
-    for blur in (int(min(px, py) * 0.025), int(min(px, py) * 0.008)):
-        img = Image.alpha_composite(img, glow.filter(ImageFilter.GaussianBlur(blur)))
-    d = ImageDraw.Draw(img)
+    icon = ref.crop(ICON_BOX)
+    word = ref.crop(WORD_BOX)
+    tag = ref.crop(TAG_BOX)
 
-    rounded_rect(d, icon_cx, icon_cy, icon_size, 0.18, 0.024, CYAN)
-    draw_circuit_n(d, icon_cx, icon_cy, icon_size, CYAN)
+    # Layout: icon top-center, wordmark + tagline below
+    icon_w = int(w * (0.52 if w < h else 0.46))
+    th_icon = feather_paste(canvas, icon, ((w - icon_w) // 2, int(h * 0.055), icon_w))
 
-    # Wordmark: "NSPanel" white + " Core" cyan — size chosen to fit the width
-    t1, t2 = "NSPanel ", "Core"
-    base_size = int(min(px, py) * 0.16)
-    f_word = font(base_size, "SemiBold")
-    # shrink until it fits (portrait canvases are narrow)
-    for _ in range(12):
-        w_total = d.textlength(t1, font=f_word) + d.textlength(t2, font=f_word)
-        if w_total <= px * 0.88:
-            break
-        base_size = int(base_size * 0.9)
-        f_word = font(base_size, "SemiBold")
-    w1 = d.textlength(t1, font=f_word)
-    w2 = d.textlength(t2, font=f_word)
-    x = (px - (w1 + w2)) / 2
-    y = py * 0.62
-    d.text((x, y), t1, font=f_word, fill=WHITE)
-    d.text((x + w1, y), t2, font=f_word, fill=CYAN)
+    y_after_icon = int(h * 0.055) + th_icon
+    gap = int(h * 0.045)
+    word_w = int(w * (0.80 if w < h else 0.72))
+    y_word = y_after_icon + gap
+    feather_paste(canvas, word, ((w - word_w) // 2, y_word, word_w))
 
-    # Tagline — same fit logic
-    tag = "SMART WALL OS"
-    tracking = min(px, py) * 0.012
-    tag_size = int(base_size * 0.44)
-    f_tag = font(tag_size, "Light")
-    for _ in range(12):
-        total = sum(d.textlength(ch, font=f_tag) for ch in tag) + tracking * (len(tag) - 1)
-        if total <= px * 0.88:
-            break
-        tag_size = int(tag_size * 0.9)
-        f_tag = font(tag_size, "Light")
-    total = sum(d.textlength(ch, font=f_tag) for ch in tag) + tracking * (len(tag) - 1)
-    x = (px - total) / 2
-    y = py * 0.765
-    for ch in tag:
-        d.text((x, y), ch, font=f_tag, fill=GRAY)
-        x += d.textlength(ch, font=f_tag) + tracking
+    tag_w = int(word_w * 0.66)
+    y_tag = y_word + int(th_icon * 0.32) + gap
+    feather_paste(canvas, tag, ((w - tag_w) // 2, y_tag, tag_w))
 
-    return img.resize((w, h), Image.LANCZOS)
+    return canvas
 
 
 def main():
     splash_eu = make_splash(455, 320)
-    splash_us = make_splash(320, 455)
     splash_eu.save(os.path.join(REPO, "branding", "splash-preview-eu.png"))
+    splash_us = make_splash(320, 455)
     splash_us.save(os.path.join(REPO, "branding", "splash-preview-us.png"))
-
-    count = 0
-    for variant, splash in (("eu", splash_eu), ("us", splash_us)):
+    for variant, sp in (("eu", splash_eu), ("us", splash_us)):
         for t in range(1, 5):
-            dst = os.path.join(PICS, variant, f"tft{t}")
-            splash.save(os.path.join(dst, "6.png"))
-            count += 1
-    print(f"splash regenerated in {count} picture sets")
+            sp.save(os.path.join(REPO, "docker", "HMI_files", "hmi_pictures",
+                                 variant, f"tft{t}", "6.png"))
+    print("splash composed from the user's own artwork pixels (crops only)")
 
 
 if __name__ == "__main__":
