@@ -1,8 +1,8 @@
 <div align="center">
 
-# NSPanel Core
+<img src="branding/nspanel-core-logo.png" alt="NSPanel Core" width="380">
 
-**The core that runs your Sonoff NSPanels, for Home Assistant users.**
+**Smart Wall OS for the Sonoff NSPanel — built for Home Assistant.**
 
 Custom software for the Sonoff NSPanel (not the NSPanel Pro) designed to be easy to use
 day to day and to manage multiple NSPanels around your home — with an intuitive interface

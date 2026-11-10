@@ -21,9 +21,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Stage HMI project and picture set
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p work/pics
-          cp "docker/HMI_files/tft_automation/${{ matrix.variant }}/gui.HMI" work/input.hmi
+          gh release download "v2.1.8-ha.1" --repo ALeXXBody/NSPanelCore --pattern "NSPanelCore-HMI-*.hmi" --dir work --clobber
+          cp work/NSPanelCore-HMI-${{ matrix.variant }}.hmi work/input.hmi
           cp docker/HMI_files/hmi_pictures/${{ matrix.variant }}/tft${{ matrix.theme }}/*.png work/pics/
           ls work/pics | wc -l
 
