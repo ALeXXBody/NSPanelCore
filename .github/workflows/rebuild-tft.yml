@@ -76,5 +76,6 @@ jobs:
             echo "No changes"
           else
             git commit -m "Rebuild panel TFT files with NSPanel Core startup splash"
+            git pull --rebase origin main
             git push
           fi
