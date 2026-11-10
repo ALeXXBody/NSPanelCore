@@ -1,0 +1,77 @@
+name: "Rebuild panel TFT files"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.variant }} theme ${{ matrix.theme }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [eu, us]
+        theme: [1, 2, 3, 4]
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+
+      - name: Stage HMI project and picture set
+        run: |
+          mkdir -p work/pics
+          cp "docker/HMI_files/tft_automation/${{ matrix.variant }}/gui.HMI" work/input.hmi
+          cp docker/HMI_files/hmi_pictures/${{ matrix.variant }}/tft${{ matrix.theme }}/*.png work/pics/
+          ls work/pics | wc -l
+
+      - name: Compile TFT (Nextion Editor under Wine)
+        run: |
+          chmod -R a+rwx work
+          docker run --rm -v "$PWD/work:/app/input" sztupy/nextion-scripts:latest ./update_images.sh png 180
+          test -f work/output.tft || { echo "output.tft missing"; exit 1; }
+
+      - name: Upload compiled TFT
+        uses: actions/upload-artifact@v4
+        with:
+          name: tft-${{ matrix.variant }}-tft${{ matrix.theme }}
+          path: work/output.tft
+          retention-days: 1
+
+  commit:
+    name: Commit rebuilt TFT files
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tft-*
+          merge-multiple: false
+          path: artifacts
+
+      - name: Place TFT files
+        run: |
+          for d in artifacts/tft-*; do
+            variant="$(echo "$d" | sed 's|artifacts/tft-\(.*\)-tft[0-9]*|\1|')"
+            theme="$(echo "$d" | sed 's|.*-tft\([0-9]*\)$|\1|')"
+            cp "$d/output.tft" "docker/HMI_files/tft_automation/${variant}/output_tft${theme}/gui.tft"
+          done
+          ls -la docker/HMI_files/tft_automation/eu/output_tft1/ docker/HMI_files/tft_automation/us/output_tft4/
+
+      - name: Commit and push
+        run: |
+          git config user.name "NSPanelCore CI"
+          git config user.email "alexxbody@users.noreply.github.com"
+          git add docker/HMI_files/tft_automation/*/output_tft*/gui.tft
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Rebuild panel TFT files with NSPanel Core startup splash"
+            git push
+          fi

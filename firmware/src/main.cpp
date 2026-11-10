@@ -77,7 +77,7 @@ void sendMqttManagerRegistrationRequest() {
     doc["command"] = "register_request";
     doc["mac_origin"] = WiFi.macAddress();
     doc["friendly_name"] = NSPMConfig::instance->wifi_hostname.c_str();
-    doc["version"] = NSPanelManagerFirmwareVersion;
+    doc["version"] = NSPanelCoreFirmwareVersion;
     doc["md5_firmware"] = NSPMConfig::instance->md5_firmware;
     doc["md5_data_file"] = NSPMConfig::instance->md5_data_file;
     doc["md5_tft_file"] = NSPMConfig::instance->md5_tft_file;
@@ -190,17 +190,17 @@ void startAndManageWiFiAccessPoint() {
     IPAddress subnet(255, 255, 255, 0);
 
     Serial.println("Starting AP!");
-    if (WiFi.softAP("NSPMPanel", NULL)) {
+    if (WiFi.softAP("NSPanelCore", NULL)) {
       Serial.println("Soft-AP started.");
       if (WiFi.softAPConfig(local_ip, local_ip, subnet)) {
         Serial.println("Soft-AP configuration applied.");
 
-        Serial.println("WiFi SSID: NSPMPanel");
+        Serial.println("WiFi SSID: NSPanelCore");
         Serial.println("No WiFi password.");
         Serial.print("WiFi IP Address: 192.168.1.1");
 
         vTaskDelay(500 / portTICK_PERIOD_MS);
-        webMan.init(NSPanelManagerFirmwareVersion);
+        webMan.init(NSPanelCoreFirmwareVersion);
         // Wait indefinitely
         if (!NSPMConfig::instance->wifi_ssid.empty()) {
           for (;;) {
@@ -276,7 +276,7 @@ void taskManageWifiAndMqtt(void *param) {
           LOG_INFO("Gateway:    ", WiFi.gatewayIP().toString());
 
           // We successfully connected to WiFi. Init the rest of the components.
-          webMan.init(NSPanelManagerFirmwareVersion);
+          webMan.init(NSPanelCoreFirmwareVersion);
           mqttManager.start();
         }
       } else if (!config.wifi_ssid.empty() && !WiFi.isConnected() && millis() - lastWiFiconnected >= 180 * 1000) {
@@ -348,8 +348,8 @@ void taskManageWifiAndMqtt(void *param) {
 
 void setup() {
   Serial.begin(115200);
-  Serial.print("Starting NSPanel Manager firmware v. ");
-  Serial.println(NSPanelManagerFirmwareVersion);
+  Serial.print("Starting NSPanel Core firmware v. ");
+  Serial.println(NSPanelCoreFirmwareVersion);
   vTaskDelay(250 / portTICK_PERIOD_MS);
   // Load config if any, and if it fails. Factory reset!
   if (!(config.init() && config.loadFromLittleFS())) {

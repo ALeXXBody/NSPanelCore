@@ -43,7 +43,7 @@ bool NSPMConfig::loadFromLittleFS() {
   }
 
   // Load config data
-  this->wifi_hostname = doc["wifi_hostname"] | "NSPMPanel";
+  this->wifi_hostname = doc["wifi_hostname"] | "NSPanelCore";
   this->wifi_ssid = doc["wifi_ssid"] | "";
   this->wifi_psk = doc["wifi_psk"] | "";
   this->manager_address = "";                                                              // Manager address is set from a register accept from manager. This value is not used.
@@ -187,7 +187,7 @@ bool NSPMConfig::saveToLittleFS(bool remountLittleFs) {
 
 bool NSPMConfig::factoryReset() {
   Serial.println("Performing a factory reset.");
-  this->wifi_hostname = "NSPMPanel";
+  this->wifi_hostname = "NSPanelCore";
   this->wifi_ssid = "";
   this->wifi_psk = "";
   this->logging_level = 0;

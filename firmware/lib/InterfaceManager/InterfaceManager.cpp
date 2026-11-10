@@ -72,7 +72,7 @@ void InterfaceManager::_taskLoadConfigAndInit(void *param) {
         PageManager::GetNSPanelManagerPage()->setText("LittleFS mount failed!");
       } else if (!WiFi.isConnected()) {
         if (WiFi.getMode() == WIFI_MODE_AP) {
-          PageManager::GetNSPanelManagerPage()->setText("Connect to AP NSPMPanel");
+          PageManager::GetNSPanelManagerPage()->setText("Connect to AP NSPanelCore");
           secondary_text = "Connect to IP 192.168.1.1";
         } else {
           PageManager::GetNSPanelManagerPage()->setText("Connecting to WiFi...");
