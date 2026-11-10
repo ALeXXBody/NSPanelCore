@@ -19,6 +19,19 @@ Supervised installation. If you run plain Docker (e.g. on a NAS), jump to
 
 ## Option A: Home Assistant add-on (recommended)
 
+### 0. One-time: make the container images public
+
+GitHub Container Registry packages created by a personal account default to
+**private**, which makes the add-on install fail with `403 ... denied` on first
+pull. After the first release build has run (see the repo's Actions tab):
+
+1. Open `https://github.com/ALeXXBody?tab=packages`
+2. Open `nspanel-core-amd64` → **Package settings** → scroll to
+   **Danger Zone** → **Change visibility** → **Public**.
+3. Repeat for `nspanel-core-aarch64` (and the `-beta-` packages if you use them).
+
+This is one-time per package; visibility sticks for all later versions.
+
 ### 1. Add the add-on repository
 
 In Home Assistant:
@@ -68,7 +81,7 @@ screensaver if you want outside temperature).
 ### 5. Register and flash your panel
 
 1. Power on the NSPanel. On first boot it starts its own access point
-   (`NSPanelManager_XXXXXX`) — join it from a phone/laptop, enter your WiFi
+   (`NSPanelCore`) — join it from a phone/laptop, enter your WiFi
    credentials and the manager address (`http://<ha-host>:8000`).
 2. The panel appears under **Denied NSPanels** in the manager UI — click **Accept**.
 3. In the panel's edit page, click **Flash firmware** / **Update TFT**. The manager
@@ -127,7 +140,7 @@ Differences from the add-on:
 | Symptom | Fix |
 |---|---|
 | Add-on not visible in the store | Make sure the repository URL was added exactly as above and you have HA OS/Supervised (not Container). |
-| Add-on fails to install, "image not found" | A GitHub release with published images is required; alternatively remove the `image:` line from `docker/config.yaml` so the Supervisor builds the image on the HA host itself (slower first start). |
+| Add-on fails to install, `403 ... denied` pulling the image | The GHCR package is private — make it public (see step 0 above). If the package does not exist at all, a release build has not finished yet: check the Actions tab. |
 | "Could not connect to Home Assistant" | Add-on: check the add-on logs for token errors and restart it (the supervisor token is injected at start). Docker: verify the long-lived token and the HA URL (must include `http://` and port `8123`). |
 | Panels never appear in the manager | Check panel got WiFi + manager address via its AP; check MQTT broker reachable from BOTH panel and manager; check the panel's MAC is not sitting in Denied list. |
 | Wrong temperature displayed | Set the temperature provider to a Home Assistant sensor in the room's settings (OpenHAB was removed in this fork). |
