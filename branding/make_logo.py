@@ -42,68 +42,71 @@ def rounded_rect(draw, cx, cy, s, radius_ratio, width_ratio, fill):
     )
 
 
-def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.024, node_r_ratio=1.0):
-    """Circuit-style N matching the reference topology, drawn in the simple
-    line style: two left verticals, two parallel diagonals converging on a
-    junction at the foot of the right vertical, ring nodes at the left
-    terminals and on the right branch, dots at the remaining terminals.
+def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.022):
+    """The N, traced from the reference artwork's own skeleton (pixel-extracted
+    polylines, normalized to the icon square) drawn in the clean line style.
+
+    Structure (y down, fractions of s):
+      N-path outer: left vertical x0.196 (y0.847->0.221), 45-deg jog, diagonal
+      (0.312,0.184)->(0.635,0.500), right vertical x0.64 (y0.500->0.258), top zigzag
+      N-path inner: left vertical x0.344 (y0.826->0.542) with bottom jog,
+      diagonal (0.381,0.505)->(0.683,0.805), jog, right vertical x0.79
+      (y0.800->0.274), top zigzag
+      inner long diagonal with 45-deg bends at both ends:
+      (0.280,0.258)->(0.344,0.342)->(0.677,0.684)->(0.730,0.705)->(0.730,0.753)
+      thin decoration verticals: x0.725 (y0.332..0.632), x0.275 (y0.379..0.684)
+      with a 45-deg bend, plus ring/dot nodes at the measured positions.
     """
     w = max(3, int(s * trace_ratio))
-    r = int(w * node_r_ratio)
+    r = int(w * 0.9)
 
-    # Geometry measured from the reference artwork (fractions of icon size s)
-    xL = cx - s * 0.25          # outer left vertical
-    xB = cx - s * 0.14          # inner left vertical (short, right of xL)
-    xR = cx + s * 0.135         # right vertical
-    yTop = cy - s * 0.24        # top ring of left vertical
-    yBot = cy + s * 0.27        # bottom ring of left vertical
-    jy = cy + s * 0.09          # junction height (59% on screen)
+    paths = [
+        # N-path outer
+        [(0.196, 0.847), (0.206, 0.221), (0.312, 0.184), (0.635, 0.500),
+         (0.640, 0.258), (0.619, 0.216), (0.651, 0.184)],
+        # N-path inner
+        [(0.328, 0.805), (0.349, 0.742), (0.344, 0.542), (0.381, 0.505),
+         (0.683, 0.805), (0.788, 0.800), (0.794, 0.274), (0.751, 0.226),
+         (0.788, 0.168)],
+        # inner long diagonal (both-end 45-deg bends)
+        [(0.280, 0.258), (0.344, 0.342), (0.677, 0.684), (0.730, 0.705),
+         (0.730, 0.753)],
+        # thin decoration verticals (with bends into the long diagonal)
+        [(0.725, 0.332), (0.725, 0.632)],
+        [(0.275, 0.379), (0.275, 0.684), (0.323, 0.316)],
+    ]
 
-    bright = (xB, cy - s * 0.02)  # bright node: origin of inner diagonal
+    def P(fx, fy):
+        return (cx + (fx - 0.5) * s, cy + (fy - 0.5) * s)
 
-    # --- Traces ---
-    # left outer vertical: bottom ring -> top ring
-    draw.line([(xL, yBot), (xL, yTop)], fill=color, width=w)
-    # inner left vertical: bright node -> dot terminal above
-    draw.line([bright, (xB, cy - s * 0.18)], fill=color, width=w)
-    # diagonal 1 (long): top-left ring -> junction
-    draw.line([(xL, yTop), (xR, jy)], fill=color, width=w)
-    # diagonal 2 (steeper, converging): bright node -> junction
-    draw.line([bright, (xR, jy)], fill=color, width=w)
-    # right vertical: junction -> top, then 45-degree branch up-right to a ring
-    draw.line([(xR, jy), (xR, cy - s * 0.23)], fill=color, width=w)
-    bx, by = cx + s * 0.29, cy - s * 0.37
-    draw.line([(xR, cy - s * 0.23), (bx, by)], fill=color, width=w)
+    for pts in paths:
+        pp = [P(*pt) for pt in pts]
+        draw.line(pp, fill=color, width=w, joint="curve")
 
-    # --- Ring nodes (donut: circle outline + small center dot) ---
-    def ring(x, y, radius):
-        rr = int(w * radius)
+    # Node dots at all stroke endpoints (simple style: bright-center dots)
+    endpoints = []
+    for pts in paths:
+        endpoints.append(pts[0])
+        endpoints.append(pts[-1])
+    seen = set()
+    for pt in endpoints:
+        key = (round(pt[0], 2), round(pt[1], 2))
+        if key in seen:
+            continue
+        seen.add(key)
+        x, y = P(*pt)
+        draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
+        rd = int(r * 0.5)
+        draw.ellipse([x - rd, y - rd, x + rd, y + rd], fill=(215, 246, 252, color[3]))
+
+    # Rings where the reference has them (bottom-left terminal of the outer
+    # path and the two right-side top zigzag terminals)
+    for (fx, fy, k) in [(0.196, 0.847, 1.5), (0.651, 0.184, 1.2), (0.788, 0.168, 1.2)]:
+        x, y = P(fx, fy)
+        rr = int(w * k)
         draw.ellipse([x - rr, y - rr, x + rr, y + rr], outline=color, width=max(2, w // 2))
         cd = max(2, w // 3)
         draw.ellipse([x - cd, y - cd, x + cd, y + cd], fill=color)
-
-    ring(xL, yBot, 1.6)   # bottom-left terminal ring
-    ring(xL, yTop, 1.6)   # top-left: diagonal origin ring
-    ring(bx, by, 1.4)     # branch terminal ring
-
-    # --- Bright junction node (where diagonals meet the right vertical) ---
-    jr = int(w * 1.5)
-    draw.ellipse([xR - jr, jy - jr, xR + jr, jy + jr], fill=color)
-    jr2 = int(jr * 0.5)
-    draw.ellipse([xR - jr2, jy - jr2, xR + jr2, jy + jr2],
-                 fill=(215, 246, 252, color[3]))
-
-    # --- Simple dot terminals ---
-    dots = [
-        bright,                          # bright node on the left
-        (xB, cy - s * 0.18),             # inner vertical top terminal
-        (xR, cy - s * 0.16),             # right vertical top before branch
-    ]
-    for (dx, dy) in dots:
-        draw.ellipse([dx - r, dy - r, dx + r, dy + r], fill=color)
-        rd = int(r * 0.5)
-        draw.ellipse([dx - rd, dy - rd, dx + rd, dy + rd],
-                     fill=(215, 246, 252, color[3]))
 
 
 def _icon_layers(px, icon_cx, icon_cy, icon_size):
