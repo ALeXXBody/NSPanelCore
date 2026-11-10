@@ -11,6 +11,10 @@ No redrawing, no tracing, no generated shapes — only crops of the original.
 from PIL import Image, ImageDraw, ImageFilter
 import glob
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from make_logo import CYAN, WHITE, GRAY, rounded_rect, draw_circuit_n, font  # noqa
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REF = sorted(glob.glob(os.path.join(REPO, "branding", "uploads", "image_*")))[0]
@@ -37,38 +41,54 @@ def feather_paste(canvas, crop, box):
 
 
 def make_splash(w, h):
-    ref = Image.open(REF).convert("RGB")
+    """Flat splash: flat dark background, flat traced-N icon, flat text."""
+    S = 4
+    px, py = w * S, h * S
+    img = Image.new("RGBA", (px, py), (13, 16, 22, 255))
+    d = ImageDraw.Draw(img)
 
-    # Background: the artwork's own bottom-edge color (matches seamlessly)
-    bg_bottom = ref.getpixel((w // 2 if w < ref.width else ref.width - 10, ref.height - 8))
-    bg_top = ref.getpixel((ref.width - 10, 8))
-    canvas = Image.new("RGB", (w, h))
-    # subtle vertical gradient from top color to bottom color
-    for y in range(h):
-        t = y / max(1, h - 1)
-        col = tuple(int(bg_top[i] + (bg_bottom[i] - bg_top[i]) * t) for i in range(3))
-        d = ImageDraw.Draw(canvas)
-        d.line([(0, y), (w, y)], fill=col)
+    # Flat N icon (traced skeleton, no glow)
+    icon_cx, icon_cy = px / 2, py * 0.30
+    icon_size = min(px, py) * 0.40
+    rounded_rect(d, icon_cx, icon_cy, icon_size, 0.18, 0.024, CYAN)
+    draw_circuit_n(d, icon_cx, icon_cy, icon_size, CYAN)
 
-    icon = ref.crop(ICON_BOX)
-    word = ref.crop(WORD_BOX)
-    tag = ref.crop(TAG_BOX)
+    # Flat wordmark: "NSPanel" white + " Core" cyan — fitted to width
+    t1, t2 = "NSPanel ", "Core"
+    base_size = int(min(px, py) * 0.16)
+    f_word = font(base_size, "SemiBold")
+    for _ in range(12):
+        w_total = d.textlength(t1, font=f_word) + d.textlength(t2, font=f_word)
+        if w_total <= px * 0.88:
+            break
+        base_size = int(base_size * 0.9)
+        f_word = font(base_size, "SemiBold")
+    w1 = d.textlength(t1, font=f_word)
+    w2 = d.textlength(t2, font=f_word)
+    x = (px - (w1 + w2)) / 2
+    y = py * 0.62
+    d.text((x, y), t1, font=f_word, fill=WHITE)
+    d.text((x + w1, y), t2, font=f_word, fill=CYAN)
 
-    # Layout: icon top-center, wordmark + tagline below
-    icon_w = int(w * (0.52 if w < h else 0.46))
-    th_icon = feather_paste(canvas, icon, ((w - icon_w) // 2, int(h * 0.055), icon_w))
+    # Flat tagline
+    tag = "SMART WALL OS"
+    tracking = min(px, py) * 0.012
+    tag_size = int(base_size * 0.44)
+    f_tag = font(tag_size, "Light")
+    for _ in range(12):
+        total = sum(d.textlength(ch, font=f_tag) for ch in tag) + tracking * (len(tag) - 1)
+        if total <= px * 0.88:
+            break
+        tag_size = int(tag_size * 0.9)
+        f_tag = font(tag_size, "Light")
+    total = sum(d.textlength(ch, font=f_tag) for ch in tag) + tracking * (len(tag) - 1)
+    x = (px - total) / 2
+    y = py * 0.765
+    for ch in tag:
+        d.text((x, y), ch, font=f_tag, fill=GRAY)
+        x += d.textlength(ch, font=f_tag) + tracking
 
-    y_after_icon = int(h * 0.055) + th_icon
-    gap = int(h * 0.045)
-    word_w = int(w * (0.80 if w < h else 0.72))
-    y_word = y_after_icon + gap
-    feather_paste(canvas, word, ((w - word_w) // 2, y_word, word_w))
-
-    tag_w = int(word_w * 0.66)
-    y_tag = y_word + int(th_icon * 0.32) + gap
-    feather_paste(canvas, tag, ((w - tag_w) // 2, y_tag, tag_w))
-
-    return canvas
+    return img.resize((w, h), Image.LANCZOS)
 
 
 def main():
@@ -80,7 +100,7 @@ def main():
         for t in range(1, 5):
             sp.save(os.path.join(REPO, "docker", "HMI_files", "hmi_pictures",
                                  variant, f"tft{t}", "6.png"))
-    print("splash composed from the user's own artwork pixels (crops only)")
+    print("flat splash regenerated (no glow, correct N shape)")
 
 
 if __name__ == "__main__":

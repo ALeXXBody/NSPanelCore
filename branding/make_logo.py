@@ -124,9 +124,7 @@ def _icon_layers(px, icon_cx, icon_cy, icon_size):
 
 
 def _compose_with_glow(base, glow, px):
-    """Composite two glow passes, then return a fresh ImageDraw on the result."""
-    for blur in (int(px * 0.022), int(px * 0.008)):
-        base = Image.alpha_composite(base, glow.filter(ImageFilter.GaussianBlur(blur)))
+    """Flat style: no glow passes — just the base layer, crisp."""
     return base, ImageDraw.Draw(base)
 
 
