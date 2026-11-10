@@ -49,6 +49,7 @@ their excellent work. This fork is maintained independently with the following f
 The original NSPanel Manager documentation still applies to everything except the removed
 OpenHAB parts:
 
+- 🚀 **Install on Home Assistant: [docs/INSTALL_HA.md](docs/INSTALL_HA.md)** — add-on repository install, MQTT setup, panel registration, Docker/NAS route and troubleshooting
 - 📖 Docs: [nspanelmanager.com](https://nspanelmanager.com) (upstream documentation)
 - 🎥 Walkthrough & install guide (upstream): [YouTube demo](https://www.youtube.com/watch?v=EzDDtguwFd4)
 - 💬 Community Discord (upstream): [discord.gg/RwXvAH56fE](https://discord.gg/RwXvAH56fE)

@@ -1,9 +1,9 @@
-name: "NSPanel Manager BETA"
-description: "Container for Sonoff NSPanel management with a simple and intuitive UI"
-version: 2.1.9-beta3
-image: docker.io/nspanelmanager/nspanelmanager-beta-{arch}
-slug: "nspanelmanager-beta"
-url: "https://github.com/NSPManager/NSPanelManager"
+name: "NSPanel Manager HA BETA"
+description: "Development builds of the NSPanel Manager HA fork - may be unstable"
+version: 2.1.9-ha.beta.1
+image: ghcr.io/alexxbody/nspanelmanager-ha-beta-{arch}
+slug: "nspanelmanager-ha-beta"
+url: "https://github.com/ALeXXBody/NSPanelManager-HA"
 webui: http://[HOST]:[PORT:8000]/
 panel_icon: mdi:fit-to-screen
 ports:
