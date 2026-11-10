@@ -42,54 +42,68 @@ def rounded_rect(draw, cx, cy, s, radius_ratio, width_ratio, fill):
     )
 
 
-def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.026, core=True, with_stub=True):
-    """Circuit-style N inside an icon of size s centered at (cx, cy).
-
-    Matches the reference: full-height left vertical, a KINKED diagonal
-    (steep segment from top-left down to a junction, then a 45-degree
-    segment to the bottom of the right vertical), full-height right
-    vertical, a 45-degree branch stub off the junction, and small
-    rectangular pads sitting on two of the traces.
+def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.024, node_r_ratio=1.0):
+    """Circuit-style N matching the reference topology, drawn in the simple
+    line style: two left verticals, two parallel diagonals converging on a
+    junction at the foot of the right vertical, ring nodes at the left
+    terminals and on the right branch, dots at the remaining terminals.
     """
     w = max(3, int(s * trace_ratio))
-    nw, nh = s * 0.30, s * 0.34
-    top, bot = cy - nh, cy + nh
-    x1, x2 = cx - nw, cx + nw
+    r = int(w * node_r_ratio)
 
-    # Junction on the diagonal, slightly right of and below center
-    jx = cx + s * 0.02
-    jy = cy + s * 0.03
+    # Geometry measured from the reference artwork (fractions of icon size s)
+    xL = cx - s * 0.25          # outer left vertical
+    xB = cx - s * 0.14          # inner left vertical (short, right of xL)
+    xR = cx + s * 0.135         # right vertical
+    yTop = cy - s * 0.24        # top ring of left vertical
+    yBot = cy + s * 0.27        # bottom ring of left vertical
+    jy = cy + s * 0.09          # junction height (59% on screen)
 
-    traces = [
-        [(x1, bot), (x1, top)],           # left vertical
-        [(x1, top), (jx, jy)],            # steep diagonal segment
-        [(jx, jy), (x2, bot)],            # 45-degree diagonal segment
-        [(x2, bot), (x2, top)],           # right vertical
+    bright = (xB, cy - s * 0.02)  # bright node: origin of inner diagonal
+
+    # --- Traces ---
+    # left outer vertical: bottom ring -> top ring
+    draw.line([(xL, yBot), (xL, yTop)], fill=color, width=w)
+    # inner left vertical: bright node -> dot terminal above
+    draw.line([bright, (xB, cy - s * 0.18)], fill=color, width=w)
+    # diagonal 1 (long): top-left ring -> junction
+    draw.line([(xL, yTop), (xR, jy)], fill=color, width=w)
+    # diagonal 2 (steeper, converging): bright node -> junction
+    draw.line([bright, (xR, jy)], fill=color, width=w)
+    # right vertical: junction -> top, then 45-degree branch up-right to a ring
+    draw.line([(xR, jy), (xR, cy - s * 0.23)], fill=color, width=w)
+    bx, by = cx + s * 0.29, cy - s * 0.37
+    draw.line([(xR, cy - s * 0.23), (bx, by)], fill=color, width=w)
+
+    # --- Ring nodes (donut: circle outline + small center dot) ---
+    def ring(x, y, radius):
+        rr = int(w * radius)
+        draw.ellipse([x - rr, y - rr, x + rr, y + rr], outline=color, width=max(2, w // 2))
+        cd = max(2, w // 3)
+        draw.ellipse([x - cd, y - cd, x + cd, y + cd], fill=color)
+
+    ring(xL, yBot, 1.6)   # bottom-left terminal ring
+    ring(xL, yTop, 1.6)   # top-left: diagonal origin ring
+    ring(bx, by, 1.4)     # branch terminal ring
+
+    # --- Bright junction node (where diagonals meet the right vertical) ---
+    jr = int(w * 1.5)
+    draw.ellipse([xR - jr, jy - jr, xR + jr, jy + jr], fill=color)
+    jr2 = int(jr * 0.5)
+    draw.ellipse([xR - jr2, jy - jr2, xR + jr2, jy + jr2],
+                 fill=(215, 246, 252, color[3]))
+
+    # --- Simple dot terminals ---
+    dots = [
+        bright,                          # bright node on the left
+        (xB, cy - s * 0.18),             # inner vertical top terminal
+        (xR, cy - s * 0.16),             # right vertical top before branch
     ]
-    if with_stub:
-        stub = s * 0.115
-        traces.append([(jx, jy), (jx - stub, jy + stub)])
-
-    for pts in traces:
-        draw.line(pts, fill=color, width=w)
-
-    r = int(w * 0.95)
-    # Nodes: cyan dot with a hot pale center (the neon "bulb" look)
-    nodes = [(x1, top), (x1, bot), (x2, bot), (x2, top)]
-    if with_stub:
-        stub = s * 0.115
-        nodes.append((jx - stub, jy + stub))
-    nodes.append((jx, jy))
-    for (nxp, nyp) in nodes:
-        draw.ellipse([nxp - r, nyp - r, nxp + r, nyp + r], fill=color)
-        rr = int(r * 0.55)
-        draw.ellipse([nxp - rr, nyp - rr, nxp + rr, nyp + rr],
-                     fill=(205, 242, 250, color[3]))
-
-    # One small rectangular pad on the left vertical (SMD pad look)
-    pad_w, pad_l = int(w * 1.7), int(w * 0.9)
-    py = bot - int(nh * 2 * 0.55)
-    draw.rectangle([x1 - pad_w / 2, py - pad_l / 2, x1 + pad_w / 2, py + pad_l / 2], fill=color)
+    for (dx, dy) in dots:
+        draw.ellipse([dx - r, dy - r, dx + r, dy + r], fill=color)
+        rd = int(r * 0.5)
+        draw.ellipse([dx - rd, dy - rd, dx + rd, dy + rd],
+                     fill=(215, 246, 252, color[3]))
 
 
 def _icon_layers(px, icon_cx, icon_cy, icon_size):
