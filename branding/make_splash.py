@@ -40,9 +40,17 @@ def make_splash(w, h):
     rounded_rect(d, icon_cx, icon_cy, icon_size, 0.18, 0.024, CYAN)
     draw_circuit_n(d, icon_cx, icon_cy, icon_size, CYAN)
 
-    # Wordmark: "NSPanel" white + " Core" cyan
-    f_word = font(int(min(px, py) * 0.16), "SemiBold")
+    # Wordmark: "NSPanel" white + " Core" cyan — size chosen to fit the width
     t1, t2 = "NSPanel ", "Core"
+    base_size = int(min(px, py) * 0.16)
+    f_word = font(base_size, "SemiBold")
+    # shrink until it fits (portrait canvases are narrow)
+    for _ in range(12):
+        w_total = d.textlength(t1, font=f_word) + d.textlength(t2, font=f_word)
+        if w_total <= px * 0.88:
+            break
+        base_size = int(base_size * 0.9)
+        f_word = font(base_size, "SemiBold")
     w1 = d.textlength(t1, font=f_word)
     w2 = d.textlength(t2, font=f_word)
     x = (px - (w1 + w2)) / 2
@@ -50,10 +58,17 @@ def make_splash(w, h):
     d.text((x, y), t1, font=f_word, fill=WHITE)
     d.text((x + w1, y), t2, font=f_word, fill=CYAN)
 
-    # Tagline
-    f_tag = font(int(min(px, py) * 0.07), "Light")
+    # Tagline — same fit logic
     tag = "SMART WALL OS"
     tracking = min(px, py) * 0.012
+    tag_size = int(base_size * 0.44)
+    f_tag = font(tag_size, "Light")
+    for _ in range(12):
+        total = sum(d.textlength(ch, font=f_tag) for ch in tag) + tracking * (len(tag) - 1)
+        if total <= px * 0.88:
+            break
+        tag_size = int(tag_size * 0.9)
+        f_tag = font(tag_size, "Light")
     total = sum(d.textlength(ch, font=f_tag) for ch in tag) + tracking * (len(tag) - 1)
     x = (px - total) / 2
     y = py * 0.765
