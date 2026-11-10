@@ -46,3 +46,11 @@ firmware/NSPanelManagerFirmware/CMakeLists.txt
 docs/tex/*
 !docs/tex/*.pdf
 !docs/tex/*.tex
+
+# Local C++ build artifacts
+MQTTManager/libMQTTManager_*.a
+MQTTManager/libMQTT*.so
+MQTTManager/nspm_mqttmanager
+MQTTManager/build/
+MQTTManager/Testing/
+firmware/.pio/
