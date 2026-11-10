@@ -42,26 +42,38 @@ def rounded_rect(draw, cx, cy, s, radius_ratio, width_ratio, fill):
     )
 
 
-def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.022):
-    """Circuit-style N inside an icon of size s centered at (cx, cy)."""
-    w = max(3, int(s * trace_ratio))
-    nx, ny = s * 0.32, s * 0.30  # half-width / half-height of the N block
-    top = cy - ny
-    bot = cy + ny
-    x1, x2 = cx - nx, cx + nx
-    y_top_stop = cy - ny * 0.45  # left vertical stops here; diagonal starts there
+def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.022, with_stub=True):
+    """Circuit-style N inside an icon of size s centered at (cx, cy).
 
-    draw.line([(x1, bot), (x1, y_top_stop)], fill=color, width=w)
-    draw.line([(x1, y_top_stop), (x2, bot)], fill=color, width=w)
+    Proper N geometry: full-height left vertical, diagonal from its top to
+    the bottom of the right vertical, full-height right vertical. Node dots
+    at the terminals and on the diagonal, plus an optional 45-degree branch
+    stub for the PCB-trace look.
+    """
+    w = max(3, int(s * trace_ratio))
+    nw, nh = s * 0.30, s * 0.32  # half-width / half-height of the N block
+    top, bot = cy - nh, cy + nh
+    x1, x2 = cx - nw, cx + nw
+
+    # Traces: left vertical, diagonal (top-left -> bottom-right), right vertical
+    draw.line([(x1, bot), (x1, top)], fill=color, width=w)
+    draw.line([(x1, top), (x2, bot)], fill=color, width=w)
     draw.line([(x2, bot), (x2, top)], fill=color, width=w)
 
-    r = int(w * 1.15)
-    nodes = [
-        (x1, bot), (x1, y_top_stop), (x2, bot), (x2, top),
-        (x1 + (x2 - x1) * 0.5, (y_top_stop + bot) / 2 + s * 0.02),
-    ]
+    # Node dots: terminals + diagonal midpoint
+    r = int(w * 1.05)
+    diag_mid_x = (x1 + x2) / 2
+    diag_mid_y = (top + bot) / 2
+    nodes = [(x1, top), (x1, bot), (x2, bot), (x2, top), (diag_mid_x, diag_mid_y)]
     for (nxp, nyp) in nodes:
         draw.ellipse([nxp - r, nyp - r, nxp + r, nyp + r], fill=color)
+
+    # 45-degree branch stub off the diagonal midpoint (PCB routing look)
+    if with_stub:
+        stub_len = s * 0.11
+        ex, ey = diag_mid_x - stub_len, diag_mid_y + stub_len
+        draw.line([(diag_mid_x, diag_mid_y), (ex, ey)], fill=color, width=w)
+        draw.ellipse([ex - r, ey - r, ex + r, ey + r], fill=color)
 
 
 def _icon_layers(px, icon_cx, icon_cy, icon_size):
