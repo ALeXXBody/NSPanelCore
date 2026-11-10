@@ -40,10 +40,11 @@ void Scene::save() {
 }
 
 void Scene::attachDeconstructCallback(DeviceEntityObserver *observer) {
-  // Do not add a subsriber twice
-  for (DeviceEntityObserver *obs : this->_updateObservers) {
+  // Do not add a subscriber twice (was checking _updateObservers instead of
+  // _deconstructObservers — every attach would stack duplicates).
+  for (DeviceEntityObserver *obs : this->_deconstructObservers) {
     if (observer == obs) {
-      break;
+      return;
     }
   }
   this->_deconstructObservers.push_back(observer);

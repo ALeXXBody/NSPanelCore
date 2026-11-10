@@ -15,6 +15,39 @@ void HomePage::init() {
   this->_ignoreMqttMessagesUntil = 0;
   this->_ignoreNextTouchRelease = false;
   RoomManager::attachRoomChangeCallback(this);
+
+  // Create the persistent display-update worker once. Previously a new 5 KB
+  // task was spawned on every entity-update burst, causing constant heap
+  // churn (fragmentation) and a check-then-create race that could
+  // double-spawn tasks or drop a burst that arrived during processing.
+  if (HomePage::_taskHandleUpdateDisplay == NULL) {
+    xTaskCreatePinnedToCore(_taskUpdateDisplay, "taskUpdateDisplay", 5000, NULL, 1, &HomePage::_taskHandleUpdateDisplay, CONFIG_ARDUINO_RUNNING_CORE);
+  }
+}
+
+void HomePage::entityUpdateCallback(DeviceEntity *entity) {
+  if (millis() < this->_ignoreMqttMessagesUntil) {
+    return;
+  }
+
+  HomePage::_lastDeviceEntityUpdate = millis();
+  if (HomePage::_taskHandleUpdateDisplay != NULL) {
+    xTaskNotifyGive(HomePage::_taskHandleUpdateDisplay);
+  }
+}
+
+void HomePage::_taskUpdateDisplay(void *param) {
+  for (;;) {
+    // Wait for the first notification of an update burst, then debounce:
+    // wait until updates have been quiet for 250 ms (pending notifications
+    // are cleared along the way instead of spawning new tasks).
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    while (millis() < HomePage::_lastDeviceEntityUpdate + 250) {
+      vTaskDelay(25 / portTICK_PERIOD_MS);
+      ulTaskNotifyTake(pdTRUE, 0); // Clear pending notifications accumulated during the debounce window
+    }
+    PageManager::GetHomePage()->updateLightStatus(true, true);
+  }
 }
 
 void HomePage::show() {
@@ -42,28 +75,6 @@ void HomePage::roomChangedCallback() {
 }
 
 void HomePage::unshow() {
-}
-
-void HomePage::entityUpdateCallback(DeviceEntity *entity) {
-  if (millis() < this->_ignoreMqttMessagesUntil) {
-    return;
-  }
-
-  HomePage::_lastDeviceEntityUpdate = millis();
-  if (HomePage::_taskHandleUpdateDisplay == NULL) {
-    xTaskCreatePinnedToCore(_taskUpdateDisplay, "taskUpdateDisplay", 5000, NULL, 1, &HomePage::_taskHandleUpdateDisplay, CONFIG_ARDUINO_RUNNING_CORE);
-    vTaskDelay(50 / portTICK_PERIOD_MS);
-  }
-}
-
-void HomePage::_taskUpdateDisplay(void *param) {
-  while (millis() < HomePage::_lastDeviceEntityUpdate + 250) {
-    vTaskDelay(25 / portTICK_PERIOD_MS);
-  }
-
-  PageManager::GetHomePage()->updateLightStatus(true, true);
-  HomePage::_taskHandleUpdateDisplay = NULL;
-  vTaskDelete(NULL);
 }
 
 void HomePage::entityDeconstructCallback(DeviceEntity *entity) {
@@ -162,6 +173,11 @@ void HomePage::setDimmingValue(uint8_t value) {
 
 void HomePage::updateDimmerValueCache() {
   int newValue = NSPanel::instance->getComponentIntVal(HOME_DIMMER_SLIDER_NAME);
+  if (newValue < 0) {
+    // Panel did not respond — keep the cached value instead of corrupting it
+    // (an int -255 truncated into uint8_t would silently become 1).
+    return;
+  }
   if (newValue > InterfaceConfig::raiseToMaxLightLevelAbove) {
     this->_dimmerValue = 100;
   } else {
@@ -182,7 +198,12 @@ void HomePage::setColorTempValue(uint8_t value) {
 }
 
 void HomePage::updateColorTempValueCache() {
-  this->_colorTemp = NSPanel::instance->getComponentIntVal(HOME_LIGHT_COLOR_SLIDER_NAME);
+  int newValue = NSPanel::instance->getComponentIntVal(HOME_LIGHT_COLOR_SLIDER_NAME);
+  if (newValue < 0) {
+    // Panel did not respond — keep the cached value, don't write garbage.
+    return;
+  }
+  this->_colorTemp = newValue;
 }
 
 void HomePage::setCeilingBrightnessLabelText(uint8_t value) {

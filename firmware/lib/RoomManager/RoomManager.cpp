@@ -34,7 +34,10 @@ void RoomManager::performConfigReload() {
 void RoomManager::loadAllRooms(bool is_update) {
   bool save_new_config_to_littlefs_at_end = false;
   bool reboot_after_config_saved = false;
-  JsonDocument *roomData = new JsonDocument;
+  // Stack-allocated (was `new JsonDocument` without delete — leaked the whole
+  // config document on every config reload).
+  JsonDocument roomDataStorage;
+  JsonDocument *roomData = &roomDataStorage;
   uint8_t tries = 0;
   bool successDownloadingConfig = false;
   do {

@@ -168,13 +168,25 @@ void LightPage::switchMode() {
 }
 
 uint8_t LightPage::getBrightnessValue() {
-  return NSPanel::instance->getComponentIntVal(LIGHT_PAGE_BRIGHTNESS_SLIDER_NAME);
+  int value = NSPanel::instance->getComponentIntVal(LIGHT_PAGE_BRIGHTNESS_SLIDER_NAME);
+  if (value >= 0) {
+    this->_last_read_brightness = (uint8_t)value;
+  }
+  return this->_last_read_brightness; // Last known-good value on panel read failure
 }
 
 uint8_t LightPage::getKelvinSatValue() {
-  return NSPanel::instance->getComponentIntVal(LIGHT_PAGE_KELVIN_SLIDER_NAME);
+  int value = NSPanel::instance->getComponentIntVal(LIGHT_PAGE_KELVIN_SLIDER_NAME);
+  if (value >= 0) {
+    this->_last_read_kelvin_saturation = (uint8_t)value;
+  }
+  return this->_last_read_kelvin_saturation;
 }
 
 uint16_t LightPage::getHueValue() {
-  return NSPanel::instance->getComponentIntVal(LIGHT_PAGE_HUE_SLIDER_NAME);
+  int value = NSPanel::instance->getComponentIntVal(LIGHT_PAGE_HUE_SLIDER_NAME);
+  if (value >= 0) {
+    this->_last_read_hue = (uint16_t)value;
+  }
+  return this->_last_read_hue;
 }

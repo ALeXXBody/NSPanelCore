@@ -34,6 +34,10 @@ private:
   uint8_t _last_brightness = 0;
   uint8_t _last_kelvin_saturation = 0;
   uint16_t _last_hue = 0;
+  /// @brief Last successfully read slider values, used as fallback when the panel does not respond.
+  uint8_t _last_read_brightness = 0;
+  uint8_t _last_read_kelvin_saturation = 0;
+  uint16_t _last_read_hue = 0;
 };
 
 #endif

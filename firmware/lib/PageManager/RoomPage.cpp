@@ -117,7 +117,7 @@ void RoomPage::processTouchEvent(uint8_t page, uint8_t component, bool pressed) 
       this->_selectedLight = (*RoomManager::currentRoom)->getLightAtRoomViewPosition(5);
       if (this->_selectedLight != nullptr) {
         this->_toggleSelectedLight();
-        RoomPage::setLightState(4, this->_selectedLight->getLightLevel() > 0);
+        RoomPage::setLightState(5, this->_selectedLight->getLightLevel() > 0); // Was 4 — copy-paste bug that updated light 4's widget when light 5 was toggled.
       }
     }
     break;

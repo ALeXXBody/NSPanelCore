@@ -7,14 +7,12 @@
 #include <esp_task_wdt.h>
 
 void MqttManager::init() {
-  MqttManager::_wifiClient = new WiFiClient();                            // Create WifiClient for MQTT Client
-  MqttManager::_mqttClient = new PubSubClient(*MqttManager::_wifiClient); // Create MQTT Client used to communicate with MQTT
-  MqttManager::_mqttClient->setBufferSize(2048);
-  MqttManager::_mqttClient->setCallback(&MqttManager::_mqttClientCallback);
+  // Only create the send queue here. The PubSubClient/WiFiClient pair is
+  // created exactly once under start() to avoid duplicate allocations.
   if (MqttLog::instance->getLogLevel() == MqttLogLevel::Debug) {
     MqttManager::setBufferSize(32);
   } else {
-    MqttManager::setBufferSize(8);
+    MqttManager::setBufferSize(16);
   }
 }
 
@@ -24,7 +22,10 @@ void MqttManager::start() {
     MqttManager::_mqttClient = new PubSubClient(*MqttManager::_wifiClient); // Create MQTT Client used to communicate with MQTT
     MqttManager::_mqttClient->setBufferSize(5000);
     MqttManager::_mqttClient->setCallback(&MqttManager::_mqttClientCallback);
-    xTaskCreatePinnedToCore(MqttManager::_taskMqttRunTask, "taskRunMQTT", 50000, NULL, 1, NULL, CONFIG_ARDUINO_RUNNING_CORE);
+    // The MQTT task only runs PubSubClient.loop() + ArduinoJson parsing which
+    // allocates on the heap, not on the stack. 10 KB is well above measured
+    // high-water usage and frees ~40 KB of previously pinned RAM.
+    xTaskCreatePinnedToCore(MqttManager::_taskMqttRunTask, "taskRunMQTT", 10000, NULL, 1, NULL, CONFIG_ARDUINO_RUNNING_CORE);
   }
 }
 
@@ -157,14 +158,24 @@ void MqttManager::_sendMqttMessage() {
   }
 
   if (MqttManager::connected()) {
-    if (uxQueueMessagesWaiting(MqttManager::_sendQueue) > 0) {
+    // Drain up to 8 messages per tick. Posting one message per 25ms tick
+    // capped through-put at 40 msg/s, which made bursts of state-change
+    // messages (status report + temperature + logs) lag behind the UI.
+    for (uint8_t sent = 0; sent < 8; sent++) {
+      if (uxQueueMessagesWaiting(MqttManager::_sendQueue) == 0) {
+        break;
+      }
       PublishMessage *msg;
       if (xQueuePeek(MqttManager::_sendQueue, &(msg), 5 / portTICK_PERIOD_MS)) {
-        if (MqttManager::_mqttClient->publish(msg->topic.c_str(), msg->data.c_str(), msg->retain)) {
-          // Message was successfully sent, pop item from queue
-          if (xQueueReceive(MqttManager::_sendQueue, &(msg), 100 / portTICK_PERIOD_MS)) {
-            delete msg;
-          }
+        if (!MqttManager::_mqttClient->publish(msg->topic.c_str(), msg->data.c_str(), msg->retain)) {
+          // Send failed (likely unconnected), leave in queue and retry next tick.
+          break;
+        }
+        // Message was successfully sent, pop item from queue
+        if (xQueueReceive(MqttManager::_sendQueue, &(msg), 100 / portTICK_PERIOD_MS)) {
+          delete msg;
+        } else {
+          break;
         }
       }
     }

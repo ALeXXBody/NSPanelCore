@@ -288,38 +288,41 @@ void taskManageWifiAndMqtt(void *param) {
           sendMqttManagerRegistrationRequest();
         }
         bool force_send_mqtt_update = false;
-        JsonDocument *status_report_doc = new JsonDocument;
+        // Reused across iterations — was `new JsonDocument` on every loop,
+        // one alloc/free pair per second, forever.
+        static JsonDocument status_report_doc;
+        status_report_doc.clear();
         if (NSPanel::instance->getUpdateState()) {
           force_send_mqtt_update = true;
-          (*status_report_doc)["state"] = "updating_tft";
-          (*status_report_doc)["progress"] = NSPanel::instance->getUpdateProgress();
+          status_report_doc["state"] = "updating_tft";
+          status_report_doc["progress"] = NSPanel::instance->getUpdateProgress();
         } else if (WebManager::getState() == WebManagerState::UPDATING_FIRMWARE) {
           force_send_mqtt_update = true;
-          (*status_report_doc)["state"] = "updating_fw";
-          (*status_report_doc)["progress"] = WebManager::getUpdateProgress();
+          status_report_doc["state"] = "updating_fw";
+          status_report_doc["progress"] = WebManager::getUpdateProgress();
         } else if (WebManager::getState() == WebManagerState::UPDATING_LITTLEFS) {
           force_send_mqtt_update = true;
-          (*status_report_doc)["state"] = "updating_fs";
-          (*status_report_doc)["progress"] = WebManager::getUpdateProgress();
+          status_report_doc["state"] = "updating_fs";
+          status_report_doc["progress"] = WebManager::getUpdateProgress();
         }
         // Online/Offline state is handled in /status topic managed by MQTTManager.
 
         if (force_send_mqtt_update || millis() >= lastStatusReport + 30000) {
           char display_temp[7]; // Displayed temperature should NEVER have to be more than 7 chars. Example, 1000.0 is 6 chars, -100.0 is 6 chars. Neither should happen!
           std::snprintf(display_temp, sizeof(display_temp), "%.1f", averageTemperature);
-          (*status_report_doc)["rssi"] = WiFi.RSSI();
-          (*status_report_doc)["heap_used_pct"] = round((float(ESP.getFreeHeap()) / float(ESP.getHeapSize())) * 100);
-          (*status_report_doc)["mac"] = WiFi.macAddress();
-          (*status_report_doc)["temperature"] = display_temp;
-          (*status_report_doc)["ip"] = WiFi.localIP().toString();
+          status_report_doc["rssi"] = WiFi.RSSI();
+          status_report_doc["heap_used_pct"] = round((float(ESP.getFreeHeap()) / float(ESP.getHeapSize())) * 100);
+          status_report_doc["mac"] = WiFi.macAddress();
+          status_report_doc["temperature"] = display_temp;
+          status_report_doc["ip"] = WiFi.localIP().toString();
 
           std::string warning_string = NSPanel::instance->getWarnings();
-          (*status_report_doc)["warnings"] = warning_string.c_str();
+          status_report_doc["warnings"] = warning_string.c_str();
 
           MqttManager::publish(NSPMConfig::instance->mqtt_panel_temperature_topic, display_temp);
 
           char buffer[512];
-          uint json_length = serializeJson(*status_report_doc, buffer);
+          uint json_length = serializeJson(status_report_doc, buffer);
           MqttManager::publish(NSPMConfig::instance->mqtt_panel_status_topic, buffer, true);
 
           // std::string display_temp = std::to_string((int)round(temperature));
@@ -329,7 +332,6 @@ void taskManageWifiAndMqtt(void *param) {
 
           lastStatusReport = millis();
         }
-        delete status_report_doc;
       }
 
       if (WiFi.isConnected()) {

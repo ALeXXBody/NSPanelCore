@@ -22,6 +22,7 @@
 void InterfaceManager::init() {
   this->instance = this;
   this->_processMqttMessages = true;
+  InterfaceManager::_mutexMqttMessages = xSemaphoreCreateMutex();
   RoomManager::init();
   MqttManager::publish(NSPMConfig::instance->mqtt_screen_state_topic, "1");
   xTaskCreatePinnedToCore(_taskLoadConfigAndInit, "taskLoadConfigAndInit", 5000, NULL, 1, NULL, CONFIG_ARDUINO_RUNNING_CORE);
@@ -147,8 +148,17 @@ void InterfaceManager::_taskProcessMqttMessages(void *param) {
     // Wait for notification that we need to process messages.
     if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY)) {
       // Process all the messages
-      while (InterfaceManager::_mqttMessages.size() > 0) {
+      while (true) {
+        // Guarded access to the shared message list
+        if (xSemaphoreTake(InterfaceManager::_mutexMqttMessages, 1000 / portTICK_PERIOD_MS) != pdTRUE) {
+          break;
+        }
+        if (InterfaceManager::_mqttMessages.size() == 0) {
+          xSemaphoreGive(InterfaceManager::_mutexMqttMessages);
+          break;
+        }
         mqttMessage msg = InterfaceManager::_mqttMessages.front();
+        xSemaphoreGive(InterfaceManager::_mutexMqttMessages);
         try {
           if (InterfaceManager::instance->_processMqttMessages) {
             if (msg.topic.compare(NSPMConfig::instance->mqtt_screen_cmd_topic) == 0) {
@@ -165,7 +175,10 @@ void InterfaceManager::_taskProcessMqttMessages(void *param) {
         } catch (...) {
           LOG_ERROR("Error processing MQTT message on topic ", msg.topic.c_str());
         }
-        InterfaceManager::_mqttMessages.pop_front();
+        if (xSemaphoreTake(InterfaceManager::_mutexMqttMessages, portMAX_DELAY) == pdTRUE) {
+          InterfaceManager::_mqttMessages.pop_front();
+          xSemaphoreGive(InterfaceManager::_mutexMqttMessages);
+        }
         vTaskDelay(10 / portTICK_PERIOD_MS); // Wait 10ms between processing each event to allow for other tasks, ie. more MQTT messages to arrive.
       }
     }
@@ -173,14 +186,20 @@ void InterfaceManager::_taskProcessMqttMessages(void *param) {
 }
 
 void InterfaceManager::mqttCallback(char *topic, byte *payload, unsigned int length) {
+  // This callback runs in the MQTT task PubSubClient loop — task context, not
+  // an ISR, so vTaskNotifyGiveFromISR/portYIELD_FROM_ISR is invalid and the
+  // message list must be guarded against the consumer task.
   mqttMessage msg;
   msg.topic = topic;
   msg.payload = std::string((char *)payload, length);
-  InterfaceManager::_mqttMessages.push_back(msg);
+  if (xSemaphoreTake(InterfaceManager::_mutexMqttMessages, 1000 / portTICK_PERIOD_MS) == pdTRUE) {
+    InterfaceManager::_mqttMessages.push_back(msg);
+    xSemaphoreGive(InterfaceManager::_mutexMqttMessages);
+  }
   if (InterfaceManager::_taskHandleProcessMqttMessages) {
     // Notify task that a new message needs processing
-    vTaskNotifyGiveFromISR(InterfaceManager::_taskHandleProcessMqttMessages, NULL);
-    portYIELD_FROM_ISR();
+    xTaskNotifyGive(InterfaceManager::_taskHandleProcessMqttMessages);
+    taskYIELD();
   }
 }
 

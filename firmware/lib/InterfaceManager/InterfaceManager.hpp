@@ -44,6 +44,8 @@ private:
   static void _taskLoadConfigAndInit(void *param);
   /// @brief MQTT Messages that has been received but not yet processed
   static inline std::list<mqttMessage> _mqttMessages;
+  /// @brief Guards _mqttMessages between the MQTT callback task and the consumer task
+  static inline SemaphoreHandle_t _mutexMqttMessages;
   /// @brief The task handle used to notify task to start processing MQTT messages
   static inline TaskHandle_t _taskHandleProcessMqttMessages;
   /// @brief Task that processes all the MQTT messages in the queue

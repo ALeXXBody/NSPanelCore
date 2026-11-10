@@ -1,6 +1,5 @@
 #include "freertos/portmacro.h"
 #include <Arduino.h>
-#include <ChunkDownloader.hpp>
 #include <HTTPClient.h>
 #include <HttpLib.hpp>
 #include <MqttLog.hpp>
@@ -14,22 +13,6 @@
 #include <math.h>
 #include <string>
 #include <vector>
-
-bool recvRetCommandFinished() {
-  bool ret = false;
-  uint8_t temp[4] = {0};
-
-  Serial2.setTimeout(500);
-  if (sizeof(temp) != Serial2.readBytes((char *)temp, sizeof(temp))) {
-    ret = false;
-  }
-
-  if (temp[0] == NEX_RET_CMD_FINISHED && temp[1] == 0xFF && temp[2] == 0xFF && temp[3] == 0xFF) {
-    ret = true;
-  }
-
-  return ret;
-}
 
 void NSPanel::goToPage(const char *page) {
   std::string cmd_string = "page ";
@@ -100,9 +83,19 @@ void NSPanel::setComponentVisible(const char *componentId, bool visible) {
 }
 
 int NSPanel::getComponentIntVal(const char *componentId) {
-  // Wait for command queue to clear
-  while (this->_commandQueue.size() > 0) {
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+  // Wait for command queue to clear (bounded — don't let a busy command
+  // queue stall slider reads for seconds).
+  unsigned long startDrain = millis();
+  while (millis() - startDrain < 250) {
+    if (xSemaphoreTake(this->_mutexCommandQueue, 10 / portTICK_PERIOD_MS) != pdTRUE) {
+      break;
+    }
+    size_t queued = this->_commandQueue.size();
+    xSemaphoreGive(this->_mutexCommandQueue);
+    if (queued == 0) {
+      break;
+    }
+    vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 
   if (xSemaphoreTake(this->_mutexReadSerialData, 1000 / portTICK_PERIOD_MS) != pdTRUE) {
@@ -121,11 +114,11 @@ int NSPanel::getComponentIntVal(const char *componentId) {
   int value = -1;
   unsigned long _startWait = millis();
   while (Serial2.available() == 0) {
-    vTaskDelay(10 / portTICK_PERIOD_MS);
+    vTaskDelay(2 / portTICK_PERIOD_MS);
 
-    // 3 second timeout for reading data.
-    if (millis() >= _startWait + 3000) {
-      LOG_ERROR("3 second timeout while getting int value from display trigged. Return -253");
+    // 1.5 second timeout for reading data.
+    if (millis() >= _startWait + 1500) {
+      LOG_ERROR("1.5 second timeout while getting int value from display trigged. Return -253");
       value = -253;
       break;
     }
@@ -154,6 +147,8 @@ bool NSPanel::init() {
   NSPanel::instance = this;
   this->_mutexReadSerialData = xSemaphoreCreateMutex();
   this->_mutexWriteSerialData = xSemaphoreCreateMutex();
+  this->_mutexCommandQueue = xSemaphoreCreateMutex();
+  this->_rxBuffer.reserve(128);
   this->_writeCommandsToSerial = true;
   this->_isUpdating = false;
   this->_update_progress = 0;
@@ -200,7 +195,7 @@ bool NSPanel::init() {
   LOG_INFO("Trying to connect to display."); // Send bogus to the panel to make is "clear" any reading state
   Serial2.print("DRAKJHSUYDGBNCJHGJKSHBDN");
   NSPanel::_sendCommandEndSequence();
-  vTaskDelay((1000000 / Serial2.baudRate()) + 30 / portTICK_PERIOD_MS);
+  vTaskDelay(10 / portTICK_PERIOD_MS); // Was a unit-bug mix of microseconds and ticks; 10ms is ample for the panel to process a baud change.
   // Clear Serial2 read buffer
   while (Serial2.available() > 0) {
     Serial2.read();
@@ -212,7 +207,7 @@ bool NSPanel::init() {
   LOG_DEBUG("Sending final connect to panel");
   Serial2.print("connect");
   NSPanel::_sendCommandEndSequence();
-  vTaskDelay((1000000 / Serial2.baudRate()) + 30 / portTICK_PERIOD_MS);
+  vTaskDelay(10 / portTICK_PERIOD_MS); // Was a unit-bug mix of microseconds and ticks; 10ms is ample for the panel to process a baud change.
 
   std::string reply_data = "";
   while (Serial2.available() > 0) {
@@ -270,28 +265,13 @@ void NSPanel::_sendCommandWithoutResponse(const char *command) {
   this->_addCommandToQueue(cmd);
 }
 
-void NSPanel::_sendCommandClearResponse(const char *command) {
-  NSPanelCommand cmd;
-  cmd.command = command;
-  cmd.expectResponse = true;
-  cmd.callback = &NSPanel::_clearSerialBuffer;
-  this->_addCommandToQueue(cmd);
-}
-
 void NSPanel::_sendCommandEndSequence() {
-  Serial2.write(0xFF);
-  Serial2.write(0xFF);
-  Serial2.write(0xFF);
-  Serial2.flush(true);
-}
-
-void NSPanel::_sendCommandClearResponse(const char *command, uint16_t timeout) {
-  NSPanelCommand cmd;
-  cmd.command = command;
-  cmd.expectResponse = true;
-  cmd.callback = &NSPanel::_clearSerialBuffer;
-  cmd.timeout = timeout;
-  this->_addCommandToQueue(cmd);
+  // Nextion terminator, sent as a single write followed by the command bytes.
+  // Do NOT call Serial2.flush() here: it blocks until the UART physically
+  // drains (~1.5-3ms per command at 115200) and serializes every widget update.
+  // The hardware TX ring buffer handles queueing transparently.
+  static const uint8_t terminator[3] = {0xFF, 0xFF, 0xFF};
+  Serial2.write(terminator, sizeof(terminator));
 }
 
 void NSPanel::_addCommandToQueue(NSPanelCommand command) {
@@ -300,8 +280,11 @@ void NSPanel::_addCommandToQueue(NSPanelCommand command) {
   }
 
   if (this->_taskHandleSendCommandQueue != NULL) {
-    this->_commandQueue.push(command);
-    xTaskNotifyGive(this->_taskHandleSendCommandQueue);
+    if (xSemaphoreTake(this->_mutexCommandQueue, 1000 / portTICK_PERIOD_MS) == pdTRUE) {
+      this->_commandQueue.push(command);
+      xSemaphoreGive(this->_mutexCommandQueue);
+      xTaskNotifyGive(this->_taskHandleSendCommandQueue);
+    }
   } else {
     LOG_ERROR("Task '", pcTaskGetName(xTaskGetCurrentTaskHandle()), "' is trying to add command to queue before a queue exists!");
   }
@@ -317,11 +300,22 @@ void NSPanel::_taskSendCommandQueue(void *param) {
       }
 
       // Process all commands in queue
-      while (NSPanel::instance->_commandQueue.size() > 0) {
-        NSPanelCommand cmd = NSPanel::instance->_commandQueue.front();
+      while (true) {
+        NSPanelCommand cmd;
+        if (xSemaphoreTake(NSPanel::instance->_mutexCommandQueue, 1000 / portTICK_PERIOD_MS) != pdTRUE) {
+          break; // Notifications will wake us up again if more commands arrived.
+        }
+        if (NSPanel::instance->_commandQueue.size() == 0) {
+          xSemaphoreGive(NSPanel::instance->_mutexCommandQueue);
+          break;
+        }
+        cmd = NSPanel::instance->_commandQueue.front();
+        xSemaphoreGive(NSPanel::instance->_mutexCommandQueue);
         NSPanel::instance->_sendCommand(&cmd);
         // Command processed, remove it from queue
+        xSemaphoreTake(NSPanel::instance->_mutexCommandQueue, portMAX_DELAY);
         NSPanel::instance->_commandQueue.pop();
+        xSemaphoreGive(NSPanel::instance->_mutexCommandQueue);
         vTaskDelay(COMMAND_SEND_WAIT_MS / portTICK_PERIOD_MS);
       }
     }
@@ -341,41 +335,47 @@ void NSPanel::attachWakeCallback(void (*callback)()) {
 }
 
 void IRAM_ATTR NSPanel::_onSerialData(void) {
-  if (xSemaphoreTake(NSPanel::instance->_mutexReadSerialData, 5 * portTICK_PERIOD_MS) == pdTRUE) {
-    if (Serial2.available() > 0) {
-      std::vector<char> data;
-      bool read_to_end = false;
-      uint8_t num_ff_read_in_row = 0;
+  if (xSemaphoreTake(NSPanel::instance->_mutexReadSerialData, 5 * portTICK_PERIOD_MS) != pdTRUE) {
+    // Another task is busy with the UART. The next UART event will retry.
+    return;
+  }
 
-      while (Serial2.available() > 0) {
-        uint8_t read = Serial2.read();
-        data.push_back((char)read);
-        if (read == 0xFF) {
-          num_ff_read_in_row++;
-          if (num_ff_read_in_row >= 3) { // End of command, clear bugger and read next if any
-            NSPanel::instance->_processQueue.push(data);
-            if (NSPanel::instance->_taskHandleProcessPanelOutput != NULL) {
-              xTaskNotifyGive(NSPanel::instance->_taskHandleProcessPanelOutput);
-            }
-            data.clear();
+  // _onSerialData runs in the highest-priority UART event task — no sleeps and
+  // no blocking calls allowed or every other task in the system (and the
+  // 256-byte RX ring buffer) suffers. Read what is available in chunks, append
+  // to the frame assembler and return. Incomplete frames simply keep waiting
+  // in _rxBuffer until their terminator arrives in a later event.
+  uint8_t data[64];
+  int available = Serial2.available();
+
+  while (available > 0) {
+    int to_read = (available < (int)sizeof(data)) ? available : (int)sizeof(data);
+    int n = Serial2.read(data, to_read);
+    if (n <= 0) {
+      break;
+    }
+
+    for (int i = 0; i < n; i++) {
+      NSPanel::instance->_rxBuffer.push_back((char)data[i]);
+      if (data[i] == 0xFF) {
+        NSPanel::instance->_rxFFCounter++;
+        if (NSPanel::instance->_rxFFCounter >= 3) { // End of command, push it over to the processing task
+          NSPanel::instance->_processQueue.push(NSPanel::instance->_rxBuffer);
+          NSPanel::instance->_rxBuffer.clear();
+          NSPanel::instance->_rxFFCounter = 0;
+          if (NSPanel::instance->_taskHandleProcessPanelOutput != NULL) {
+            xTaskNotifyGive(NSPanel::instance->_taskHandleProcessPanelOutput);
           }
-        } else {
-          num_ff_read_in_row = 0;
         }
-        if (Serial2.available() == 0) {
-          vTaskDelay(50 / portTICK_PERIOD_MS);
-        }
-      }
-
-      if (data.size() > 0) { // This will only trigger if data did not end in 0xFF 0xFF 0xFF which should never happen
-        NSPanel::instance->_processQueue.push(data);
-        if (NSPanel::instance->_taskHandleProcessPanelOutput != NULL) {
-          xTaskNotifyGive(NSPanel::instance->_taskHandleProcessPanelOutput);
-        }
+      } else {
+        NSPanel::instance->_rxFFCounter = 0;
       }
     }
-    xSemaphoreGive(NSPanel::instance->_mutexReadSerialData);
+
+    available = Serial2.available();
   }
+
+  xSemaphoreGive(NSPanel::instance->_mutexReadSerialData);
 }
 
 void NSPanel::_taskProcessPanelOutput(void *param) {
@@ -416,8 +416,8 @@ void NSPanel::_taskProcessPanelOutput(void *param) {
 
         // Done with item, pop it off the queue
         NSPanel::instance->_processQueue.pop();
-        // Wait at least 10ms between each processing of event to allow for other functions to execute.
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+        // Brief yield to let other tasks run between events.
+        vTaskDelay(1 / portTICK_PERIOD_MS);
       }
     }
   }
@@ -450,7 +450,6 @@ void NSPanel::_sendCommand(NSPanelCommand *command) {
   Serial2.print(command->command.c_str());
   NSPanel::instance->_sendCommandEndSequence();
   this->_lastCommandSent = millis();
-
   if (command->expectResponse) {
     unsigned int start_wait = millis();
     while (Serial2.available() == 0) {
@@ -641,7 +640,7 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
   // Send "connect" string to get data
   Serial2.print("DRAKJHSUYDGBNCJHGJKSHBDN");
   NSPanel::instance->_sendCommandEndSequence();
-  vTaskDelay((1000000 / Serial2.baudRate()) + 30 / portTICK_PERIOD_MS);
+  vTaskDelay(10 / portTICK_PERIOD_MS); // Was a unit-bug mix of microseconds and ticks; 10ms is ample for the panel to process a baud change.
   // Clear Serial2 read buffer
   NSPanel::_clearSerialBuffer();
   vTaskDelay(50 / portTICK_PERIOD_MS);
@@ -798,7 +797,10 @@ bool NSPanel::_updateTFTOTA() {
       }
     }
 
-    vTaskDelay(500 / portTICK_PERIOD_MS);
+    // No fixed delay here: the panel always ACKs each chunk (0x05/0x08
+    // protocol) and _readDataToString below blocks until that ACK arrives
+    // (5 s timeout). The old unconditional 500 ms delay added ~6 minutes of
+    // pure sleep when flashing a 3 MB TFT file (~750 chunks).
     Serial2.write(dataBuffer, bytesReceived);
     nextStartWriteOffset += bytesReceived;
     lastReadByte = nextStartWriteOffset;

@@ -10,8 +10,7 @@
 
 #define getHeaderValue(x, y) x.substring(strlen(y))
 
-// milliseconds to wait between each command sent
-#define COMMAND_SEND_WAIT_MS 2
+#define COMMAND_SEND_WAIT_MS 1
 
 struct NSPanelCommand {
   /// @brief The command to be sent
@@ -75,12 +74,18 @@ private:
   static void _taskProcessPanelOutput(void *param);
   SemaphoreHandle_t _mutexReadSerialData;
   SemaphoreHandle_t _mutexWriteSerialData;
+  // _mutexCommandQueue guards access to _commandQueue. _commandQueue is pushed to from many different tasks
+  // (touch processing, GUI update tasks, MQTT task) and read from taskSendCommandQueue. Use of an unsynchronized
+  // std::queue across tasks leads to heap corruption.
+  SemaphoreHandle_t _mutexCommandQueue;
+  /// @brief Buffer that holds an in-progress frame received from the panel (bytes up to the 0xFF 0xFF 0xFF terminator).
+  std::vector<char> _rxBuffer;
+  /// @brief Number of consecutive 0xFF bytes currently at the end of _rxBuffer.
+  uint8_t _rxFFCounter = 0;
 
   unsigned long _lastCommandSent = 0;
   std::queue<NSPanelCommand> _commandQueue;
   void _sendCommandWithoutResponse(const char *command);
-  void _sendCommandClearResponse(const char *command);
-  void _sendCommandClearResponse(const char *command, uint16_t timeout);
   void _sendCommandEndSequence();
   void _addCommandToQueue(NSPanelCommand command);
   void _sendCommand(NSPanelCommand *command);
