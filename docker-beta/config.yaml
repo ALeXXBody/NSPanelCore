@@ -1,9 +1,9 @@
-name: "NSPanel Manager HA BETA"
-description: "Development builds of the NSPanel Manager HA fork - may be unstable"
+name: "NSPanel Core BETA"
+description: "Development builds of NSPanel Core - may be unstable"
 version: 2.1.9-ha.beta.1
-image: ghcr.io/alexxbody/nspanelmanager-ha-beta-{arch}
-slug: "nspanelmanager-ha-beta"
-url: "https://github.com/ALeXXBody/NSPanelManager-HA"
+image: ghcr.io/alexxbody/nspanel-core-beta-{arch}
+slug: "nspanel-core-beta"
+url: "https://github.com/ALeXXBody/NSPanelCore"
 webui: http://[HOST]:[PORT:8000]/
 panel_icon: mdi:fit-to-screen
 ports:

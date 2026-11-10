@@ -1,4 +1,4 @@
-name: "Publish (NSPanel Manager HA)"
+name: "Publish (NSPanel Core)"
 
 on:
   release:
@@ -22,9 +22,9 @@ jobs:
         id: image
         run: |
           if [ "${{ github.event.release.prerelease }}" == "true" ]; then
-            echo "image=ghcr.io/alexxbody/nspanelmanager-ha-beta-{arch}" >> $GITHUB_OUTPUT
+            echo "image=ghcr.io/alexxbody/nspanel-core-beta-{arch}" >> $GITHUB_OUTPUT
           else
-            echo "image=ghcr.io/alexxbody/nspanelmanager-ha-{arch}" >> $GITHUB_OUTPUT
+            echo "image=ghcr.io/alexxbody/nspanel-core-{arch}" >> $GITHUB_OUTPUT
           fi
       - name: Checkout the repository
         uses: actions/checkout@v4

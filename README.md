@@ -1,8 +1,8 @@
 <div align="center">
 
-# NSPanel Manager — HA Edition
+# NSPanel Core
 
-**Standardised smart home control for Home Assistant users, using the original Sonoff NSPanel.**
+**The core that runs your Sonoff NSPanels, for Home Assistant users.**
 
 Custom software for the Sonoff NSPanel (not the NSPanel Pro) designed to be easy to use
 day to day and to manage multiple NSPanels around your home — with an intuitive interface
@@ -19,9 +19,9 @@ on the panel itself for people of all ages and backgrounds.
 
 ## About this fork
 
-This is a **hard fork** of [NSPManager/NSPanelManager](https://github.com/NSPManager/NSPanelManager)
+NSPanel Core is a **hard fork** of [NSPManager/NSPanelManager](https://github.com/NSPManager/NSPanelManager)
 (GPL-3.0). Full credit to the original NSPanel Manager team — this project exists because of
-their excellent work. This fork is maintained independently with the following focus:
+their excellent work. NSPanel Core is maintained independently with the following focus:
 
 ### What changed
 
@@ -59,7 +59,7 @@ OpenHAB parts:
 ```bash
 # Build the full appliance image (manager + bridge + UI)
 cd docker
-docker build -t nspanelmanager-ha .
+docker build -t nspanel-core .
 ```
 
 The Dockerfile builds everything in-tree: the web UI from `docker/web-ui/`,
@@ -82,7 +82,7 @@ TFT (screen) updates are flashed through the manager web interface — the compi
 
 ## Support
 
-If this fork has been useful to you, consider supporting the maintainer:
+If NSPanel Core has been useful to you, consider supporting the maintainer:
 
 <div align="center">
 

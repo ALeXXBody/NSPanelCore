@@ -1,4 +1,4 @@
-# Installing NSPanel Manager HA on Home Assistant
+# Installing NSPanel Core on Home Assistant
 
 This guide covers installing the add-on on a Home Assistant OS or Home Assistant
 Supervised installation. If you run plain Docker (e.g. on a NAS), jump to
@@ -28,16 +28,16 @@ In Home Assistant:
 3. Paste this URL and click **Add**:
 
    ```
-   https://github.com/ALeXXBody/NSPanelManager-HA
+   https://github.com/ALeXXBody/NSPanelCore
    ```
 
-4. Close the dialog. A new repository **NSPanel Manager HA** appears with two add-ons:
-   - **NSPanel Manager HA** (stable)
-   - **NSPanel Manager HA BETA** (development builds — skip unless testing)
+4. Close the dialog. A new repository **NSPanel Core** appears with two add-ons:
+   - **NSPanel Core** (stable)
+   - **NSPanel Core BETA** (development builds — skip unless testing)
 
 ### 2. Install and start
 
-1. Click **NSPanel Manager HA → Install**. The image is pulled from GHCR
+1. Click **NSPanel Core → Install**. The image is pulled from GHCR
    (built automatically for i386/amd64/armhf/armv7/aarch64 when a release is published).
 2. Set **Start on boot** and **Watchdog** to on (both are defaults), then click **Start**.
 3. Click **Open Web UI** (or the **fit-to-screen** icon that appears in your HA sidebar).
@@ -92,14 +92,14 @@ For HA **Container** installs or running on a NAS next to HA:
 ```bash
 # Build the image (multi-stage; builds the UI and the C++ bridge in-tree)
 cd docker
-docker build -t nspanelmanager-ha .
+docker build -t nspanel-core .
 
 # Run (adjust paths to persistent storage)
-docker run -d --name nspanelmanager-ha \
+docker run -d --name nspanel-core \
   -p 8000:8000 \
   -v /your/data/dir:/data \
   --restart unless-stopped \
-  nspanelmanager-ha
+  nspanel-core
 ```
 
 Differences from the add-on:
@@ -118,7 +118,7 @@ Differences from the add-on:
 ## Updating
 
 - **Add-on**: HA shows an update badge when a new release is published here —
-  Settings → Add-ons → NSPanel Manager HA → Update.
+  Settings → Add-ons → NSPanel Core → Update.
 - **Docker**: pull/rebuild the image and recreate the container. Config
   (SQLite database, uploaded firmware) lives in the mounted `/data` volume.
 
