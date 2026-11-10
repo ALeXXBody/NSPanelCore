@@ -17,38 +17,35 @@ jobs:
       matrix:
         arch: [amd64, aarch64]
     steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+
       - name: Determine image name
-        shell: bash
         id: image
         run: |
           if [ "${{ github.event.release.prerelease }}" == "true" ]; then
-            echo "image=ghcr.io/alexxbody/nspanel-core-beta-{arch}" >> $GITHUB_OUTPUT
+            echo "name=ghcr.io/alexxbody/nspanel-core-beta-${{ matrix.arch }}" >> $GITHUB_OUTPUT
           else
-            echo "image=ghcr.io/alexxbody/nspanel-core-{arch}" >> $GITHUB_OUTPUT
+            echo "name=ghcr.io/alexxbody/nspanel-core-${{ matrix.arch }}" >> $GITHUB_OUTPUT
           fi
-      - name: Checkout the repository
-        uses: actions/checkout@v4
+
       - name: Update version strings
         shell: bash
         run: |
           sed -i 's/%version%/${{ github.ref_name }}/g' docker/web/nspanelmanager/web/templates/about.html
           sed -i 's/%version%/${{ github.ref_name }}/g' docker/web/nspanelmanager/web/templates/modals/initial_setup/welcome.html
           sed -i 's/%version%/${{ github.ref_name }}/g' docker/web/nspanelmanager/web/views.py
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+
+      - name: Build and push ${{ matrix.arch }} image
+        uses: home-assistant/builder/actions/build-image@2026.09.0
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish
-        uses: home-assistant/builder@2026.09.0
-        with:
-          args: |
-            --${{ matrix.arch }} \
-            --target docker \
-            --image ${{ steps.image.outputs.image }} \
-            --version ${{ github.ref_name }} \
-            --release ${{ github.ref_name }}
+          arch: ${{ matrix.arch }}
+          image: ${{ steps.image.outputs.name }}
+          image-tags: |
+            ${{ github.ref_name }}
+          context: docker
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          cosign: "false"
 
   bump-addon-version:
     name: Bump add-on version in main
