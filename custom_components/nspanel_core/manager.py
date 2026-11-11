@@ -123,7 +123,7 @@ class NSPanelManager:
     async def apply_settings(self, user_input: dict) -> None:
         s = self.config.settings
         for key, value in user_input.items():
-            if hasattr(s, key):
+            if hasattr(s, key) and key in s.__dataclass_fields__:
                 setattr(s, key, value)
         await self.async_save()
         await self._publish_manager_status()
@@ -186,39 +186,52 @@ class NSPanelManager:
         panel = self._panel_by_mac(mac)
         if panel is None:
             friendly = data.get("friendly_name", f"NSPanel {mac[-4:].upper()}")
+            if not self.config.rooms:
+                _LOGGER.error("Cannot register NSPanel: no rooms exist. Create a room first.")
+                return
             panel = PanelConfig(
                 id=self.config.next_id_for("panel"),
                 mac=mac,
                 name=friendly,
-                model=data.get("model", "eu"),
+                model=data.get("model", "sonoff"),
+                room_id=self.config.rooms[0].id,
+                version=data.get("version", "UNKNOWN"),
             )
             self.config.panels.append(panel)
             await self.async_save()
-            _LOGGER.info("New panel registered: %s (%s)", friendly, mac)
+            _LOGGER.info("New panel registered as awaiting accept: %s (%s)", friendly, mac)
 
-        panel.online = True
         await self._publish_panel_status(panel, "awaiting_accept")
-        if panel.denied:
-            return
-        panel.accepted = True
 
-        accept = {
-            "address": self.config.settings.manager_address,
-            "config_topic": f"nspanel/{mac}/command",
-            "accepted": True,
-        }
-        await self._publish(
-            panel_topic(mac, "command"),
-            base64.b64encode(json.dumps(accept).encode()).decode(),
-            True,
-        )
-        await self._send_panel_config(panel)
-        # The original UI refreshes the NSPanels section on this event.
-        if self.stomp is not None:
-            self.stomp.update_topic(
-                "mqttmanager/events",
-                json.dumps({"event_type": "register_request", "mac": mac}),
+        # Store registration metadata (same fields the C++ bridge kept)
+        panel.name = data.get("friendly_name") or panel.name
+        panel.model = data.get("model", "sonoff")
+        if data.get("md5_firmware"):
+            panel.firmware_md5 = data["md5_firmware"]
+        if data.get("md5_tft_file"):
+            panel.tft_md5 = data["md5_tft_file"]
+        if data.get("md5_data_file"):
+            panel.littlefs_md5 = data["md5_data_file"]
+
+        reply = self._register_accept_reply(panel)
+        if panel.accepted and not panel.denied:
+            # Accepted panels get the accept reply on both topics + config,
+            # exactly like the C++ bridge.
+            await self._publish(
+                panel_topic(data.get("friendly_name") or mac, "command"), reply
             )
+            await self._publish(panel_topic(mac, "command"), reply)
+            await self._send_panel_config(panel)
+            await self._publish_panel_status(panel, "online")
+
+        if panel.id == self.config.panels[-1].id and not panel.accepted:
+            # New registration: notify the UI (original event chain)
+            if self.stomp is not None:
+                self.stomp.update_topic(
+                    "mqttmanager/events",
+                    json.dumps({"event_type": "register_request", "nspanel_id": panel.id}),
+                )
+        await self.async_save()
 
     async def _send_panel_config(self, panel: PanelConfig) -> None:
         """Build and send the NSPanelConfig protobuf for a panel."""
@@ -274,7 +287,7 @@ class NSPanelManager:
             config_payload["room_infos"].append(info)
 
         cfg = pbw.build_nspanel_config(config_payload)
-        await self._publish_protobuf(panel_topic(panel.mac, "command"), cfg, True)
+        await self._publish_protobuf(panel_topic(panel.mac, "config"), cfg, True)
         _LOGGER.info("Sent NSPanelConfig to panel %s (%s)", panel.name, panel.mac)
         await self._publish_panel_status(panel, "online")
 
@@ -449,8 +462,11 @@ class NSPanelManager:
         if "room_id" in body:
             panel.room_id = int(body["room_id"] or 0)
         await self.async_save()
-        if panel.accepted:
+        if panel.accepted and not panel.denied:
+            reply = self._register_accept_reply(panel)
+            await self._publish(panel_topic(panel.mac, "command"), reply)
             await self._send_panel_config(panel)
+            await self._publish_panel_status(panel, "online")
 
     async def remove_panel(self, panel_id: int) -> None:
         self.config.panels = [p for p in self.config.panels if p.id != panel_id]
@@ -629,7 +645,23 @@ class NSPanelManager:
         await self._dispatch_command(panel, command)
 
     async def _on_manager_command(self, msg) -> None:
-        return
+        """Panels (and the web preview) register via JSON on this topic."""
+        try:
+            data = json.loads(msg.payload)
+        except (ValueError, TypeError):
+            return
+        if data.get("command") == "register_request":
+            mac = data.get("mac_origin") or data.get("mac_address") or data.get("mac") or ""
+            if mac:
+                await self._handle_register_request(mac, data)
+
+    def _register_accept_reply(self, panel: PanelConfig) -> str:
+        return json.dumps({
+            "command": "register_accept",
+            "address": self.config.settings.manager_address,
+            "port": self.config.settings.manager_port,
+            "config_topic": f"nspanel/{panel.mac}/config",
+        })
 
     async def _dispatch_command(self, panel: PanelConfig, command: dict) -> None:
         kind = command.get("kind")
@@ -753,8 +785,10 @@ class NSPanelManager:
         if scene is None or scene.ha_entity:
             return
         light_states = []
+        page = next((p for p in self.config.pages if p.id == page_id), None)
+        room_id = page.room_id if page and page.room_id else None
         for light in self.config.lights:
-            if light.room_id != (self._room_by_id(page_id) and 0):
+            if room_id is None or light.room_id != room_id:
                 continue
             light_states.append(
                 {

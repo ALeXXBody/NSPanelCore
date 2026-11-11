@@ -219,6 +219,7 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
 
     async_register_built_in_panel(
         hass,
+        update=hass.data.get(f"{DOMAIN}_panel_registered", False),
         component_name="iframe",
         sidebar_title="NSPanel Core",
         sidebar_icon="mdi:tablet-dashboard",
@@ -227,4 +228,5 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         require_admin=True,
     )
     hass.data[f"{DOMAIN}_entry_id"] = entry_id
+    hass.data[f"{DOMAIN}_panel_registered"] = True
     _LOGGER.info("NSPanel Core UI registered at %s", URL_BASE)

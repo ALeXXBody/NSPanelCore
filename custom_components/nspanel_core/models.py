@@ -75,7 +75,8 @@ class PanelConfig:
     id: int
     mac: str  # lowercase, no separators — as used in MQTT topics
     name: str
-    model: str = "eu"
+    model: str = "sonoff"
+    version: str = "UNKNOWN"
     room_id: int = 0
     accepted: bool = False
     denied: bool = False
@@ -117,6 +118,7 @@ class PanelConfig:
 @dataclass
 class GlobalSettings:
     manager_address: str = "core"
+    manager_port: int = 8000
     mqtt_wait_time: int = 0
     clock_us_style: bool = False
     date_format: str = "%d/%m"
