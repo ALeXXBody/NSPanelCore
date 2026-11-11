@@ -54,3 +54,7 @@ MQTTManager/nspm_mqttmanager
 MQTTManager/build/
 MQTTManager/Testing/
 firmware/.pio/
+docker/MQTTManager/CMakeCache.txt
+docker/MQTTManager/CMakeFiles/
+docker/MQTTManager/build/
+docker/MQTTManager/conan_cache/
