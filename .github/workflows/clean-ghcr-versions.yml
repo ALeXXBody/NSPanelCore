@@ -15,13 +15,13 @@ jobs:
       matrix:
         pkg: [nspanel-core-amd64, nspanel-core-aarch64]
     steps:
-      - name: Delete versions not tagged v1.0.2/latest
+      - name: Delete versions not tagged v1.0.2
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PKG: ${{ matrix.pkg }}
         run: |
           ids=$(gh api "/user/packages/container/$PKG/versions" --paginate \
-            --jq '.[] | select((.metadata.container.tags // [] | map(select(. == "v1.0.2" or . == "latest")) | length) == 0) | .id')
+            --jq '.[] | select((.metadata.container.tags // [] | map(select(. == "v1.0.2")) | length) == 0) | .id')
           if [ -z "$ids" ]; then
             echo "No removable versions found in $PKG (keeping v1.0.2/latest)"
             exit 0
