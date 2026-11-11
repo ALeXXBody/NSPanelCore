@@ -150,7 +150,6 @@ class PlaceholderPageView(HomeAssistantView):
     never falls back to the HA frontend (which caused the 'doubled page')."""
 
     url = [
-        f"{URL_BASE}/rooms",
         f"{URL_BASE}/relay_groups",
         f"{URL_BASE}/global_scenes",
         f"{URL_BASE}/weather_and_time",
@@ -295,6 +294,54 @@ class ComingSoonView(HomeAssistantView):
         return web.Response(text=html, content_type="text/html")
 
 
+class RoomsPageView(HomeAssistantView):
+    url = f"{URL_BASE}/rooms"
+    name = "nspanel_core:rooms"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        rooms_ctx = []
+        for room in manager.config.rooms:
+            panels_in_room = [
+                {"id": p.id, "status": "online" if p.online else "offline"}
+                for p in manager.config.panels if p.room_id == room.id
+            ]
+            rooms_ctx.append({"room": {"id": room.id, "friendly_name": room.name}, "nspanels": panels_in_room})
+        html = _render(
+            "rooms.html",
+            rooms=rooms_ctx,
+            page_title="Rooms",
+            nspanels=_panels_context(manager),
+        )
+        return web.Response(text=html, content_type="text/html")
+
+
+class SaveNewRoomView(HomeAssistantView):
+    url = f"{URL_BASE}/save_new_room"
+    name = "nspanel_core:save_new_room"
+    requires_auth = False
+
+    async def post(self, request):
+        manager = _manager(request)
+        form = await request.post()
+        name = str(form.get("friendly_name", "")).strip()
+        if name:
+            await manager.add_room(name)
+        raise web.HTTPFound(f"{URL_BASE}/rooms")
+
+
+class DeleteRoomView(HomeAssistantView):
+    url = f"{URL_BASE}/api/rooms/{{room_id}}/delete"
+    name = "nspanel_core:api:room_delete2"
+    requires_auth = False
+
+    async def post(self, request):
+        manager = _manager(request)
+        await manager.remove_room(int(request.match_info["room_id"]))
+        raise web.HTTPFound(f"{URL_BASE}/rooms")
+
+
 class RestartView(HomeAssistantView):
     url = f"{URL_BASE}/api/restart"
     name = "nspanel_core:api:restart"
@@ -359,6 +406,9 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         PanelActionView(),
         EditPanelView(),
         SavePanelSettingsView(),
+        RoomsPageView(),
+        SaveNewRoomView(),
+        DeleteRoomView(),
         PlaceholderPageView(),
         RestartView(),
         ThemeView(),

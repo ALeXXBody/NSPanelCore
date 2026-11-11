@@ -1,4 +1,5 @@
-{% extends 'base.html' %} {% block content %}
+{% extends 'base.html' %}
+{% block content %}
 <dialog id="create_new_room_modal" class="modal">
     <div class="modal-box">
         <!-- Upper right close button -->
@@ -7,7 +8,7 @@
         </form>
 
         <form method="POST" action="/nspanel_core/save_new_room">
-            {% csrf_token %}
+            
             <!-- Modal header -->
             <h3 class="text-lg font-semibold mb-2">Create new room</h3>
 
