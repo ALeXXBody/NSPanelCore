@@ -145,6 +145,78 @@ class PanelActionView(HomeAssistantView):
         return web.Response(text=html, content_type="text/html")
 
 
+class PlaceholderPageView(HomeAssistantView):
+    """Pages still being ported — served with the original shell so the app
+    never falls back to the HA frontend (which caused the 'doubled page')."""
+
+    url = [
+        f"{URL_BASE}/rooms",
+        f"{URL_BASE}/relay_groups",
+        f"{URL_BASE}/global_scenes",
+        f"{URL_BASE}/weather_and_time",
+        f"{URL_BASE}/denied_nspanels",
+        f"{URL_BASE}/settings",
+        f"{URL_BASE}/manager_settings",
+        f"{URL_BASE}/coming-soon",
+    ]
+    name = "nspanel_core:placeholder"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        page = request.path.rsplit("/", 1)[-1]
+        titles = {
+            "rooms": "Rooms",
+            "relay_groups": "Relay/Light groups",
+            "global_scenes": "Global scenes",
+            "weather_and_time": "Weather & Time",
+            "denied_nspanels": "Denied NSPanels",
+            "settings": "Settings",
+            "manager_settings": "Manager settings",
+        }
+        html = _render(
+            "index_shell.html",
+            page_title=titles.get(page, page),
+            nspanels=_panels_context(manager),
+        )
+        return web.Response(text=html, content_type="text/html")
+
+
+class EditPanelView(HomeAssistantView):
+    url = f"{URL_BASE}/edit/{{panel_id}}"
+    name = "nspanel_core:edit"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        panel_id = int(request.match_info["panel_id"])
+        panel = next((p for p in manager.panels() if p.id == panel_id), None)
+        name = panel.name if panel else "Unknown"
+        html = _render(
+            "index_shell.html",
+            page_title=f"{name} — settings",
+            nspanels=_panels_context(manager),
+        )
+        return web.Response(text=html, content_type="text/html")
+
+
+class ComingSoonView(HomeAssistantView):
+    """Catch-all under /nspanel_core/* — never leaks the HA frontend into the
+    iframe (this caused the 'doubled page' when clicking unported links)."""
+
+    url = f"{URL_BASE}/{{tail:.*}}"
+    name = "nspanel_core:catchall"
+    requires_auth = False
+
+    async def get(self, request):
+        html = _render(
+            "index_shell.html",
+            page_title="This page is being ported",
+            nspanels=[],
+        )
+        return web.Response(text=html, content_type="text/html")
+
+
 class RestartView(HomeAssistantView):
     url = f"{URL_BASE}/api/restart"
     name = "nspanel_core:api:restart"
@@ -195,25 +267,27 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
     """Register the original-UI views, static assets and the sidebar panel."""
     hass.http.app["hass"] = hass
 
+    from homeassistant.components.http import StaticPathConfig
+
+    hass.loop.create_task(
+        hass.http.async_register_static_paths(
+            [StaticPathConfig(f"{URL_BASE}/static", str(STATIC_DIR), cache_headers=True)]
+        )
+    )
+
     for view in (
         MainPageView(),
         HtmxNspanelsSectionView(),
         PanelActionView(),
+        EditPanelView(),
+        PlaceholderPageView(),
         RestartView(),
         ThemeView(),
         MessagesView(),
         StompView(),
+        ComingSoonView(),  # catch-all must be registered last
     ):
         hass.http.register_view(view)
-
-    from homeassistant.components.http import StaticPathConfig
-
-    hass.loop.call_soon_threadsafe(
-        asyncio.create_task,
-        hass.http.async_register_static_paths(
-            [StaticPathConfig(f"{URL_BASE}/static", str(STATIC_DIR), cache_headers=True)]
-        ),
-    )
 
     from homeassistant.components.frontend import async_register_built_in_panel
 
