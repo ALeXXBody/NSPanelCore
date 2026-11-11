@@ -44,14 +44,13 @@ In Home Assistant:
    https://github.com/ALeXXBody/NSPanelCore
    ```
 
-4. Close the dialog. A new repository **NSPanel Core** appears with two add-ons:
-   - **NSPanel Core** (stable)
-   - **NSPanel Core BETA** (development builds — skip unless testing)
+4. Close the dialog. A new repository **NSPanel Core** appears with one add-on:
+   - **NSPanel Core**
 
 ### 2. Install and start
 
 1. Click **NSPanel Core → Install**. The image is pulled from GHCR
-   (built automatically for i386/amd64/armhf/armv7/aarch64 when a release is published).
+   (built automatically for amd64/aarch64 when a release is published).
 2. Set **Start on boot** and **Watchdog** to on (both are defaults), then click **Start**.
 3. Click **Open Web UI** (or the **fit-to-screen** icon that appears in your HA sidebar).
 

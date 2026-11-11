@@ -5,20 +5,20 @@ import type * as Preset from '@docusaurus/preset-classic';
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
-  title: 'NSPanel Manager',
+  title: 'NSPanel Core',
   tagline: 'Documentation',
   favicon: 'images/favicon.ico',
 
   // Set the production url of your site here
-  url: 'https://nspanelmanager.com',
+  url: 'https://alexxbody.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: '/',
+  baseUrl: '/NSPanelCore/',
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'NSPManager',
-  projectName: 'NSPanelManager',
+  organizationName: 'ALeXXBody',
+  projectName: 'NSPanelCore',
 
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
@@ -44,9 +44,7 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           // Remove this to remove the "edit this page" links.
-          editUrl:
-            // TODO: change branch back to `main` after merge of beta branch
-            'https://github.com/NSPManager/NSPanelManager/edit/beta/docs',
+          editUrl: 'https://github.com/ALeXXBody/NSPanelCore/edit/main/docs',
         },
         theme: {
           customCss: './src/css/custom.css',
@@ -84,10 +82,10 @@ const config: Config = {
         {
           position: 'right',
           label: 'Flash Firmware',
-          href: 'https://nspanelmanager.com/flashing-tool.html', // `flashing-tool.html` returns a page not found
+          href: 'https://github.com/ALeXXBody/NSPanelCore'
         },
         {
-          href: 'https://github.com/NSPManager/NSPanelManager',
+          href: 'https://github.com/ALeXXBody/NSPanelCore',
           label: 'GitHub',
           position: 'right',
         },
@@ -130,7 +128,7 @@ const config: Config = {
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/NSPManager/NSPanelManager',
+              href: 'https://github.com/ALeXXBody/NSPanelCore',
             },
           ],
         },

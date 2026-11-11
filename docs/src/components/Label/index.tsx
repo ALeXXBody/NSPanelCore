@@ -4,8 +4,8 @@ import styles from './styles.module.css';
 
 // Predefined label colors
 const labelColors = {
-    beta: '#9912ec',
-    // example to add other labels
+    // example to add labels
+    // feature: '#28a745',
     // bug: '#d73a49',
     // feature: '#28a745',
 };

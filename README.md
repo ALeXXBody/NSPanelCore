@@ -44,6 +44,27 @@ their excellent work. NSPanel Core is maintained independently with the followin
 | Protobuf definitions | [`docker/protobuf/`](docker/protobuf/) |
 | Panel TFT binaries (runtime) | [`docker/HMI_files/`](docker/HMI_files/) |
 
+## Installation
+
+**Home Assistant add-on (recommended):**
+
+1. In Home Assistant: **Settings → Add-ons → Add-on Store → ⋮ (top right) → Repositories**
+2. Paste this URL and click **Add**:
+   ```
+   https://github.com/ALeXXBody/NSPanelCore
+   ```
+3. Open **NSPanel Core → Install → Start** (enable *Start on boot* and *Watchdog* — both default on)
+4. Open the add-on's web UI and follow the initial setup guide (MQTT + Home Assistant connection)
+
+**Requirements:**
+
+- An MQTT broker (e.g. the Mosquitto broker add-on) — the panels and the manager talk over MQTT
+- Docker host on `amd64` or `aarch64`
+- Panels on the same network as Home Assistant
+
+Full guide with MQTT setup, panel registration, Docker/NAS install and troubleshooting:
+**[docs/INSTALL_HA.md](docs/INSTALL_HA.md)**
+
 ## Documentation
 
 The original NSPanel Manager documentation still applies to everything except the removed

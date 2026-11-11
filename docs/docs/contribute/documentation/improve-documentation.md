@@ -14,7 +14,7 @@ Here’s a quick overview to get you started.
 
 Each pages of the Guide including this one provides a link at its whole bottom:
 
-[Edit this page](hhttps://github.com/NSPManager/NSPanelManager/edit/beta/docs/docs/contribute/documentation/improve-documentation.md)
+[Edit this page](https://github.com/ALeXXBody/NSPanelCore/edit/main/docs/docs/contribute/documentation/improve-documentation.md)
 
 1. Simply click over this link, it will allow you to edit via GitHub UI directly, the content of the page.
 2. Update the content using Markdown in the editor.

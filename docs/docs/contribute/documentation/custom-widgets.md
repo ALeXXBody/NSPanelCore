@@ -19,7 +19,7 @@ All such widgets are stored within `docs/src/components` directory.
 
 ## Label - Rounded tags
 
-Widget to add labels such as beta features.
+Widget to add labels such as feature flags.
 
 <Tabs>
   <TabItem value="code" label="Code">
@@ -35,11 +35,11 @@ Widget to add labels such as beta features.
     Place the content to place a Label in your markdown page:
     
     ```markdown
-        <Label value="BETA"/> feature
+        <Label value="NEW"/> feature
     ```
   </TabItem>
   <TabItem value="preview" label="Preview" default>
-    <Label value="BETA"/> feature
+    <Label value="NEW"/> feature
   </TabItem>
 </Tabs>
 
