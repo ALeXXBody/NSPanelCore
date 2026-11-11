@@ -77,10 +77,15 @@ class NSPanelManager:
         data = await self._store.async_load()
         self.config = IntegrationConfig.from_dict(data or {})
 
-        # Register the management dashboard + API and the sidebar panel.
-        from .dashboard import async_register_views
+        # Original manager UI: STOMP server (live updates) + converted pages.
+        from .stomp_server import StompServer
 
-        async_register_views(self.hass, self.entry.entry_id)
+        self.stomp = StompServer()
+
+        # Register the management dashboard + API and the sidebar panel.
+        from .dashboard import async_register_ui
+
+        async_register_ui(self.hass, self.entry.entry_id)
 
         # Protobuf topics: binary payloads (encoding=None → bytes)
         await mqtt.async_subscribe(self.hass, TOPIC_PANEL_COMMAND, self._on_panel_command, encoding=None)
@@ -125,6 +130,20 @@ class NSPanelManager:
 
     async def _publish(self, topic: str, payload: str | bytes, retain: bool = False) -> None:
         await mqtt.async_publish(self.hass, topic, payload, 0, retain)
+        # Mirror to the STOMP topics the original UI subscribes to.
+        if self.stomp is not None:
+            self.stomp.mirror_mqtt(topic, payload, retain)
+
+    async def _publish_panel_status(self, panel: PanelConfig, state: str, progress: int = 0) -> None:
+        """Publish the manager's own panel-status snapshot to STOMP (the same
+        topic the status components subscribe to)."""
+        if self.stomp is None:
+            return
+        self.stomp.set_retained(panel_topic(panel.mac, "status"), True)
+        self.stomp.update_topic(panel_topic(panel.mac, "status"), json.dumps({
+            "state": state,
+            "progress": progress,
+        }))
 
     async def _publish_protobuf(self, topic: str, message: bytes, retain: bool = False) -> None:
         await self._publish(topic, message, retain)
@@ -160,6 +179,7 @@ class NSPanelManager:
                 panel.online = True
                 await self.async_save()
                 await self._send_panel_config(panel)
+                await self._publish_panel_status(panel, "online")
 
     async def _handle_register_request(self, mac: str, data: dict) -> None:
         panel = self._panel_by_mac(mac)
@@ -175,6 +195,8 @@ class NSPanelManager:
             await self.async_save()
             _LOGGER.info("New panel registered: %s (%s)", friendly, mac)
 
+        panel.online = True
+        await self._publish_panel_status(panel, "awaiting_accept")
         if panel.denied:
             return
         panel.accepted = True
@@ -195,11 +217,6 @@ class NSPanelManager:
         """Build and send the NSPanelConfig protobuf for a panel."""
         rooms = self.config.rooms
         room_ids = panel.rooms or [r.id for r in rooms]
-        pages = [p for p in self.config.pages if p.room_id == panel.room_id]
-        global_scene_page_ids = [
-            p.id for p in self.config.pages if p.room_id is None and p.is_scenes_page
-        ]
-
         pages = [p for p in self.config.pages if p.room_id == panel.room_id]
         global_scene_page_ids = [
             p.id for p in self.config.pages if p.room_id is None and p.is_scenes_page
@@ -253,6 +270,7 @@ class NSPanelManager:
         cfg = pbw.build_nspanel_config(config_payload)
         await self._publish_protobuf(panel_topic(panel.mac, "command"), cfg, True)
         _LOGGER.info("Sent NSPanelConfig to panel %s (%s)", panel.name, panel.mac)
+        await self._publish_panel_status(panel, "online")
 
     async def _on_panel_status_report(self, msg) -> None:
         mac = mac_from_topic(msg.topic, "status_report")
@@ -274,6 +292,13 @@ class NSPanelManager:
                 listener()
         for listener in self._report_listeners:
             listener(mac, report)
+        if self.stomp is not None and panel.accepted:
+            state_map = {0: "online", 1: "offline", 2: "updating_tft", 3: "updating_fw", 4: "updating_fs"}
+            await self._publish_panel_status(
+                panel,
+                state_map.get(report.get("nspanel_state", 1), "offline"),
+                report.get("update_progress", 0),
+            )
 
     def add_new_panel_listener(self, listener) -> None:
         """Register a callback fired when a panel's presence changes."""
