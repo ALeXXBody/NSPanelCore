@@ -12,7 +12,7 @@ import asyncio
 import json
 import logging
 import pathlib
-import re
+
 from typing import Any
 
 from aiohttp import web
@@ -101,9 +101,7 @@ class HtmxNspanelsSectionView(HomeAssistantView):
 class PanelActionView(HomeAssistantView):
     """Accept/deny/delete a panel — returns the refreshed section (htmx)."""
 
-    url = re.compile(
-        r"/nspanel_core/api/panel/(?P<panel_id>\d+)/(?P<action>accept|deny|delete)"
-    )
+    url = "/nspanel_core/api/panel/{panel_id}/{action}"
     name = "nspanel_core:api:panel_action"
     requires_auth = False
 
