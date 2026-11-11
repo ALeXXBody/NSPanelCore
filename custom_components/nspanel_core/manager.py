@@ -15,12 +15,12 @@ import base64
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Any
 
 from homeassistant.components import mqtt
 from homeassistant.core import HomeAssistant, Event, State
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.helpers.storage import Store
+from dataclasses import asdict
 from .const import (
     DOMAIN,
     STORAGE_KEY,
@@ -76,6 +76,11 @@ class NSPanelManager:
     async def async_start(self) -> None:
         data = await self._store.async_load()
         self.config = IntegrationConfig.from_dict(data or {})
+
+        # Register the management dashboard + API and the sidebar panel.
+        from .dashboard import async_register_views
+
+        async_register_views(self.hass, self.entry.entry_id)
 
         await mqtt.async_subscribe(self.hass, TOPIC_PANEL_STATUS, self._on_panel_status)
         await mqtt.async_subscribe(self.hass, TOPIC_PANEL_COMMAND, self._on_panel_command)
@@ -273,6 +278,12 @@ class NSPanelManager:
         """Register a callback fired when a panel's presence changes."""
         self._new_panel_listeners.append(listener)
 
+
+def asdict_panel(panel):
+    from dataclasses import asdict
+
+    return asdict(panel)
+
     def add_report_listener(self, listener) -> None:
         """Register a callback fired on every NSPanelStatusReport(mac, report)."""
         self._report_listeners.append(listener)
@@ -297,6 +308,9 @@ class NSPanelManager:
     def panels(self) -> list[PanelConfig]:
         return list(self.config.panels)
 
+    def pages(self) -> list:
+        return list(self.config.pages)
+
     def _panel_by_mac(self, mac: str) -> PanelConfig | None:
         for panel in self.config.panels:
             if panel.mac == mac:
@@ -311,6 +325,124 @@ class NSPanelManager:
 
     def relay_state(self, topic: str) -> bool:
         return self._relay_state.get(topic, False)
+
+    # ------------------------------------------------------------------
+    # Dashboard CRUD (used by the management UI)
+    # ------------------------------------------------------------------
+
+    async def add_room(self, name: str) -> None:
+        from .models import RoomConfig
+
+        room = RoomConfig(id=self.config.next_id_for("room"), name=name)
+        self.config.rooms.append(room)
+        page = next(
+            (
+                p
+                for p in self.config.pages
+                if p.room_id == room.id and not p.is_scenes_page
+            ),
+            None,
+        )
+        if page is None:
+            from .models import EntityPageConfig
+
+            self.config.pages.append(
+                EntityPageConfig(
+                    id=self.config.next_id_for("page"),
+                    room_id=room.id,
+                    page_type=4,
+                    is_scenes_page=False,
+                )
+            )
+        await self.async_save()
+
+    async def remove_room(self, room_id: int) -> None:
+        self.config.rooms = [r for r in self.config.rooms if r.id != room_id]
+        self.config.lights = [l for l in self.config.lights if l.room_id != room_id]
+        self.config.pages = [p for p in self.config.pages if p.room_id != room_id]
+        for panel in self.config.panels:
+            panel.rooms = [rid for rid in panel.rooms if rid != room_id]
+        await self.async_save()
+
+    async def add_light(
+        self,
+        name: str,
+        ha_entity: str,
+        room_id: int,
+        page_id: int,
+        page_slot: int,
+        light_type: str = "table",
+        can_dim: bool = False,
+        can_color_temperature: bool = False,
+        can_rgb: bool = False,
+    ) -> None:
+        from .models import LightConfig
+
+        light = LightConfig(
+            id=self.config.next_id_for("light"),
+            name=name,
+            ha_entity=ha_entity,
+            room_id=room_id,
+            page_id=page_id,
+            page_slot=page_slot,
+            light_type=light_type,
+            can_dim=can_dim,
+            can_color_temperature=can_color_temperature,
+            can_rgb=can_rgb,
+        )
+        self.config.lights.append(light)
+        await self.async_save()
+        # Track the HA entity and push the current state to the panel.
+        self._unsub.append(
+            async_track_state_change_event(self.hass, [ha_entity], self._on_light_state_event)
+        )
+        state = self.hass.states.get(ha_entity)
+        if state is not None:
+            event_data = {
+                "entity_id": ha_entity,
+                "old_state": None,
+                "new_state": state,
+            }
+            await self._on_light_state_event(
+                type("E", (Event,), {"data": event_data})(None)  # minimal event shim
+            )
+        await self._publish_entity_page(page_id)
+        await self._publish_room_state(room_id)
+
+    async def remove_light(self, light_id: int) -> None:
+        light = self._light_by_id(light_id)
+        self.config.lights = [l for l in self.config.lights if l.id != light_id]
+        await self.async_save()
+        if light:
+            await self._publish_entity_page(light.page_id)
+            await self._publish_room_state(light.room_id)
+
+    async def update_panel(self, panel_id: int, body: dict) -> None:
+        panel = next((p for p in self.config.panels if p.id == panel_id), None)
+        if panel is None:
+            return
+        if "accepted" in body:
+            panel.accepted = bool(body["accepted"])
+        if "name" in body and body["name"]:
+            panel.name = str(body["name"])
+        if "room_id" in body:
+            panel.room_id = int(body["room_id"] or 0)
+        await self.async_save()
+        if panel.accepted:
+            await self._send_panel_config(panel)
+
+    async def remove_panel(self, panel_id: int) -> None:
+        self.config.panels = [p for p in self.config.panels if p.id != panel_id]
+        await self.async_save()
+
+    def export_state(self) -> dict:
+        return self.config.to_dict() | {
+            "panels": [asdict_panel(p) for p in self.config.panels],
+        }
+
+    def add_new_panel_listener(self, listener) -> None:
+        """Register a callback fired when a panel's presence changes."""
+        self._new_panel_listeners.append(listener)
 
     async def set_relay(self, mac: str, relay: int, state: bool) -> None:
         await self._publish(panel_topic(mac, f"relay{relay}_cmd"), "1" if state else "0")
