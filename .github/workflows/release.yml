@@ -43,6 +43,9 @@ jobs:
           image: ${{ steps.image.outputs.name }}
           image-tags: |
             ${{ github.ref_name }}
+            latest
+          version: ${{ github.ref_name }}
+          push: "true"
           context: docker
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
           cosign: "false"
