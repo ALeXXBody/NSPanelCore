@@ -3,6 +3,15 @@ name: "Publish (NSPanel Core)"
 on:
   release:
     types: [published]
+  # Cache warming: building on main saves the Conan cache in the default-branch
+  # scope, which every tag/release run can restore. Without this, each new
+  # release tag starts with an empty cache (Actions caches are branch-scoped).
+  push:
+    branches: [main]
+    paths:
+      - 'docker/MQTTManager/**'
+      - 'docker/build_scripts/**'
+      - '.github/workflows/release.yml'
 
 permissions:
   contents: write
@@ -67,7 +76,7 @@ jobs:
   publish:
     name: Publish ${{ matrix.arch }}
     needs: build-mqttmanager-amd64
-    if: ${{ always() && needs.build-mqttmanager-amd64.result == 'success' }}
+    if: ${{ always() && needs.build-mqttmanager-amd64.result == 'success' && github.event_name == 'release' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -114,6 +123,7 @@ jobs:
   bump-addon-version:
     name: Bump add-on version in main
     needs: publish
+    if: ${{ github.event_name == 'release' }}
     permissions:
       contents: write
     runs-on: ubuntu-latest
