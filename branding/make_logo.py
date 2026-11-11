@@ -42,7 +42,7 @@ def rounded_rect(draw, cx, cy, s, radius_ratio, width_ratio, fill):
     )
 
 
-def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.022):
+def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.052):
     """The N, traced from the reference artwork's own skeleton (pixel-extracted
     polylines, normalized to the icon square) drawn in the clean line style.
 
