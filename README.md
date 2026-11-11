@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="branding/nspanel-core-logo.png" alt="NSPanel Core" width="380">
+<img src="branding/nspanel-core-logo.png?v=2" alt="NSPanel Core" width="380">
 
 **Smart Wall OS for the Sonoff NSPanel — built for Home Assistant.**
 
