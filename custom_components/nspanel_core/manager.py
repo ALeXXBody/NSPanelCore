@@ -20,6 +20,7 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.components import mqtt
+import aiohttp
 from homeassistant.core import HomeAssistant, Event, State
 from homeassistant.helpers.event import (
     async_track_state_change_event,
@@ -40,12 +41,13 @@ from .const import (
     light_state_topic,
     entity_page_state_topic,
     time_topic,
+    weather_topic,
     date_topic,
     ampm_topic,
     status_topic,
     config_reload_topic,
 )
-from .models import IntegrationConfig, LightConfig, PanelConfig
+from .models import IntegrationConfig, LightConfig, PanelConfig, SceneConfig, ThermostatConfig, RelayGroupConfig
 from .panel_pb import messages as pbw
 
 _LOGGER = logging.getLogger(__name__)
@@ -106,6 +108,12 @@ class NSPanelManager:
             self._unsub.append(
                 async_track_state_change_event(self.hass, entity_ids, self._on_light_state_event)
             )
+        # Track HA state for every mapped thermostat entity.
+        therm_ids = [t.ha_entity for t in self.config.thermostats if t.ha_entity]
+        if therm_ids:
+            self._unsub.append(
+                async_track_state_change_event(self.hass, therm_ids, self._on_thermostat_state_event)
+            )
 
         # Minute-aligned time publishing.
         self._unsub.append(
@@ -113,6 +121,11 @@ class NSPanelManager:
         )
         await self._publish_time(None)
         await self._publish_manager_status()
+        # Republish all state for already-accepted panels.
+        await self._republish_all_state()
+        # Weather polling (open-meteo) — mirrors the C++/Go weather package.
+        self._unsub.append(async_track_time_interval(self.hass, self._poll_weather, timedelta(minutes=self.config.settings.weather_update_interval or 30)))
+        self.hass.async_create_task(self._poll_weather(None))
         _LOGGER.info("NSPanel Core manager started")
 
     async def async_stop(self) -> None:
@@ -377,11 +390,39 @@ class NSPanelManager:
             _LOGGER.info("Data file update available for panel %s — triggering OTA", panel.name)
             await self._publish(panel_topic(panel.mac, "command"), json.dumps({"command": "data_file_update"}))
 
+        import hashlib, os
+        tft_dir = os.path.join(os.path.dirname(__file__), "tft")
+        tft_filename = "gui_us.tft" if panel.is_us_panel else "gui.tft"
+        tft_path = os.path.join(tft_dir, tft_filename)
+        def md5_file(p):
+            h = hashlib.md5()
+            try:
+                with open(p, "rb") as f:
+                    for chunk in iter(lambda: f.read(65536), b""):
+                        h.update(chunk)
+            except FileNotFoundError:
+                return ""
+            return h.hexdigest()
+        tft_md5 = md5_file(tft_path)
+        if tft_md5 and report.get("md5_tft_file") and report["md5_tft_file"] != tft_md5:
+            _LOGGER.info("TFT update available for panel %s — triggering OTA", panel.name)
+            await self._publish(panel_topic(panel.mac, "command"), json.dumps({"command": "tft_update"}))
+
     def relay_state(self, topic: str) -> bool:
         return self._relay_state.get(topic, False)
 
     async def set_relay(self, mac: str, relay: int, state: bool) -> None:
         await self._publish(panel_topic(mac, f"relay{relay}_cmd"), "1" if state else "0")
+
+    async def set_relay_group(self, group_id: int, state: bool) -> None:
+        group = next((g for g in self.config.relay_groups if g.id == group_id), None)
+        if group is None:
+            return
+        for binding in group.bindings:
+            mac = binding.get("panel_mac", "")
+            relay = binding.get("relay_num", 1)
+            if mac:
+                await self.set_relay(mac, relay, state)
 
     def add_new_panel_listener(self, listener) -> None:
         self._new_panel_listeners.append(listener)
@@ -514,6 +555,39 @@ class NSPanelManager:
         if light is None:
             return
         await self._ingest_light_state(light, new_state)
+
+    async def _on_thermostat_state_event(self, event: Event) -> None:
+        new_state = event.data.get("new_state")
+        if new_state is None or new_state.state in ("unknown", "unavailable"):
+            return
+        for th in self.config.thermostats:
+            if th.ha_entity == new_state.entity_id:
+                try:
+                    th.current_temperature = float(new_state.attributes.get("current_temperature", 0))
+                except (ValueError, TypeError):
+                    pass
+                try:
+                    th.set_temperature = float(new_state.attributes.get("temperature", th.set_temperature))
+                except (ValueError, TypeError):
+                    pass
+                # Publish thermostat state to panels
+                await self._publish_thermostat_state(th)
+
+    async def _publish_thermostat_state(self, th: ThermostatConfig) -> None:
+        settings = self.config.settings
+        from .const import thermostat_state_topic
+        payload = pbw.build_nspanel_entity_state_thermostat({
+            "thermostat": {
+                "thermostat_id": th.id,
+                "name": th.name,
+                "has_current_temperature": True,
+                "current_temperature": th.current_temperature,
+                "set_temperature": th.set_temperature,
+                "step_size": th.step_size,
+                "options": th.options,
+            }
+        })
+        await self._publish_protobuf(thermostat_state_topic(settings.manager_address, th.id), payload, True)
 
     async def _ingest_light_state(self, light: LightConfig, new_state: State) -> None:
         changed = False
@@ -709,12 +783,23 @@ class NSPanelManager:
                     },
                 )
         elif kind == "toggle_entity_from_entities_page":
+            page_id = command.get("entity_page_id")
+            slot = command.get("entity_slot")
+            # Scene activation (NSPM or HA scene)
+            scene = next(
+                (sc for sc in self.config.scenes if sc.page_id == page_id and sc.page_slot == slot),
+                None,
+            )
+            if scene is not None:
+                await self._activate_scene(scene, panel.room_id)
+                return
+            # Light toggle
             light = next(
                 (
                     l
                     for l in self.config.lights
-                    if l.page_id == command.get("entity_page_id")
-                    and l.page_slot == command.get("entity_slot")
+                    if l.page_id == page_id
+                    and l.page_slot == slot
                 ),
                 None,
             )
@@ -738,6 +823,33 @@ class NSPanelManager:
             )
         elif kind == "save_scene_command":
             await self._save_scene(command.get("entity_page_id"), command.get("entity_slot"))
+        elif kind == "thermostat_temperature_command":
+            tid = command.get("thermostat_id")
+            temp = command.get("temperature")
+            th = next((t for t in self.config.thermostats if t.id == tid), None)
+            if th is not None and th.ha_entity:
+                await self.hass.services.async_call(
+                    "climate", "set_temperature",
+                    {"entity_id": th.ha_entity, "temperature": temp},
+                )
+                th.set_temperature = float(temp or 0)
+                await self.async_save()
+        elif kind == "thermostat_command":
+            tid = command.get("thermostat_id")
+            option = command.get("option", "")
+            new_value = command.get("new_value", "")
+            th = next((t for t in self.config.thermostats if t.id == tid), None)
+            if th is not None and th.ha_entity:
+                if option == "mode" or option == "hvac_mode":
+                    await self.hass.services.async_call(
+                        "climate", "set_hvac_mode",
+                        {"entity_id": th.ha_entity, "hvac_mode": new_value},
+                    )
+                elif option == "fan_mode":
+                    await self.hass.services.async_call(
+                        "climate", "set_fan_mode",
+                        {"entity_id": th.ha_entity, "fan_mode": new_value},
+                    )
         elif kind == "button_pressed":
             pass
 
@@ -827,9 +939,138 @@ class NSPanelManager:
         scene.light_states = light_states
         await self.async_save()
 
+    async def _poll_weather(self, now) -> None:
+        s = self.config.settings
+        if not s.location_latitude or not s.location_longitude:
+            return
+        try:
+            lat = s.location_latitude
+            lon = s.location_longitude
+            temp_unit = "fahrenheit" if s.use_fahrenheit else "celsius"
+            precip_unit = "inch" if s.precipitation_format == "inch" else "mm"
+            wind_unit = {"kmh": "kmh", "ms": "ms", "mph": "mph", "kn": "kn"}.get(s.wind_speed_format, "kmh")
+            url = (
+                f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+                f"&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m"
+                f"&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max"
+                f"&timeformat=unixtime&temperature_unit={temp_unit}&precipitation_unit={precip_unit}&wind_speed_unit={wind_unit}&timezone=auto"
+            )
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    if resp.status != 200:
+                        _LOGGER.warning("Weather fetch failed: HTTP %s", resp.status)
+                        return
+                    data = await resp.json()
+            ICONS = {0: "sunny", 1: "partlytuner weather_day", 2: "cloudy_weather_day", 3: "overcast",
+                     45: "fog", 48: "fog", 51: "rainy", 53: "rainy", 55: "rainy", 56: "sleet", 57: "sleet",
+                     61: "rainy", 63: "rainy", 65: "rainy", 66: "sleet", 67: "sleet", 71: "snowy", 73: "snowy",
+                     75: "snowy", 77: "snowy", 80: "rainy", 81: "rainy", 82: "rainy", 85: "snowy", 86: "snowy",
+                     95: "thunderstorm", 96: "thunderstorm", 99: "thunderstorm"}
+            def icon(code):
+                return ICONS.get(int(code), "cloudy_weather_day")
+            def fmt_temp(v):
+                if s.use_fahrenheit:
+                    return f"{int(round(v))}°F"
+                return f"{int(round(v))}°C"
+            def fmt_wind(v):
+                if s.wind_speed_format == "ms":
+                    return f"{v:.1f} m/s"
+                if s.wind_speed_format == "mph":
+                    return f"{int(round(v))} mph"
+                if s.wind_speed_format == "kn":
+                    return f"{int(round(v))} kn"
+                return f"{int(round(v))} km/h"
+            cur = data.get("current", {})
+            daily = data.get("daily", {})
+            from datetime import datetime, timezone
+            def fmt_time(ts):
+                try:
+                    return datetime.fromtimestamp(int(ts), tz=timezone.utc).strftime("%H:%M")
+                except Exception:
+                    return ""
+            forecast_items = []
+            for i in range(min(4, len(daily.get("weather_code", [])))):
+                forecast_items.append({
+                    "weather_icon": icon(daily["weather_code"][i]),
+                    "precipitation_string": f"{precip_unit} {int(daily.get('precipitation_probability_max', [0])[i] if i < len(daily.get('precipitation_probability_max', [])) else 0)}%",
+                    "temperature_maxmin_string": f"{fmt_temp(daily['temperature_2m_max'][i])}/{fmt_temp(daily['temperature_2m_min'][i])}",
+                    "wind_string": fmt_wind(daily.get("wind_speed_10m_max", [0])[i] if i < len(daily.get("wind_speed_10m_max", [])) else 0),
+                    "display_string": "",
+                })
+            payload = {
+                "forecast_items": forecast_items,
+                "current_weather_icon": icon(cur.get("weather_code", 0)),
+                "current_temperature_string": fmt_temp(cur.get("temperature_2m", 0)),
+                "current_maxmin_temperature": f"{fmt_temp((daily.get('temperature_2m_max') or [0])[0])}/{fmt_temp((daily.get('temperature_2m_min') or [0])[0])}",
+                "current_wind_string": fmt_wind(cur.get("wind_speed_10m", 0)),
+                "sunrise_string": fmt_time((daily.get("sunrise") or [0])[0]),
+                "sunset_string": fmt_time((daily.get("sunset") or [0])[0]),
+                "current_precipitation_string": f"{cur.get('precipitation', 0)} {precip_unit}",
+            }
+            encoded = pbw.build_nspanel_weather_update(payload)
+            await self._publish(weather_topic(s.manager_address), encoded, True)
+            _LOGGER.debug("Weather update published")
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.warning("Weather poll failed: %s", exc)
+
+    async def _activate_scene(self, scene: SceneConfig, triggering_room_id: int | None = None) -> None:
+        """Activate a scene — HA scene/script or NSPM-saved light states."""
+        if scene.ha_entity:
+            # HA-backed scene/script
+            if scene.ha_entity.startswith("scene."):
+                await self.hass.services.async_call(
+                    "scene", "turn_on", {"entity_id": scene.ha_entity}
+                )
+            elif scene.ha_entity.startswith("script."):
+                await self.hass.services.async_call(
+                    "script", "turn_on",
+                    {"entity_id": scene.ha_entity, "variables": {"nspanelmanager": {
+                        "scene_name": scene.name,
+                        "scene_id": scene.id,
+                    }}},
+                )
+            return
+        # NSPM-managed scene: apply saved light states
+        for ls in scene.light_states:
+            light = self._light_by_id(ls.get("light_id", 0))
+            if light is None:
+                continue
+            level = ls.get("light_level", 0)
+            if level <= 0:
+                light.state = False
+                await self.hass.services.async_call("light", "turn_off", {"entity_id": light.ha_entity})
+            else:
+                light.state = True
+                light.brightness = level
+                svc_data = {"entity_id": light.ha_entity, "brightness_pct": level}
+                if ls.get("color_mode") == "dimmer" and light.can_color_temperature:
+                    light.color_temp = ls.get("color_temperature", light.color_temp)
+                    svc_data["color_temp_kelvin"] = light.color_temp
+                elif ls.get("color_mode") == "color" and light.can_rgb:
+                    light.mode = "rgb"
+                    light.hue = ls.get("hue", 0)
+                    light.saturation = ls.get("saturation", 0)
+                    svc_data["hs_color"] = (light.hue, light.saturation)
+                await self.hass.services.async_call("light", "turn_on", svc_data)
+            await self._publish_light_state(light)
+        await self._publish_room_state(scene.page_id and (next((p for p in self.config.pages if p.id == scene.page_id), None).room_id if next((p for p in self.config.pages if p.id == scene.page_id), None) else None) or 0)
+
+    async def _republish_all_state(self) -> None:
+        """Republish room states, entity pages, light states for all rooms."""
+        for room in self.config.rooms:
+            await self._publish_room_state(room.id)
+        for page in self.config.pages:
+            await self._publish_entity_page(page.id)
+        for light in self.config.lights:
+            await self._publish_light_state(light)
+        for th in self.config.thermostats:
+            await self._publish_thermostat_state(th)
+        await self._publish_time(None)
+
     # ------------------------------------------------------------------
     # Time publishing
     # ------------------------------------------------------------------
+
 
     async def _publish_time(self, now) -> None:
         settings = self.config.settings

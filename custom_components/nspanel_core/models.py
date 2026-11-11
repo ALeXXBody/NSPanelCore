@@ -42,6 +42,48 @@ class LightConfig:
         return cls(**{k: v for k, v in data.items() if k in known})
 
 
+
+
+@dataclass
+class ThermostatConfig:
+    id: int
+    name: str
+    ha_entity: str  # climate.x
+    room_id: int
+    page_id: int
+    page_slot: int
+    current_temperature: float = 0.0
+    set_temperature: float = 0.0
+    step_size: float = 0.5
+    options: list[dict] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ThermostatConfig":
+        known = {f for f in cls.__dataclass_fields__}
+        return cls(**{k: v for k, v in data.items() if k in known})
+
+
+
+
+@dataclass
+class RelayGroupConfig:
+    id: int
+    name: str
+    register_as_light: bool = False
+    bindings: list[dict] = field(default_factory=list)  # [{"panel_mac":..., "relay_num": 1|2}]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "RelayGroupConfig":
+        known = {f for f in cls.__dataclass_fields__}
+        return cls(**{k: v for k, v in data.items() if k in known})
+
+
 @dataclass
 class RoomConfig:
     id: int
@@ -115,6 +157,24 @@ class PanelConfig:
     littlefs_md5: str = ""
 
 
+
+
+@dataclass
+class MessageConfig:
+    id: int
+    title: str
+    message: str
+    read: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "MessageConfig":
+        known = {f for f in cls.__dataclass_fields__}
+        return cls(**{k: v for k, v in data.items() if k in known})
+
+
 @dataclass
 class GlobalSettings:
     manager_address: str = "core"
@@ -145,9 +205,12 @@ class IntegrationConfig:
     settings: GlobalSettings = field(default_factory=GlobalSettings)
     rooms: list[RoomConfig] = field(default_factory=list)
     lights: list[LightConfig] = field(default_factory=list)
+    thermostats: list[ThermostatConfig] = field(default_factory=list)
+    relay_groups: list[RelayGroupConfig] = field(default_factory=list)
     pages: list[EntityPageConfig] = field(default_factory=list)
     scenes: list[SceneConfig] = field(default_factory=list)
     panels: list[PanelConfig] = field(default_factory=list)
+    messages: list[MessageConfig] = field(default_factory=list)
     next_id: dict[str, int] = field(default_factory=lambda: {"room": 1, "light": 1, "page": 1, "scene": 1, "panel": 1})
 
     def next_id_for(self, kind: str) -> int:
@@ -160,9 +223,12 @@ class IntegrationConfig:
             "settings": asdict(self.settings),
             "rooms": [asdict(r) for r in self.rooms],
             "lights": [l.to_dict() for l in self.lights],
+            "thermostats": [t.to_dict() for t in self.thermostats],
+            "relay_groups": [r.to_dict() for r in self.relay_groups],
             "pages": [asdict(p) for p in self.pages],
             "scenes": [asdict(s) for s in self.scenes],
             "panels": [asdict(p) for p in self.panels],
+            "messages": [asdict(m) for m in self.messages],
             "next_id": self.next_id,
         }
 
@@ -175,8 +241,11 @@ class IntegrationConfig:
         cfg.settings = GlobalSettings(**{k: v for k, v in settings.items() if k in GlobalSettings.__dataclass_fields__})
         cfg.rooms = [RoomConfig(**r) for r in data.get("rooms", [])]
         cfg.lights = [LightConfig.from_dict(l) for l in data.get("lights", [])]
+        cfg.thermostats = [ThermostatConfig.from_dict(t) for t in data.get("thermostats", [])]
+        cfg.relay_groups = [RelayGroupConfig.from_dict(r) for r in data.get("relay_groups", [])]
         cfg.pages = [EntityPageConfig(**p) for p in data.get("pages", [])]
         cfg.scenes = [SceneConfig(**s) for s in data.get("scenes", [])]
         cfg.panels = [PanelConfig(**p) for p in data.get("panels", [])]
+        cfg.messages = [MessageConfig(**m) for m in data.get("messages", [])]
         cfg.next_id = data.get("next_id", cfg.next_id)
         return cfg

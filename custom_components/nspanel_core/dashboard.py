@@ -41,6 +41,7 @@ def _render(template_name: str, **context) -> str:
     template = env.get_template(template_name)
     context.setdefault("notifications", [])
     context.setdefault("version", "1.0.0")
+    context.setdefault("has_unread_messages", False)
     context.setdefault("enabled_themes", {"nspmwip": "NSPanel Core (dark)"} )
     context.setdefault("theme", "nspmwip")
     context.setdefault("current_theme", "nspmwip")
@@ -469,6 +470,47 @@ def _md5(path: str) -> str:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+
+
+class DownloadTftView(HomeAssistantView):
+    url = f"{URL_BASE}/download_tft/{{panel_id}}"
+    name = "nspanel_core:download_tft"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        panel_id = int(request.match_info["panel_id"])
+        panel = next((p for p in manager.config.panels if p.id == panel_id), None)
+        if panel is None:
+            return web.Response(status=404, text="Panel not found")
+        tft_dir = _os.path.join(_os.path.dirname(__file__), "tft")
+        # US panels use gui_us.tft
+        filename = "gui_us.tft" if panel.is_us_panel else "gui.tft"
+        path = _os.path.join(tft_dir, filename)
+        if not _os.path.exists(path):
+            return web.Response(status=404, text="TFT not found")
+        return web.FileResponse(path)
+
+
+class ChecksumTftView(HomeAssistantView):
+    url = f"{URL_BASE}/checksum_tft_file/{{panel_id}}"
+    name = "nspanel_core:checksum_tft"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        panel_id = int(request.match_info["panel_id"])
+        panel = next((p for p in manager.config.panels if p.id == panel_id), None)
+        if panel is None:
+            return web.Response(status=404, text="Panel not found")
+        tft_dir = _os.path.join(_os.path.dirname(__file__), "tft")
+        filename = "gui_us.tft" if panel.is_us_panel else "gui.tft"
+        path = _os.path.join(tft_dir, filename)
+        if not _os.path.exists(path):
+            return web.Response(status=404, text="TFT not found")
+        return web.Response(text=_md5(path))
 
 
 class ComingSoonView(HomeAssistantView):
