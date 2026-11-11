@@ -1,13 +1,17 @@
 {
   "domain": "nspanel_core",
   "name": "NSPanel Core",
-  "codeowners": ["@ALeXXBody"],
+  "codeowners": [
+    "@ALeXXBody"
+  ],
   "config_flow": true,
-  "dependencies": ["mqtt"],
+  "dependencies": [
+    "mqtt"
+  ],
   "documentation": "https://github.com/ALeXXBody/NSPanelCore",
   "integration_type": "hub",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/ALeXXBody/NSPanelCore/issues",
-  "requirements": ["protobuf>=5.26.1,<7"],
+  "requirements": [],
   "version": "1.0.0"
 }

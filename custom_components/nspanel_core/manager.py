@@ -21,8 +21,6 @@ from homeassistant.components import mqtt
 from homeassistant.core import HomeAssistant, Event, State
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.helpers.storage import Store
-from google.protobuf.message import Message
-
 from .const import (
     DOMAIN,
     STORAGE_KEY,
@@ -43,8 +41,7 @@ from .const import (
     config_reload_topic,
 )
 from .models import IntegrationConfig, LightConfig, PanelConfig
-from .protobuf import protobuf_nspanel_pb2 as pb_nspanel
-from .protobuf import protobuf_nspanel_entity_pb2 as pb_entity
+from .panel_pb import messages as pbw
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -123,8 +120,8 @@ class NSPanelManager:
     async def _publish(self, topic: str, payload: str | bytes, retain: bool = False) -> None:
         await mqtt.async_publish(self.hass, topic, payload, 0, retain)
 
-    async def _publish_protobuf(self, topic: str, message: Message, retain: bool = False) -> None:
-        await self._publish(topic, message.SerializeToString(), retain)
+    async def _publish_protobuf(self, topic: str, message: bytes, retain: bool = False) -> None:
+        await self._publish(topic, message, retain)
 
     async def _publish_manager_status(self) -> None:
         await self._publish(
@@ -197,51 +194,57 @@ class NSPanelManager:
             p.id for p in self.config.pages if p.room_id is None and p.is_scenes_page
         ]
 
-        cfg = pb_nspanel.NSPanelConfig()
-        cfg.name = panel.name
-        cfg.default_room = panel.room_id
-        cfg.default_page = panel.default_page
-        cfg.screensaver_activation_timeout = panel.screensaver_activation_timeout
-        cfg.min_button_push_time = panel.min_button_push_time
-        cfg.button_long_press_time = panel.button_long_press_time
-        cfg.special_mode_trigger_time = panel.special_mode_trigger_time
-        cfg.special_mode_release_time = panel.special_mode_release_time
-        cfg.screen_dim_level = panel.screen_dim_level
-        cfg.screensaver_dim_level = panel.screensaver_dim_level
-        cfg.screensaver_mode = panel.screensaver_mode
-        cfg.show_screensaver_inside_temperature = True
-        cfg.show_screensaver_outside_temperature = bool(
-            self.config.settings.outside_temp_sensor_entity
-        )
-        cfg.clock_us_style = panel.clock_us_style
-        cfg.use_fahrenheit = panel.use_fahrenheit
-        cfg.is_us_panel = panel.is_us_panel
-        cfg.reverse_relays = panel.reverse_relays
-        cfg.relay1_default_mode = panel.relay1_default_mode
-        cfg.relay2_default_mode = panel.relay2_default_mode
-        cfg.temperature_calibration = panel.temperature_calibration
-        cfg.button1_mode = panel.button1_mode
-        cfg.button2_mode = panel.button2_mode
-        cfg.optimistic_mode = panel.optimistic_mode
-        cfg.raise_light_level_to_100_above = panel.raise_to_100_light_level
-        cfg.nspanel_id = panel.id
-        cfg.default_light_brightess = panel.default_light_brightness
-        cfg.locked_to_default_room = False
-        cfg.inside_temperature_sensor_mqtt_topic = panel.inside_temperature_sensor_topic
+        pages = [p for p in self.config.pages if p.room_id == panel.room_id]
+        global_scene_page_ids = [
+            p.id for p in self.config.pages if p.room_id is None and p.is_scenes_page
+        ]
+        room_ids = panel.rooms or [r.id for r in rooms]
 
+        config_payload = {
+            "name": panel.name,
+            "default_room": panel.room_id,
+            "default_page": panel.default_page,
+            "screensaver_activation_timeout": panel.screensaver_activation_timeout,
+            "min_button_push_time": panel.min_button_push_time,
+            "button_long_press_time": panel.button_long_press_time,
+            "special_mode_trigger_time": panel.special_mode_trigger_time,
+            "special_mode_release_time": panel.special_mode_release_time,
+            "screen_dim_level": panel.screen_dim_level,
+            "screensaver_dim_level": panel.screensaver_dim_level,
+            "screensaver_mode": panel.screensaver_mode,
+            "show_screensaver_inside_temperature": True,
+            "show_screensaver_outside_temperature": bool(
+                self.config.settings.outside_temp_sensor_entity
+            ),
+            "clock_us_style": panel.clock_us_style,
+            "use_fahrenheit": panel.use_fahrenheit,
+            "is_us_panel": panel.is_us_panel,
+            "reverse_relays": panel.reverse_relays,
+            "relay1_default_mode": panel.relay1_default_mode,
+            "relay2_default_mode": panel.relay2_default_mode,
+            "temperature_calibration": panel.temperature_calibration,
+            "button1_mode": panel.button1_mode,
+            "button2_mode": panel.button2_mode,
+            "optimistic_mode": panel.optimistic_mode,
+            "raise_light_level_to_100_above": panel.raise_to_100_light_level,
+            "nspanel_id": panel.id,
+            "default_light_brightess": panel.default_light_brightness,
+            "locked_to_default_room": False,
+            "inside_temperature_sensor_mqtt_topic": panel.inside_temperature_sensor_topic,
+            "room_infos": [],
+            "global_scene_entity_page_ids": global_scene_page_ids,
+        }
         for rid in room_ids:
-            info = cfg.room_infos.add()
-            info.room_id = rid
+            info = {"room_id": rid, "entity_page_ids": [], "scene_page_ids": []}
             for p in pages:
                 if p.room_id == rid:
                     if p.is_scenes_page:
-                        info.scene_page_ids.append(p.id)
+                        info["scene_page_ids"].append(p.id)
                     else:
-                        info.entity_page_ids.append(p.id)
+                        info["entity_page_ids"].append(p.id)
+            config_payload["room_infos"].append(info)
 
-        for page in global_scene_page_ids:
-            cfg.global_scene_entity_page_ids.append(page)
-
+        cfg = pbw.build_nspanel_config(config_payload)
         await self._publish_protobuf(panel_topic(panel.mac, "command"), cfg, True)
         _LOGGER.info("Sent NSPanelConfig to panel %s (%s)", panel.name, panel.mac)
 
@@ -251,21 +254,20 @@ class NSPanelManager:
         if not panel:
             return
         try:
-            report = pb_nspanel.NSPanelStatusReport()
-            report.ParseFromString(msg.payload)
+            report = pbw.parse_nspanel_status_report(msg.payload)
         except Exception:  # noqa: BLE001
             return
         was_online = panel.online
-        panel.online = report.nspanel_state == 0
-        panel.firmware_md5 = report.md5_firmware
-        panel.tft_md5 = report.md5_tft_gui
-        panel.littlefs_md5 = report.md5_littlefs
+        panel.online = report.get("nspanel_state", 0) == 0
+        panel.firmware_md5 = report.get("md5_firmware", "")
+        panel.tft_md5 = report.get("md5_tft_gui", "")
+        panel.littlefs_md5 = report.get("md5_littlefs", "")
         await self.async_save()
         if panel.online != was_online:
             for listener in self._new_panel_listeners:
                 listener()
         for listener in self._report_listeners:
-            listener(panel.mac, report)
+            listener(mac, report)
 
     def add_new_panel_listener(self, listener) -> None:
         """Register a callback fired when a panel's presence changes."""
@@ -384,21 +386,19 @@ class NSPanelManager:
             await self._publish_room_state(light.room_id)
 
     async def _publish_light_state(self, light: LightConfig) -> None:
-        state = pb_entity.NSPanelEntityState(
-            light=pb_entity.NSPanelEntityState.Light(
-                light_id=light.id,
-                name=light.name,
-                state=light.state,
-                can_color_temp=light.can_color_temperature,
-                can_color=light.can_rgb,
-                brightness=light.brightness,
-                hue=light.hue,
-                saturation=light.saturation,
-                current_light_mode=pb_entity.NSPanelEntityState.Light.RGB
-                if light.mode == "rgb"
-                else pb_entity.NSPanelEntityState.Light.COLOR_TEMP,
-            )
-        )
+        state = pbw.build_nspanel_entity_state_light({
+            "light": {
+                "light_id": light.id,
+                "name": light.name,
+                "state": light.state,
+                "can_color_temp": light.can_color_temperature,
+                "can_color": light.can_rgb,
+                "brightness": light.brightness,
+                "hue": light.hue,
+                "saturation": light.saturation,
+                "current_light_mode": 1 if light.mode == "rgb" else 0,
+            }
+        })
         settings = self.config.settings
         kelvin_pct = (
             (light.color_temp - settings.color_temp_min)
@@ -407,9 +407,23 @@ class NSPanelManager:
         )
         if settings.reverse_color_temp:
             kelvin_pct = 100 - kelvin_pct
-        state.light.color_temp = int(kelvin_pct)
+        # color_temp field is a percentage of the kelvin range
+        payload = pbw.build_nspanel_entity_state_light({
+            "light": {
+                "light_id": light.id,
+                "name": light.name,
+                "state": light.state,
+                "can_color_temp": light.can_color_temperature,
+                "can_color": light.can_rgb,
+                "brightness": light.brightness,
+                "color_temp": int(kelvin_pct),
+                "hue": light.hue,
+                "saturation": light.saturation,
+                "current_light_mode": 1 if light.mode == "rgb" else 0,
+            }
+        })
         await self._publish_protobuf(
-            light_state_topic(settings.manager_address, light.id), state, True
+            light_state_topic(settings.manager_address, light.id), payload, True
         )
 
     async def _publish_room_state(self, room_id: int) -> None:
@@ -426,23 +440,21 @@ class NSPanelManager:
         def avg(values: list[int]) -> int:
             return int(sum(values) / len(values)) if values else 0
 
-        status = pb_nspanel.NSPanelRoomStatus(
-            id=room_id,
-            name=room.name,
-            average_dim_level=avg([l.brightness for l in on_lights]),
-            ceiling_lights_dim_level=avg([l.brightness for l in ceiling if l.state]),
-            table_lights_dim_level=avg([l.brightness for l in table if l.state]),
-            average_color_temperature=avg([l.color_temp for l in on_lights]),
-            ceiling_lights_color_temperature_value=avg([l.color_temp for l in ceiling if l.state]),
-            table_lights_color_temperature_value=avg([l.color_temp for l in table if l.state]),
-            num_ceiling_lights=len(ceiling),
-            num_table_lights=len(table),
-            num_ceiling_lights_on=sum(1 for l in ceiling if l.state),
-            num_table_lights_on=sum(1 for l in table if l.state),
-        )
-        page_ids = [p.id for p in self.config.pages if p.room_id == room_id and not p.is_scenes_page]
-        status.entity_page_ids.extend(page_ids)
-
+        status = pbw.build_nspanel_room_status({
+            "id": room_id,
+            "name": room.name,
+            "average_dim_level": avg([l.brightness for l in on_lights]),
+            "ceiling_lights_dim_level": avg([l.brightness for l in ceiling if l.state]),
+            "table_lights_dim_level": avg([l.brightness for l in table if l.state]),
+            "average_color_temperature": avg([l.color_temp for l in on_lights]),
+            "ceiling_lights_color_temperature_value": avg([l.color_temp for l in ceiling if l.state]),
+            "table_lights_color_temperature_value": avg([l.color_temp for l in table if l.state]),
+            "num_ceiling_lights": len(ceiling),
+            "num_table_lights": len(table),
+            "num_ceiling_lights_on": sum(1 for l in ceiling if l.state),
+            "num_table_lights_on": sum(1 for l in table if l.state),
+            "entity_page_ids": page_ids,
+        })
         await self._publish_protobuf(room_state_topic(settings.manager_address, room_id), status, True)
 
     async def _publish_entity_page(self, page_id: int) -> None:
@@ -450,33 +462,32 @@ class NSPanelManager:
         if page is None:
             return
         settings = self.config.settings
-        page_msg = pb_nspanel.NSPanelRoomEntitiesPage(
-            id=page.id,
-            page_type=page.page_type,
-            header_text="Scenes" if page.is_scenes_page else "",
-        )
+        entities = []
         members = (
-            [s for s in self.config.scenes if s.page_id == page.id]
+            [sc for sc in self.config.scenes if sc.page_id == page.id]
             if page.is_scenes_page
             else [l for l in self.config.lights if l.page_id == page.id]
         )
         members.sort(key=lambda m: m.page_slot)
         for member in members:
-            slot = page_msg.entities.add()
-            slot.room_view_position = member.page_slot
-            if page.is_scenes_page:
-                slot.name = member.name  # type: ignore[union-attr]
-                slot.pco = 11  # scenes slot PCO (panel requests activate)
-            else:
-                slot.name = member.name
-                slot.pco = 3  # light toggle slot
-                slot.pco2 = 7  # brightness slider
-                slot.can_save_scene = True
-                slot.mqtt_state_topic = light_state_topic(
-                    settings.manager_address, member.id  # type: ignore[union-attr]
-                )
+            entities.append({
+                "room_view_position": member.page_slot,
+                "name": member.name,
+                "pco": 11 if page.is_scenes_page else 3,
+                "pco2": 0 if page.is_scenes_page else 7,
+                "can_save_scene": not page.is_scenes_page,
+                "mqtt_state_topic": ""
+                if page.is_scenes_page
+                else light_state_topic(settings.manager_address, member.id),
+            })
+        payload = pbw.build_nspanel_room_entities_page({
+            "id": page.id,
+            "page_type": page.page_type,
+            "header_text": "Scenes" if page.is_scenes_page else "",
+            "entities": entities,
+        })
         await self._publish_protobuf(
-            entity_page_state_topic(settings.manager_address, page.id), page_msg, True
+            entity_page_state_topic(settings.manager_address, page.id), payload, True
         )
 
     # ------------------------------------------------------------------
@@ -488,9 +499,8 @@ class NSPanelManager:
         panel = self._panel_by_mac(mac)
         if panel is None or not panel.accepted:
             return
-        command = pb_nspanel.NSPanelMQTTManagerCommand()
         try:
-            command.ParseFromString(msg.payload)
+            command = pbw.parse_nspanel_mqttmanager_command(msg.payload)
         except Exception:  # noqa: BLE001
             return
         await self._dispatch_command(panel, command)
@@ -499,42 +509,60 @@ class NSPanelManager:
         # Browser/register requests arrive as JSON on this topic (web UI flow).
         return
 
-    async def _dispatch_command(self, panel: PanelConfig, command) -> None:
-        kind = command.WhichOneof("CommandData")
+    async def _dispatch_command(self, panel: PanelConfig, command: dict) -> None:
+        kind = command.get("kind")
 
         if kind == "light_command":
-            lc = command.light_command
-            for light_id in lc.light_ids:
+            for light_id in command.get("light_ids", []):
                 light = self._light_by_id(light_id)
                 if light is None:
                     continue
-                await self._apply_light_command(light, lc)
+                await self._apply_light_command(
+                    light,
+                    {
+                        "has_brightness": bool(command.get("has_brightness")),
+                        "brightness": command.get("brightness", 0),
+                        "has_color_temperature": bool(command.get("has_color_temperature")),
+                        "color_temperature": command.get("color_temperature", 0),
+                        "has_hue": bool(command.get("has_hue")),
+                        "hue": command.get("hue", 0),
+                        "has_saturation": bool(command.get("has_saturation")),
+                        "saturation": command.get("saturation", 0),
+                    },
+                )
         elif kind == "toggle_entity_from_entities_page":
-            toggle = command.toggle_entity_from_entities_page
+            toggle = command
             light = next(
                 (
                     l
                     for l in self.config.lights
-                    if l.page_id == toggle.entity_page_id and l.page_slot == toggle.entity_slot
+                    if l.page_id == toggle.get("entity_page_id")
+                    and l.page_slot == toggle.get("entity_slot")
                 ),
                 None,
             )
             if light:
-                await self._apply_light_command(
-                    light, None, toggle_on=not light.state
-                )
+                await self._apply_light_command(light, None, toggle_on=not light.state)
         elif kind == "first_page_turn_on":
-            req = command.first_page_turn_on
-            await self._first_page_turn(panel, req.affect_lights, req.brightness_slider_value, req.kelvin_slider_value, True)
+            await self._first_page_turn(
+                panel,
+                command.get("first_page_turn_on_affect_lights", 0),
+                command.get("brightness_slider_value", 0),
+                command.get("kelvin_slider_value", 0),
+                True,
+            )
         elif kind == "first_page_turn_off":
-            req = command.first_page_turn_off
-            await self._first_page_turn(panel, req.affect_lights, None, None, False)
+            await self._first_page_turn(
+                panel,
+                command.get("first_page_turn_off_affect_lights", 0),
+                None,
+                None,
+                False,
+            )
         elif kind == "save_scene_command":
-            save = command.save_scene_command
-            await self._save_scene(save.entity_page_id, save.entity_slot)
+            await self._save_scene(command.get("entity_page_id"), command.get("entity_slot"))
         elif kind == "button_pressed":
-            # FOLLOW-mode buttons are handled by HA entities created by the
-            # switch platform; NOTIFY handled in that platform too.
+            # FOLLOW/NOTIFY-mode buttons are handled by the switch platform.
             pass
 
         await self._publish(config_reload_topic(), "1", False)
