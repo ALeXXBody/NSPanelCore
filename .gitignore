@@ -58,3 +58,5 @@ docker/MQTTManager/CMakeCache.txt
 docker/MQTTManager/CMakeFiles/
 docker/MQTTManager/build/
 docker/MQTTManager/conan_cache/
+mqttmanager-build/*
+!mqttmanager-build/.gitkeep

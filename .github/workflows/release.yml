@@ -9,8 +9,57 @@ permissions:
   packages: write
 
 jobs:
+  build-mqttmanager:
+    name: Build MQTTManager (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            target: linux/amd64
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            target: linux/arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Conan dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2
+          key: conan-${{ matrix.arch }}-${{ hashFiles('docker/MQTTManager/conanfile.py', 'docker/MQTTManager/CMakeLists.txt') }}
+          restore-keys: conan-${{ matrix.arch }}-
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential curl libssl-dev openssl libcurl4-openssl-dev
+          pip install conan
+          conan profile detect --force
+          echo 'core.cache:storage_path=/MQTTManager/conan_cache/' > ~/.conan2/global.conf
+          sed -i "s|cppstd=.*|cppstd=gnu23|g" ~/.conan2/profiles/default
+          sed -i "s|build_type=.*|build_type=Release|g" ~/.conan2/profiles/default
+
+      - name: Build MQTTManager
+        run: |
+          sudo rm -rf /MQTTManager
+          sudo cp -r docker/MQTTManager /MQTTManager
+          sudo chmod +x /MQTTManager/compile_mqttmanager.sh
+          cd /MQTTManager
+          sudo /MQTTManager/compile_mqttmanager.sh --target-platform ${{ matrix.target }} --strip
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: mqttmanager-${{ matrix.arch }}
+          path: /MQTTManager/build/nspm_mqttmanager
+
   publish:
     name: Publish ${{ matrix.arch }}
+    needs: build-mqttmanager
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -32,6 +81,12 @@ jobs:
           sed -i 's/%version%/${{ github.ref_name }}/g' docker/web/nspanelmanager/web/templates/modals/initial_setup/welcome.html
           sed -i 's/%version%/${{ github.ref_name }}/g' docker/web/nspanelmanager/web/views.py
 
+      - name: Download pre-built MQTTManager binary
+        uses: actions/download-artifact@v4
+        with:
+          name: mqttmanager-${{ matrix.arch }}
+          path: docker/mqttmanager-build/
+
       - name: Build and push ${{ matrix.arch }} image
         uses: home-assistant/builder/actions/build-image@2026.09.0
         with:
@@ -43,6 +98,8 @@ jobs:
           version: ${{ github.ref_name }}
           push: "true"
           context: docker
+          build-args: |
+            no_mqttmanager_build=yes
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
           cosign: "false"
 
