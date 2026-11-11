@@ -517,23 +517,37 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         )
     )
 
-    for view in (
-        MainPageView(),
-        HtmxNspanelsSectionView(),
-        PanelActionView(),
-        EditPanelView(),
-        SavePanelSettingsView(),
-        RoomsPageView(),
-        SaveNewRoomView(),
-        DeleteRoomView(),
-        PlaceholderPageView(),
-        RestartView(),
-        ThemeView(),
-        MessagesView(),
-        StompView(),
-        ComingSoonView(),  # catch-all must be registered last
-    ):
-        hass.http.register_view(view)
+    # Register routes directly via aiohttp (HomeAssistantView.register is
+    # fragile across HA versions — it crashed on list-valued urls in 2026.10).
+    views = [
+        (MainPageView, ["GET"]),
+        (HtmxNspanelsSectionView, ["GET"]),
+        (PanelActionView, ["POST", "DELETE"]),
+        (EditPanelView, ["GET"]),
+        (SavePanelSettingsView, ["POST"]),
+        (RoomsPageView, ["GET"]),
+        (SaveNewRoomView, ["POST"]),
+        (DeleteRoomView, ["POST"]),
+        (GlobalScenesView, ["GET"]),
+        (RelayGroupsView, ["GET"]),
+        (WeatherTimeView, ["GET"]),
+        (DeniedPanelsView, ["GET"]),
+        (SettingsView, ["GET"]),
+        (ManagerSettingsView, ["GET"]),
+        (PlaceholderPageView, ["GET"]),
+        (RestartView, ["POST"]),
+        (ThemeView, ["POST"]),
+        (MessagesView, ["GET"]),
+        (StompView, ["GET"]),
+        (ComingSoonView, ["GET"]),
+    ]
+    for view_cls, methods in views:
+        view = view_cls()
+        for method in methods:
+            handler = getattr(view, method.lower(), None)
+            if handler is None:
+                continue
+            hass.http.app.router.add_route(method, view.url, handler)
 
     from homeassistant.components.frontend import async_register_built_in_panel
 
