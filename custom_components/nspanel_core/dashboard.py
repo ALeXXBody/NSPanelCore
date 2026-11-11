@@ -203,6 +203,7 @@ class EditPanelView(HomeAssistantView):
         panel_dict["ip_address"] = ""
         panel_dict["friendly_name"] = panel.name  # Django model used friendly_name
         panel_dict["mac_address"] = panel.mac  # MAC shown in settings header
+        panel_dict["room"] = {"id": panel.room_id}  # Django model used panel.room (FK)
         panel_info = {"data": panel_dict}
         nspanel = {"data": panel_dict}
         rooms = [{"id": r.id, "name": r.name} for r in manager.config.rooms]
