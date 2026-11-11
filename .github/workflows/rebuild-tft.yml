@@ -25,7 +25,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p work/pics
-          gh release download "v2.1.8-ha.1" --repo ALeXXBody/NSPanelCore --pattern "NSPanelCore-HMI-*.hmi" --dir work --clobber
+          gh release download "v1.0.0" --repo ALeXXBody/NSPanelCore --pattern "NSPanelCore-HMI-*.hmi" --dir work --clobber
           cp work/NSPanelCore-HMI-${{ matrix.variant }}.hmi work/input.hmi
           cp docker/HMI_files/hmi_pictures/${{ matrix.variant }}/tft${{ matrix.theme }}/*.png work/pics/
           ls work/pics | wc -l
