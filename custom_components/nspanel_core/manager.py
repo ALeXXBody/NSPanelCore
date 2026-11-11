@@ -157,9 +157,15 @@ class NSPanelManager:
         await self._publish(topic, message, retain)
 
     async def _publish_manager_status(self) -> None:
+        import json as _j
+        import pathlib as _p
+        try:
+            _version = "v" + _j.loads((_p.Path(__file__).parent / "manifest.json").read_text()).get("version", "1.2.0")
+        except Exception:
+            _version = "v1.2.0"
         await self._publish(
             status_topic(self.config.settings.manager_address),
-            json.dumps({"state": "online", "version": "1.0.0"}),
+            json.dumps({"state": "online", "version": _version}),
             True,
         )
 

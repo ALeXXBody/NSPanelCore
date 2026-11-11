@@ -73,7 +73,14 @@ def _render(template_name: str, **context) -> str:
     env.globals["RC"] = _RC
     template = env.get_template(template_name)
     context.setdefault("notifications", [])
-    context.setdefault("version", "1.0.0")
+    import json as _json
+    import pathlib as _pathlib
+    _manifest_path = _pathlib.Path(__file__).parent / "manifest.json"
+    try:
+        _ver = _json.loads(_manifest_path.read_text()).get("version", "1.2.0")
+    except Exception:
+        _ver = "1.2.0"
+    context.setdefault("version", f"v{_ver}")
     context.setdefault("has_unread_messages", False)
     context.setdefault("enabled_themes", {"nspmwip": "NSPanel Core (dark)"} )
     context.setdefault("theme", "nspmwip")
