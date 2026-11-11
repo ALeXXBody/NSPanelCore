@@ -693,6 +693,18 @@ class StompView(HomeAssistantView):
         return await manager.stomp.handle_ws(request)
 
 
+class WebappStompView(HomeAssistantView):
+    """STOMP WebSocket at the original /websocket/stomp path (for the web app)."""
+
+    url = "/websocket/stomp"
+    name = "nspanel_core:webapp_ws"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        return await manager.stomp.handle_ws(request)
+
+
 import re  # noqa: E402
 
 
@@ -705,6 +717,13 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
     hass.loop.create_task(
         hass.http.async_register_static_paths(
             [StaticPathConfig(f"{URL_BASE}/static", str(STATIC_DIR), cache_headers=True)]
+        )
+    )
+
+    WEBAPP_DIR = pathlib.Path(__file__).parent / "ui" / "webapp"
+    hass.loop.create_task(
+        hass.http.async_register_static_paths(
+            [StaticPathConfig("/webapp", str(WEBAPP_DIR), cache_headers=True)]
         )
     )
 

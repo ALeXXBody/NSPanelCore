@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NSPanel Core</title>
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+
+    <link rel="manifest" href="/webapp/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/webapp/favicon.svg" />
+    <script type="module" crossorigin src="/webapp/assets/index-CSXx6q3S.js"></script>
+    <link rel="modulepreload" crossorigin href="/webapp/assets/jsx-runtime-9hv0zHmp.js">
+    <link rel="modulepreload" crossorigin href="/webapp/assets/iconBase-CyUrzYfb.js">
+    <link rel="modulepreload" crossorigin href="/webapp/assets/components-Dwq-WXxc.js">
+    <link rel="modulepreload" crossorigin href="/webapp/assets/useThemeStore-CA_Jyi3D.js">
+    <link rel="stylesheet" crossorigin href="/webapp/assets/index-BJHyMW62.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/webapp/sw.js", {
+            scope: "/webapp/",
+          });
+        });
+      }
+    </script>
+  </body>
+</html>
