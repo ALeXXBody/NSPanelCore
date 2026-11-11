@@ -4,7 +4,7 @@ There are two ways to run NSPanel Core. Pick based on your situation:
 
 | | **HA Integration** (recommended going forward) | **HA Add-on** (legacy) |
 |---|---|---|
-| Install method | HACS / copy a folder | Add-on store |
+| Install method | HA Marketplace / copy a folder | Add-on store |
 | Runs as | Inside Home Assistant | Docker container in Supervisor |
 | Build/update pain | **None** — plain Python files | Docker image builds (slow, was unreliable) |
 | Status | **In development** — panels register, lights/sensors work; mapping UI, scenes, thermostats still being ported | **v1.0.2 is the last verified-installable release**. Later tags (v1.0.4–v1.0.6) never published images and cannot be installed |
@@ -18,15 +18,23 @@ There are two ways to run NSPanel Core. Pick based on your situation:
 - The **MQTT integration** configured in Home Assistant (Settings → Devices & Services → MQTT)
 - Panels already flashed and on the same network as the MQTT broker
 
-### Install (manual, until HACS listing)
+### Install (HA Marketplace)
 
-1. Copy the folder [`custom_components/nspanel_core/`](../custom_components/nspanel_core/)
-   into your HA `config/custom_components/` directory.
-2. Restart Home Assistant.
+1. In Home Assistant, open **HA Marketplace** → add a **custom repository**:
+   `https://github.com/ALeXXBody/NSPanelCore` (category: **integration**)
+2. Install **NSPanel Core** from it.
 3. Settings → Devices & Services → **Add Integration** → **NSPanel Core** → Submit.
    (No connection settings needed — it uses HA's own MQTT broker connection.)
 4. Power-cycle your panels. They announce themselves on MQTT and register
    automatically; each panel appears as a device with sensors.
+
+### Install (manual fallback)
+
+If you prefer not to use a marketplace:
+
+1. Copy the folder [`custom_components/nspanel_core/`](../custom_components/nspanel_core/)
+   into your HA `config/custom_components/` directory.
+2. Restart Home Assistant, then continue from step 3 above.
 
 ### What works today
 
