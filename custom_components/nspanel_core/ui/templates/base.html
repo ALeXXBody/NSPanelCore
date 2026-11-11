@@ -44,7 +44,6 @@
   {% endblock %}
   <title>NSPanel Core</title>
   <script>
-    // If this page is opened directly (not in an iframe), redirect to HA home
     if (window.self === window.top) {
       window.location.href = "/";
     }
@@ -54,9 +53,7 @@
 <body class="h-full">
   {% include 'modals_stub.html' %}
   {% include 'partial/error_toast.html' %}
-  <div class="px-4 py-2">
-    <img src="/nspanel_core/static/logo.svg" alt="Logo" class="h-12">
-  </div>
+  {% include 'navbar.html' %}
 
   <div class="w-full flex flex-wrap justify-center mx-auto">
     <div class="w-screen max-w-screen-xl">
