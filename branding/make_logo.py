@@ -42,71 +42,33 @@ def rounded_rect(draw, cx, cy, s, radius_ratio, width_ratio, fill):
     )
 
 
-def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.052):
-    """The N, traced from the reference artwork's own skeleton (pixel-extracted
-    polylines, normalized to the icon square) drawn in the clean line style.
+def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.075):
+    """The LETTER N: three bold strokes — left vertical, diagonal,
+    right vertical — with small node dots at the terminals."""
+    w = max(4, int(s * trace_ratio))
+    r = int(w * 0.8)
 
-    Structure (y down, fractions of s):
-      N-path outer: left vertical x0.196 (y0.847->0.221), 45-deg jog, diagonal
-      (0.312,0.184)->(0.635,0.500), right vertical x0.64 (y0.500->0.258), top zigzag
-      N-path inner: left vertical x0.344 (y0.826->0.542) with bottom jog,
-      diagonal (0.381,0.505)->(0.683,0.805), jog, right vertical x0.79
-      (y0.800->0.274), top zigzag
-      inner long diagonal with 45-deg bends at both ends:
-      (0.280,0.258)->(0.344,0.342)->(0.677,0.684)->(0.730,0.705)->(0.730,0.753)
-      thin decoration verticals: x0.725 (y0.332..0.632), x0.275 (y0.379..0.684)
-      with a 45-deg bend, plus ring/dot nodes at the measured positions.
-    """
-    w = max(3, int(s * 0.052))   # THICK strokes (user request)
-    r = int(w * 0.9)
+    xL, xR = cx - s * 0.24, cx + s * 0.24
+    top, bot = cy - s * 0.30, cy + s * 0.30
 
-    paths = [
-        # N-path outer
-        [(0.196, 0.847), (0.206, 0.221), (0.312, 0.184), (0.635, 0.500),
-         (0.640, 0.258), (0.619, 0.216), (0.651, 0.184)],
-        # N-path inner
-        [(0.328, 0.805), (0.349, 0.742), (0.344, 0.542), (0.381, 0.505),
-         (0.683, 0.805), (0.788, 0.800), (0.794, 0.274), (0.751, 0.226),
-         (0.788, 0.168)],
-        # inner long diagonal (both-end 45-deg bends)
-        [(0.280, 0.258), (0.344, 0.342), (0.677, 0.684), (0.730, 0.705),
-         (0.730, 0.753)],
-        # thin decoration verticals (with bends into the long diagonal)
-        [(0.725, 0.332), (0.725, 0.632)],
-        [(0.275, 0.379), (0.275, 0.684), (0.323, 0.316)],
-    ]
+    # left vertical
+    draw.line([(xL, bot), (xL, top)], fill=color, width=w)
+    # diagonal: top of left stroke -> bottom of right stroke
+    draw.line([(xL, top), (xR, bot)], fill=color, width=w)
+    # right vertical
+    draw.line([(xR, bot), (xR, top)], fill=color, width=w)
 
-    def P(fx, fy):
-        return (cx + (fx - 0.5) * s, cy + (fy - 0.5) * s)
-
-    for pts in paths:
-        pp = [P(*pt) for pt in pts]
-        draw.line(pp, fill=color, width=w, joint="curve")
-
-    # Node dots at all stroke endpoints (simple style: bright-center dots)
-    endpoints = []
-    for pts in paths:
-        endpoints.append(pts[0])
-        endpoints.append(pts[-1])
-    seen = set()
-    for pt in endpoints:
-        key = (round(pt[0], 2), round(pt[1], 2))
-        if key in seen:
-            continue
-        seen.add(key)
-        x, y = P(*pt)
-        draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
+    # terminal node dots (circuit feel, minimal)
+    for (nx, ny) in [(xL, top), (xL, bot), (xR, bot), (xR, top)]:
+        draw.ellipse([nx - r, ny - r, nx + r, ny + r], fill=color)
         rd = int(r * 0.5)
-        draw.ellipse([x - rd, y - rd, x + rd, y + rd], fill=(215, 246, 252, color[3]))
+        draw.ellipse([nx - rd, ny - rd, nx + rd, ny + rd],
+                     fill=(215, 246, 252, color[3]))
 
-    # Rings where the reference has them (bottom-left terminal of the outer
-    # path and the two right-side top zigzag terminals)
-    for (fx, fy, k) in [(0.196, 0.847, 1.5), (0.651, 0.184, 1.2), (0.788, 0.168, 1.2)]:
-        x, y = P(fx, fy)
-        rr = int(w * k)
-        draw.ellipse([x - rr, y - rr, x + rr, y + rr], outline=color, width=max(2, w // 2))
-        cd = max(2, w // 3)
-        draw.ellipse([x - cd, y - cd, x + cd, y + cd], fill=color)
+
+def _compose_with_glow(base, glow, px):
+    """Flat style: no glow passes — just the base layer, crisp."""
+    return base, ImageDraw.Draw(base)
 
 
 def _icon_layers(px, icon_cx, icon_cy, icon_size):
@@ -121,11 +83,6 @@ def _icon_layers(px, icon_cx, icon_cy, icon_size):
     rounded_rect(gd, icon_cx, icon_cy, icon_size, 0.18, 0.03, CYAN_GLOW)
     draw_circuit_n(gd, icon_cx, icon_cy, icon_size, CYAN_GLOW, 0.03)
     return base, glow
-
-
-def _compose_with_glow(base, glow, px):
-    """Flat style: no glow passes — just the base layer, crisp."""
-    return base, ImageDraw.Draw(base)
 
 
 def make_logo(size=1024, with_text=True):
