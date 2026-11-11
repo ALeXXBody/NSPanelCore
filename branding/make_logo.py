@@ -134,6 +134,30 @@ def make_icon_only(size=512):
     return img.resize((size, size), Image.LANCZOS)
 
 
+def _icon_svg_data(size):
+    """PNG bytes of the approved icon, base64-encoded for SVG embedding."""
+    import base64
+    import io
+    buf = io.BytesIO()
+    make_icon_only(size).convert("RGB").save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _write_icon_svg(path, size=512):
+    """SVG wrapping the approved raster icon (exact approved look)."""
+    data = _icon_svg_data(size)
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink" '
+        f'viewBox="0 0 {size} {size}">'
+        f'<image href="data:image/png;base64,{data}" '
+        f'xlink:href="data:image/png;base64,{data}" '
+        f'width="{size}" height="{size}"/></svg>\n'
+    )
+    with open(path, "w") as f:
+        f.write(svg)
+
+
 def main():
     os.makedirs(BRAND_DIR, exist_ok=True)
     logo = make_logo(1024)
@@ -149,6 +173,14 @@ def main():
     if os.path.isdir(ui_dir):
         make_icon_only(512).convert("RGB").save(os.path.join(ui_dir, "icon-512.png"))
         make_icon_only(192).convert("RGB").save(os.path.join(ui_dir, "icon-192.png"))
+        _write_icon_svg(os.path.join(ui_dir, "favicon.svg"), 512)
+
+    # Django web app static assets (header logo, favicon, icon)
+    dj_static = os.path.join(REPO, "docker", "web", "nspanelmanager", "web", "static")
+    if os.path.isdir(dj_static):
+        make_icon_only(128).convert("RGB").save(os.path.join(dj_static, "favicon.png"))
+        _write_icon_svg(os.path.join(dj_static, "logo.svg"), 512)
+        _write_icon_svg(os.path.join(dj_static, "icon.svg"), 512)
     print("brand assets written")
 
 

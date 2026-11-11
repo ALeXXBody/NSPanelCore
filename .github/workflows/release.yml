@@ -23,11 +23,7 @@ jobs:
       - name: Determine image name
         id: image
         run: |
-          if [ "${{ github.event.release.prerelease }}" == "true" ]; then
-            echo "name=ghcr.io/alexxbody/nspanel-core-beta-${{ matrix.arch }}" >> $GITHUB_OUTPUT
-          else
-            echo "name=ghcr.io/alexxbody/nspanel-core-${{ matrix.arch }}" >> $GITHUB_OUTPUT
-          fi
+          echo "name=ghcr.io/alexxbody/nspanel-core-${{ matrix.arch }}" >> $GITHUB_OUTPUT
 
       - name: Update version strings
         shell: bash
@@ -62,13 +58,8 @@ jobs:
         with:
           ref: main
       - name: Update stable version
-        if: ${{ github.event.release.prerelease != true }}
         run: |
           sed -i "s|^version: .*|version: ${{ github.ref_name }}|g" docker/config.yaml
-      - name: Update beta version
-        if: ${{ github.event.release.prerelease == true }}
-        run: |
-          sed -i "s|^version: .*|version: ${{ github.ref_name }}|g" docker-beta/config.yaml
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: Bump Home Assistant add-on version to ${{ github.ref_name }}

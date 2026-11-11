@@ -28,7 +28,7 @@ pull. After the first release build has run (see the repo's Actions tab):
 1. Open `https://github.com/ALeXXBody?tab=packages`
 2. Open `nspanel-core-amd64` → **Package settings** → scroll to
    **Danger Zone** → **Change visibility** → **Public**.
-3. Repeat for `nspanel-core-aarch64` (and the `-beta-` packages if you use them).
+3. Repeat for `nspanel-core-aarch64`.
 
 This is one-time per package; visibility sticks for all later versions.
 
