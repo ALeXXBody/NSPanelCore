@@ -119,7 +119,7 @@ def make_logo(size=1024, with_text=True):
             d.text((x, y), ch, font=f_tag, fill=GRAY)
             x += d.textlength(ch, font=f_tag) + tracking
 
-    return img.resize((size, size), Image.LANCZOS)
+    return img.resize((size, size), Image.LANCZOS).filter(ImageFilter.UnsharpMask(radius=1.0, percent=130, threshold=2))
 
 
 def make_icon_only(size=512):
@@ -131,7 +131,7 @@ def make_icon_only(size=512):
     icon_cx, icon_cy, icon_size = px / 2, px / 2, px * 0.62
     rounded_rect(d, icon_cx, icon_cy, icon_size, 0.18, 0.028, CYAN)
     draw_circuit_n(d, icon_cx, icon_cy, icon_size, CYAN)
-    return img.resize((size, size), Image.LANCZOS)
+    return img.resize((size, size), Image.LANCZOS).filter(ImageFilter.UnsharpMask(radius=1.0, percent=130, threshold=2))
 
 
 def _icon_svg_data(size):

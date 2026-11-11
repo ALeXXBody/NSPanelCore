@@ -88,7 +88,11 @@ def make_splash(w, h):
         d.text((x, y), ch, font=f_tag, fill=GRAY)
         x += d.textlength(ch, font=f_tag) + tracking
 
-    return img.resize((w, h), Image.LANCZOS)
+    out = img.resize((w, h), Image.LANCZOS)
+    # Sharpen after downscale — panel TFTs are low-res (480x320) and benefit
+    # from a light unsharp mask to keep edges crisp.
+    out = out.filter(ImageFilter.UnsharpMask(radius=1.0, percent=140, threshold=2))
+    return out
 
 
 def main():
