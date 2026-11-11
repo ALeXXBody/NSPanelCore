@@ -35,9 +35,7 @@ jobs:
       - name: Cache Conan dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            /root/.conan2
-            /MQTTManager/conan_cache
+          path: /MQTTManager/conan_cache
           key: conan-${{ matrix.arch }}-${{ hashFiles('docker/MQTTManager/conanfile.py', 'docker/MQTTManager/CMakeLists.txt') }}
           restore-keys: conan-${{ matrix.arch }}-
 
@@ -56,6 +54,7 @@ jobs:
             echo "Build attempt $attempt"
             if sudo /MQTTManager/compile_mqttmanager.sh --target-platform ${{ matrix.target }} --strip; then
               echo "Build succeeded on attempt $attempt"
+              sudo chmod -R a+rX /MQTTManager/conan_cache || true
               exit 0
             fi
             echo "Attempt $attempt failed (likely transient source-download rate limit); retrying in 30s"
