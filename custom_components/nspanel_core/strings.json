@@ -1,0 +1,31 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "NSPanel Core",
+                "description": "Manages Sonoff NSPanel panels over MQTT. Requires the MQTT integration to be configured.",
+                "data": {
+                    "name": "Name"
+                }
+            }
+        },
+        "abort": {
+            "already_configured": "NSPanel Core is already set up."
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "NSPanel Core settings",
+                "data": {
+                    "manager_address": "Manager address (used in panel MQTT topics)",
+                    "color_temp_min": "Minimum color temperature (K)",
+                    "color_temp_max": "Maximum color temperature (K)",
+                    "date_format": "Date format (e.g. %d/%m)",
+                    "location_latitude": "Latitude (for weather)",
+                    "location_longitude": "Longitude (for weather)"
+                }
+            }
+        }
+    }
+}
