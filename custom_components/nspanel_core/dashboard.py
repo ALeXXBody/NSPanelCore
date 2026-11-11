@@ -149,9 +149,7 @@ class PlaceholderPageView(HomeAssistantView):
     """Pages still being ported — served with the original shell so the app
     never falls back to the HA frontend (which caused the 'doubled page')."""
 
-    url = [
-        f"{URL_BASE}/coming-soon",
-    ]
+    url = f"{URL_BASE}/coming-soon"
     name = "nspanel_core:placeholder"
     requires_auth = False
 
