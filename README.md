@@ -2,6 +2,9 @@
 
 <img src="branding/nspanel-core-logo.png" alt="NSPanel Core" width="380">
 
+<img src="branding/splash-preview-eu.png" alt="NSPanel Core startup splash (EU panels)" width="380">
+<img src="branding/splash-preview-us.png" alt="NSPanel Core startup splash (US vertical panels)" width="190">
+
 **Smart Wall OS for the Sonoff NSPanel — built for Home Assistant.**
 
 Custom software for the Sonoff NSPanel (not the NSPanel Pro) designed to be easy to use
