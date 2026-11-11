@@ -753,6 +753,12 @@ class NSPanelManager:
             if mac:
                 await self._handle_register_request(mac, data)
 
+    async def _on_relay_state(self, msg) -> None:
+        state = str(msg.payload).strip().lower() in ("1", "true", "on")
+        self._relay_state[msg.topic] = state
+        for listener in self._relay_listeners.get(msg.topic, []):
+            listener(state)
+
     def _register_accept_reply(self, panel: PanelConfig) -> str:
         return json.dumps({
             "command": "register_accept",
