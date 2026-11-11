@@ -57,7 +57,7 @@ def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.052):
       thin decoration verticals: x0.725 (y0.332..0.632), x0.275 (y0.379..0.684)
       with a 45-deg bend, plus ring/dot nodes at the measured positions.
     """
-    w = max(3, int(s * 0.037))   # stroke width measured from the reference (bold)
+    w = max(3, int(s * 0.052))   # THICK strokes (user request)
     r = int(w * 0.9)
 
     paths = [
