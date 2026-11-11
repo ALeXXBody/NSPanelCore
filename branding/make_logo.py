@@ -43,27 +43,14 @@ def rounded_rect(draw, cx, cy, s, radius_ratio, width_ratio, fill):
 
 
 def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.075):
-    """The LETTER N: three bold strokes — left vertical, diagonal,
-    right vertical — with small node dots at the terminals."""
-    w = max(4, int(s * trace_ratio))
-    r = int(w * 0.8)
-
-    xL, xR = cx - s * 0.24, cx + s * 0.24
-    top, bot = cy - s * 0.30, cy + s * 0.30
-
-    # left vertical
-    draw.line([(xL, bot), (xL, top)], fill=color, width=w)
-    # diagonal: top of left stroke -> bottom of right stroke
-    draw.line([(xL, top), (xR, bot)], fill=color, width=w)
-    # right vertical
-    draw.line([(xR, bot), (xR, top)], fill=color, width=w)
-
-    # terminal node dots (circuit feel, minimal)
-    for (nx, ny) in [(xL, top), (xL, bot), (xR, bot), (xR, top)]:
-        draw.ellipse([nx - r, ny - r, nx + r, ny + r], fill=color)
-        rd = int(r * 0.5)
-        draw.ellipse([nx - rd, ny - rd, nx + rd, ny + rd],
-                     fill=(215, 246, 252, color[3]))
+    """The letter N — a real Montserrat Black glyph, thick, flat. No dots,
+    no decoration: just the letter, centered in the icon area."""
+    f = font(int(s * 0.62), "Black")
+    bbox = draw.textbbox((0, 0), "N", font=f)
+    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    x = cx - w / 2 - bbox[0]
+    y = cy - h / 2 - bbox[1]
+    draw.text((x, y), "N", font=f, fill=color)
 
 
 def _compose_with_glow(base, glow, px):
