@@ -394,6 +394,83 @@ class ManagerSettingsView(HomeAssistantView):
         return web.Response(text=html, content_type="text/html")
 
 
+
+import hashlib as _hashlib
+import os as _os
+
+
+def _firmware_dir():
+    return _os.path.join(_os.path.dirname(__file__), "firmware")
+
+
+class DownloadFirmwareView(HomeAssistantView):
+    url = f"{URL_BASE}/download_firmware"
+    name = "nspanel_core:download_firmware"
+    requires_auth = False
+
+    async def get(self, request):
+        model = request.query.get("model", "sonoff")
+        if model not in ("sonoff", "custom"):
+            return web.Response(status=400, text="Unknown model")
+        path = _os.path.join(_firmware_dir(), model, "firmware.bin")
+        if not _os.path.exists(path):
+            return web.Response(status=404, text="Not found")
+        return web.FileResponse(path)
+
+
+class DownloadDataFileView(HomeAssistantView):
+    url = f"{URL_BASE}/download_data_file"
+    name = "nspanel_core:download_data_file"
+    requires_auth = False
+
+    async def get(self, request):
+        model = request.query.get("model", "sonoff")
+        if model not in ("sonoff", "custom"):
+            return web.Response(status=400, text="Unknown model")
+        path = _os.path.join(_firmware_dir(), model, "data_file.bin")
+        if not _os.path.exists(path):
+            return web.Response(status=404, text="Not found")
+        return web.FileResponse(path)
+
+
+class ChecksumFirmwareView(HomeAssistantView):
+    url = f"{URL_BASE}/checksum_firmware"
+    name = "nspanel_core:checksum_firmware"
+    requires_auth = False
+
+    async def get(self, request):
+        model = request.query.get("model", "sonoff")
+        if model not in ("sonoff", "custom"):
+            return web.Response(status=400, text="Unknown model")
+        path = _os.path.join(_firmware_dir(), model, "firmware.bin")
+        if not _os.path.exists(path):
+            return web.Response(status=404, text="Not found")
+        return web.Response(text=_md5(path))
+
+
+class ChecksumDataFileView(HomeAssistantView):
+    url = f"{URL_BASE}/checksum_data_file"
+    name = "nspanel_core:checksum_data_file"
+    requires_auth = False
+
+    async def get(self, request):
+        model = request.query.get("model", "sonoff")
+        if model not in ("sonoff", "custom"):
+            return web.Response(status=400, text="Unknown model")
+        path = _os.path.join(_firmware_dir(), model, "data_file.bin")
+        if not _os.path.exists(path):
+            return web.Response(status=404, text="Not found")
+        return web.Response(text=_md5(path))
+
+
+def _md5(path: str) -> str:
+    h = _hashlib.md5()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 class ComingSoonView(HomeAssistantView):
     """Catch-all under /nspanel_core/* — never leaks the HA frontend into the
     iframe (this caused the 'doubled page' when clicking unported links)."""

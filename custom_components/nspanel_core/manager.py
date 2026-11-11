@@ -318,6 +318,9 @@ class NSPanelManager:
                 state_map.get(report.get("nspanel_state", 1), "offline"),
                 report.get("update_progress", 0),
             )
+            # Firmware/data OTA: trigger an update when the panel's reported
+            # checksums differ from the manager's (mirrors the C++ has_*_update).
+            await self._maybe_trigger_firmware_ota(panel, report)
 
     def _panel_by_mac(self, mac: str) -> PanelConfig | None:
         for panel in self.config.panels:
@@ -347,11 +350,32 @@ class NSPanelManager:
     def pages(self) -> list:
         return list(self.config.pages)
 
-    async def _on_relay_state(self, msg) -> None:
-        state = msg.payload in ("1", "true", "True", "on")
-        self._relay_state[msg.topic] = state
-        for listener in self._relay_listeners.get(msg.topic, []):
-            listener(state)
+    async def _maybe_trigger_firmware_ota(self, panel: PanelConfig, report: dict) -> None:
+        import hashlib, os
+
+        firmware_dir = os.path.join(os.path.dirname(__file__), "firmware")
+        model = "sonoff"  # default; could be extended to panel.model
+
+        def md5_file(path: str) -> str:
+            h = hashlib.md5()
+            try:
+                with open(path, "rb") as f:
+                    for chunk in iter(lambda: f.read(65536), b""):
+                        h.update(chunk)
+            except FileNotFoundError:
+                return ""
+            return h.hexdigest()
+
+        fw_md5 = md5_file(os.path.join(firmware_dir, model, "firmware.bin"))
+        data_md5 = md5_file(os.path.join(firmware_dir, model, "data_file.bin"))
+
+        if fw_md5 and report.get("md5_firmware") and report["md5_firmware"] != fw_md5:
+            _LOGGER.info("Firmware update available for panel %s — triggering OTA", panel.name)
+            await self._publish(panel_topic(panel.mac, "command"), json.dumps({"command": "firmware_update"}))
+
+        if data_md5 and report.get("md5_littlefs") and report["md5_littlefs"] != data_md5:
+            _LOGGER.info("Data file update available for panel %s — triggering OTA", panel.name)
+            await self._publish(panel_topic(panel.mac, "command"), json.dumps({"command": "data_file_update"}))
 
     def relay_state(self, topic: str) -> bool:
         return self._relay_state.get(topic, False)
