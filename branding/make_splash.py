@@ -49,7 +49,7 @@ def make_splash(w, h):
 
     # Flat N icon (traced skeleton, no glow)
     icon_cx, icon_cy = px / 2, py * 0.30
-    icon_size = min(px, py) * 0.40
+    icon_size = min(px, py) * 0.55
     rounded_rect(d, icon_cx, icon_cy, icon_size, 0.18, 0.024, CYAN)
     draw_circuit_n(d, icon_cx, icon_cy, icon_size, CYAN)
 

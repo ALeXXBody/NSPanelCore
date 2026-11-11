@@ -57,7 +57,7 @@ def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.022):
       thin decoration verticals: x0.725 (y0.332..0.632), x0.275 (y0.379..0.684)
       with a 45-deg bend, plus ring/dot nodes at the measured positions.
     """
-    w = max(3, int(s * trace_ratio))
+    w = max(3, int(s * 0.037))   # stroke width measured from the reference (bold)
     r = int(w * 0.9)
 
     paths = [
@@ -132,7 +132,7 @@ def make_logo(size=1024, with_text=True):
     """Master logo: rounded square panel + neon circuit-N + wordmark + tagline."""
     S = 4  # supersample
     px = size * S
-    base, glow = _icon_layers(px, px / 2, px * 0.355, px * 0.44)
+    base, glow = _icon_layers(px, px / 2, px * 0.355, px * 0.48)
     img, d = _compose_with_glow(base, glow, px)
 
     icon_cx, icon_cy = px / 2, px * 0.355
@@ -167,7 +167,7 @@ def make_icon_only(size=512):
     """App icon: rounded dark panel + neon icon, no text."""
     S = 4
     px = size * S
-    base, glow = _icon_layers(px, px / 2, px / 2, px * 0.62)
+    base, glow = _icon_layers(px, px / 2, px / 2, px * 0.70)
     img, d = _compose_with_glow(base, glow, px)
     icon_cx, icon_cy, icon_size = px / 2, px / 2, px * 0.62
     rounded_rect(d, icon_cx, icon_cy, icon_size, 0.18, 0.028, CYAN)
