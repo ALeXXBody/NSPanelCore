@@ -20,7 +20,7 @@ jobs:
             runner: ubuntu-latest
             target: linux/amd64
           - arch: aarch64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-latest
             target: linux/arm64
     steps:
       - name: Checkout
