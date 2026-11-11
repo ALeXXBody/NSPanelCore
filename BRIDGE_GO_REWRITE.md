@@ -96,12 +96,27 @@ Manager-facing (`{addr}` = manager address setting):
 11. Integration test: run against live Django+MQTT, diff MQTT/STOMP traffic vs C++ bridge
 12. Swap: Dockerfile copies Go binary to `/MQTTManager/build/nspm_mqttmanager`
 
+## Entity layer contract (discovered)
+- `web_entity.entity_data` JSON schema (Django writes config, bridge writes live state):
+  `{controller: "home_assistant", home_assistant_name: "light.x", can_dim, can_color_temperature,
+  can_rgb, is_ceiling_light, controlled_by_nspanel_main_page}` + live state fields the bridge
+  adds (see light.cpp set_entity_data_json usage)
+- Light types: ceiling/table (affects room aggregations), controlled_from_main_page
+- HA event shape: `event.data.new_state` with `attributes` (brightness, color_temp, rgb_color...) —
+  the light state machine maps HA attributes → NSPanelEntityState protobuf → MQTT manager topic
+
 ## Status
 - [x] Inventory complete (this doc)
-- [ ] go.mod + protos
-- [ ] db package
-- [ ] mqtt package
-- [ ] stomp package
-- [ ] entities/ha/panels/weather
-- [ ] integration test
-- [ ] Dockerfile swap
+- [x] go.mod + protos (wire-identical bindings)
+- [x] db package (full schema access + write-back)
+- [x] mqtt package (client + exact topic builders)
+- [x] timepub (minute-aligned publisher)
+- [x] config loader (mirrors MqttManagerConfig::load)
+- [x] stomp package (full STOMP 1.2 server port)
+- [x] ha package (WS API client: auth, subscribe_events, get_states, call_service, observers)
+- [x] weather package (open-meteo → NSPanelWeatherUpdate)
+- [ ] entities package (light/thermostat/scene state machines — port from C++)
+- [ ] panels package (NSPanel state machine: status report, pages, screensaver, relays, OTA md5s)
+- [ ] command routing (NSPanelMQTTManagerCommand dispatch: lights/thermostat/buttons/pages)
+- [ ] integration test (traffic diff vs C++ bridge)
+- [ ] Dockerfile swap (copy Go binary to /MQTTManager/build/nspm_mqttmanager)
