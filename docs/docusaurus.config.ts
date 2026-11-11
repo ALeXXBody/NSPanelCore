@@ -118,15 +118,6 @@ const config: Config = {
           title: 'Community',
           items: [
             {
-              label: 'Discord',
-              href: 'https://discord.gg/RwXvAH56fE',
-            },
-          ],
-        },
-        {
-          title: 'More',
-          items: [
-            {
               label: 'GitHub',
               href: 'https://github.com/ALeXXBody/NSPanelCore',
             },

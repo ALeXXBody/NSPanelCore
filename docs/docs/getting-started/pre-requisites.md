@@ -21,5 +21,4 @@ In order to make valuable use of NSPanel Manager you must full-fill the followin
 When you match all the requirements, you are then ready for the first step: [Flash our custom firmware into your NSPanel](./flash-nspanel).
 
 :::info
-You are not sure? Join us on [Discord](https://discord.gg/RwXvAH56fE) we will try to help you 👍
 :::
