@@ -5,8 +5,8 @@ NSPanel Core brand asset generator.
 Generates the master logo (neon circuit-N in a rounded square + wordmark +
 'SMART WALL OS' tagline) and all derived sizes:
   branding/nspanel-core-logo.png        1024x1024 master
-  docker/icon.png / icon128.png / icon64.png / logo.png   (HA add-on icons)
-  docker/web-ui/public icons (icon-512.png, icon-192.png)
+  branding/assets/icon.png / icon128.png / icon64.png / logo.png
+  branding/assets/web-ui icons (icon-512.png, icon-192.png)
 """
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 import os
@@ -163,21 +163,23 @@ def main():
     logo = make_logo(1024)
     logo.convert("RGB").save(os.path.join(BRAND_DIR, "nspanel-core-logo.png"))
 
-    docker_dir = os.path.join(REPO, "docker")
+    docker_dir = os.path.join(BRAND_DIR, "assets")
+    os.makedirs(docker_dir, exist_ok=True)
     make_icon_only(512).convert("RGB").save(os.path.join(docker_dir, "icon.png"))
     make_icon_only(128).convert("RGB").save(os.path.join(docker_dir, "icon128.png"))
     make_icon_only(64).convert("RGB").save(os.path.join(docker_dir, "icon64.png"))
     make_icon_only(256).convert("RGB").save(os.path.join(docker_dir, "logo.png"))
 
-    ui_dir = os.path.join(REPO, "docker", "web-ui", "public")
-    if os.path.isdir(ui_dir):
-        make_icon_only(512).convert("RGB").save(os.path.join(ui_dir, "icon-512.png"))
-        make_icon_only(192).convert("RGB").save(os.path.join(ui_dir, "icon-192.png"))
-        _write_icon_svg(os.path.join(ui_dir, "favicon.svg"), 512)
+    ui_dir = os.path.join(BRAND_DIR, "assets", "web-ui")
+    os.makedirs(ui_dir, exist_ok=True)
+    make_icon_only(512).convert("RGB").save(os.path.join(ui_dir, "icon-512.png"))
+    make_icon_only(192).convert("RGB").save(os.path.join(ui_dir, "icon-192.png"))
+    _write_icon_svg(os.path.join(ui_dir, "favicon.svg"), 512)
 
     # Django web app static assets (header logo, favicon, icon)
-    dj_static = os.path.join(REPO, "docker", "web", "nspanelmanager", "web", "static")
-    if os.path.isdir(dj_static):
+    dj_static = os.path.join(BRAND_DIR, "assets", "manager-static")
+    os.makedirs(dj_static, exist_ok=True)
+    if True:
         make_icon_only(128).convert("RGB").save(os.path.join(dj_static, "favicon.png"))
         _write_icon_svg(os.path.join(dj_static, "logo.svg"), 512)
         _write_icon_svg(os.path.join(dj_static, "icon.svg"), 512)

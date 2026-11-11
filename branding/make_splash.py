@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from make_logo import CYAN, WHITE, GRAY, rounded_rect, draw_circuit_n, font  # noqa
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BRAND_DIR = os.path.join(REPO, "branding")
 REF = sorted(glob.glob(os.path.join(REPO, "branding", "uploads", "image_*")))[0]
 
 # Crop regions in the 395x395 reference (measured earlier from the pixels)
@@ -102,8 +103,9 @@ def main():
     splash_us.save(os.path.join(REPO, "branding", "splash-preview-us.png"))
     for variant, sp in (("eu", splash_eu), ("us", splash_us)):
         for t in range(1, 5):
-            sp.save(os.path.join(REPO, "docker", "HMI_files", "hmi_pictures",
-                                 variant, f"tft{t}", "6.png"))
+            out = os.path.join(BRAND_DIR, "hmi_pictures", variant, f"tft{t}")
+            os.makedirs(out, exist_ok=True)
+            sp.save(os.path.join(out, "6.png"))
     print("flat splash regenerated (no glow, correct N shape)")
 
 

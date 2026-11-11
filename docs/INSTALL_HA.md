@@ -2,7 +2,7 @@
 
 There are two ways to run NSPanel Core. Pick based on your situation:
 
-| | **HA Integration** (recommended going forward) | **HA Add-on** (legacy) |
+| | **HA Integration** (recommended going forward) | **HA Add-on** (legacy, separate repo) |
 |---|---|---|
 | Install method | HA Marketplace / copy a folder | Add-on store |
 | Runs as | Inside Home Assistant | Docker container in Supervisor |
@@ -65,7 +65,7 @@ contract documented there is exactly what the integration implements.
 2. Paste this URL and click **Add**:
 
    ```
-   https://github.com/ALeXXBody/NSPanelCore
+   https://github.com/ALeXXBody/nspanel-core-addon
    ```
 
 3. Open **NSPanel Core → Install → Start** (enable *Start on boot* and

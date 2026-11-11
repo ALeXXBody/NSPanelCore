@@ -11,7 +11,7 @@ on the panel itself for people of all ages and backgrounds.
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![Upstream](https://img.shields.io/badge/fork%20of-NSPManager%2FNSPanelManager-orange)](https://github.com/NSPManager/NSPanelManager)
 [![Backend](https://img.shields.io/badge/controller-Home%20Assistant-41b1f6)](https://www.home-assistant.io/)
-[![Stack](https://img.shields.io/badge/stack-mono--repo%20%7C%20Docker-2496ED)](docker/)
+[![Install](https://img.shields.io/badge/install-HA%20Marketplace-00CC66)](docs/INSTALL_HA.md)
 
 </div>
 
@@ -33,16 +33,18 @@ their excellent work. NSPanel Core is maintained independently with the followin
 | 🛡️ **Stability** | Fixed the unsynchronized TFT command queue (random reboots after days of uptime), task-per-event heap churn, config-reload memory leak, upstream panel-config API 500 errors (renamed field crash), scenes API `NameError`, missing HTTP timeouts, and more — with a behavioral comparison harness verifying **zero regressions** against upstream. |
 | 🧪 **Tested** | 61-endpoint Django comparison vs pristine upstream (35 byte-identical, 9 documented improvements, 0 regressions), C++ unit suite 9/9 green (upstream's own suite was unbuildable — repaired), firmware builds verified against upstream byte budgets, web UI type-checks and builds clean. |
 
-### Repo layout (monorepo)
+### Repo layout
 
 | Component | Path |
 |---|---|
-| Manager backend (Django 5.1) | [`docker/web/nspanelmanager/`](docker/web/nspanelmanager/) |
-| MQTT bridge (C++, protobuf) | [`docker/MQTTManager/`](docker/MQTTManager/) |
-| Kiosk web UI (React 19 + Vite) | [`docker/web-ui/`](docker/web-ui/) |
+| **HA integration** (Python, HA Marketplace) | [`custom_components/nspanel_core/`](custom_components/nspanel_core/) |
 | Panel firmware (ESP32 / PlatformIO) | [`firmware/`](firmware/) |
-| Protobuf definitions | [`docker/protobuf/`](docker/protobuf/) |
-| Panel TFT binaries (runtime) | [`docker/HMI_files/`](docker/HMI_files/) |
+| Branding pipeline (logo/splash generator) | [`branding/`](branding/) |
+| Wire-contract spec (panels ⇄ manager) | [`BRIDGE_GO_REWRITE.md`](BRIDGE_GO_REWRITE.md) |
+
+The **legacy add-on** (Docker manager + C++ bridge + kiosk UI + TFT files) now
+lives in its own repository: [ALeXXBody/nspanel-core-addon](https://github.com/ALeXXBody/nspanel-core-addon).
+Existing v1.0.2 installs keep working; new installs should use the integration.
 
 ## Installation
 
@@ -65,18 +67,16 @@ OpenHAB parts:
 - 📖 Docs: [nspanelmanager.com](https://nspanelmanager.com) (upstream documentation)
 - 🎥 Walkthrough & install guide (upstream): [YouTube demo](https://www.youtube.com/watch?v=EzDDtguwFd4)
 
+## Documentation
+
+The original NSPanel Manager documentation still applies to everything except the removed
+OpenHAB parts:
+
+- 🚀 **Install on Home Assistant: [docs/INSTALL_HA.md](docs/INSTALL_HA.md)** — add-on repository install, MQTT setup, panel registration, Docker/NAS route and troubleshooting
+- 📖 Docs: [nspanelmanager.com](https://nspanelmanager.com) (upstream documentation)
+- 🎥 Walkthrough & install guide (upstream): [YouTube demo](https://www.youtube.com/watch?v=EzDDtguwFd4)
+
 ## Building & running
-
-```bash
-# Build the full appliance image (manager + bridge + UI)
-cd docker
-docker build -t nspanel-core .
-```
-
-The Dockerfile builds everything in-tree: the web UI from `docker/web-ui/`,
-the C++ MQTTManager with Conan/CMake, and the Django app — no network
-checkouts of third-party repos at build time.
-
 To modify the panel firmware and flash a panel over USB:
 
 ```bash
@@ -84,8 +84,9 @@ cd firmware
 pio run -t upload   # requires PlatformIO
 ```
 
-TFT (screen) updates are flashed through the manager web interface — the compiled
-`.tft` files for all panel variants are kept in `docker/HMI_files/`.
+TFT (screen) updates are flashed through the panel manager — the compiled
+`.tft` files for all panel variants live in the legacy add-on repository
+([nspanel-core-addon](https://github.com/ALeXXBody/nspanel-core-addon)).
 
 > **Note:** the HMI design sources (XCF/GIMP + automation scripts) that generate the
 > `.tft` files are not part of this repo; the compiled binaries are kept so panels
