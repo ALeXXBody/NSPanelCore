@@ -24,6 +24,31 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+
+
+class _RoomView:
+    """Template-friendly room object (Django model replacement)."""
+    def __init__(self, room, nspanels=None, entities=None):
+        self.id = room.id if hasattr(room, "id") else room["id"]
+        self.friendly_name = room.name if hasattr(room, "name") else room.get("name", "")
+        self.name = self.friendly_name
+        self._nspanels = nspanels or []
+        self._entities = entities or []
+
+    class _QS:
+        def __init__(self, items):
+            self._items = items
+            self.all = items  # Django template calls .all (as attribute, not method)
+
+    @property
+    def nspanel_set(self):
+        return self._QS(self._nspanels)
+
+    @property
+    def entity_set(self):
+        return self._QS(self._entities)
+
+
 URL_BASE = "/nspanel_core"
 
 UI_DIR = pathlib.Path(__file__).parent / "ui"
@@ -204,9 +229,23 @@ class EditPanelView(HomeAssistantView):
         panel_dict["friendly_name"] = panel.name  # Django model used friendly_name
         panel_dict["mac_address"] = panel.mac  # MAC shown in settings header
         panel_dict["room"] = {"id": panel.room_id}  # Django model used panel.room (FK)
+        # Django FKs not used in integration; provide stubs so template attribute access is safe.
+        class _Stub:
+            room = None
+        panel_dict["button1_detached_mode_entity"] = _Stub()
+        panel_dict["button2_detached_mode_entity"] = _Stub()
         panel_info = {"data": panel_dict}
         nspanel = {"data": panel_dict}
-        rooms = [{"id": r.id, "name": r.name} for r in manager.config.rooms]
+        room_views = []
+        for r in manager.config.rooms:
+            r_nspanels = [p for p in manager.config.panels if p.room_id == r.id]
+            r_entities = [l for l in manager.config.lights if l.room_id == r.id]
+            rv = _RoomView(r, nspanels=r_nspanels, entities=r_entities)
+            # make nspanels template-friendly (friendly_name)
+            rv._nspanels = [type("P", (), {"friendly_name": p.name}) for p in r_nspanels]
+            rv._entities = [type("E", (), {"friendly_name": e.name}) for e in r_entities]
+            room_views.append(rv)
+        rooms = room_views
         lights = [
             {"id": l.id, "name": l.name, "ha_entity": l.ha_entity, "room_id": l.room_id}
             for l in manager.config.lights
@@ -415,10 +454,15 @@ class ManagerSettingsView(HomeAssistantView):
 
     async def get(self, request):
         manager = _manager(request)
+        room_views = []
+        for r in manager.config.rooms:
+            r_nspanels = [type("P", (), {"friendly_name": p.name}) for p in manager.config.panels if p.room_id == r.id]
+            room_views.append(_RoomView(r, nspanels=r_nspanels))
         html = _render(
             "manager_settings.html",
             page_title="Manager settings",
             nspanels=_panels_context(manager),
+            rooms=room_views,
         )
         return web.Response(text=html, content_type="text/html")
 
