@@ -1,96 +1,54 @@
 <div align="center">
 
-<img src="branding/nspanel-core-logo.png?v=2" alt="NSPanel Core" width="380">
+<img src="branding/nspanel-core-logo.png?v=3" alt="NSPanel Core" width="380">
 
-**Smart Wall OS for the Sonoff NSPanel — built for Home Assistant.**
+**Smart Wall OS for the Sonoff NSPanel — as a native Home Assistant integration.**
 
-Custom software for the Sonoff NSPanel (not the NSPanel Pro) designed to be easy to use
-day to day and to manage multiple NSPanels around your home — with an intuitive interface
-on the panel itself for people of all ages and backgrounds.
+Custom software for the Sonoff NSPanel (not the NSPanel Pro) that turns your panels
+into first-class Home Assistant devices — no Docker, no add-on, no build pipeline.
 
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
-[![Upstream](https://img.shields.io/badge/fork%20of-NSPManager%2FNSPanelManager-orange)](https://github.com/NSPManager/NSPanelManager)
-[![Backend](https://img.shields.io/badge/controller-Home%20Assistant-41b1f6)](https://www.home-assistant.io/)
-[![Install](https://img.shields.io/badge/install-HA%20Marketplace-00CC66)](docs/INSTALL_HA.md)
+[![Platform](https://img.shields.io/badge/platform-Home%20Assistant-41b1f6)](https://www.home-assistant.io/)
+[![Install](https://img.shields.io/badge/install-HA%20Marketplace-00CC66)](INSTALL_HA.md)
 
 </div>
 
 ---
 
-## About this fork
+## What it does
 
-NSPanel Core is a **hard fork** of [NSPManager/NSPanelManager](https://github.com/NSPManager/NSPanelManager)
-(GPL-3.0). Full credit to the original NSPanel Manager team — this project exists because of
-their excellent work. NSPanel Core is maintained independently with the following focus:
-
-### What changed
-
-| | |
-|---|---|
-| 🏠 **Home Assistant only** | OpenHAB support has been fully removed (~3,500 LOC across the manager and MQTT bridge). All integrations target Home Assistant. |
-| 📦 **Single monorepo** | Manager, MQTT bridge, web UI and panel firmware live in this one repository (upstream split them across three). One clone, one PR surface, one release. |
-| ⚡ **Performance** | Panel UI round-trips cut from ~150–300 ms to ~10–40 ms (serial command pipeline rewrite), MQTT bridge de-locked and event-driven (no more 100 ms sleep-poll), Django settings/queries cached (panel editor ~105 queries → ~2), firmware OTA now streams with proper HTTP Range support, web UI bundle 36 MB → 1.2 MB. |
-| 🛡️ **Stability** | Fixed the unsynchronized TFT command queue (random reboots after days of uptime), task-per-event heap churn, config-reload memory leak, upstream panel-config API 500 errors (renamed field crash), scenes API `NameError`, missing HTTP timeouts, and more — with a behavioral comparison harness verifying **zero regressions** against upstream. |
-| 🧪 **Tested** | 61-endpoint Django comparison vs pristine upstream (35 byte-identical, 9 documented improvements, 0 regressions), C++ unit suite 9/9 green (upstream's own suite was unbuildable — repaired), firmware builds verified against upstream byte budgets, web UI type-checks and builds clean. |
-
-### Repo layout
-
-| Component | Path |
-|---|---|
-| **HA integration** (Python, HA Marketplace) | [`custom_components/nspanel_core/`](custom_components/nspanel_core/) |
-| Panel firmware (ESP32 / PlatformIO) | [`firmware/`](firmware/) |
-| Branding pipeline (logo/splash generator) | [`branding/`](branding/) |
-| Wire-contract spec (panels ⇄ manager) | [`BRIDGE_GO_REWRITE.md`](BRIDGE_GO_REWRITE.md) |
-
-The **legacy add-on** (Docker manager + C++ bridge + kiosk UI + TFT files) now
-lives in its own repository: [ALeXXBody/nspanel-core-addon](https://github.com/ALeXXBody/nspanel-core-addon).
-Existing v1.0.2 installs keep working; new installs should use the integration.
+- **Registers panels automatically** — panels announce themselves on MQTT and
+  appear as devices in Home Assistant
+- **Controls your home from the wall** — panel buttons and page interactions
+  drive your real HA lights and scenes through native service calls
+- **Real HA entities for panel hardware** — temperature/humidity/pressure/RSSI
+  sensors and relay switches per panel
+- **Speaks the panels' own protocol** — same MQTT/protobuf contract the panel
+  firmware already uses; no panel reflashing needed
 
 ## Installation
 
-**Home Assistant integration (recommended going forward)** — no Docker, no
-build pipeline, plain Python files in HA:
+Full guide: **[INSTALL_HA.md](INSTALL_HA.md)**
 
-1. Copy `custom_components/nspanel_core/` into HA's `config/custom_components/`
-2. Restart Home Assistant → Settings → Devices & Services → Add Integration → **NSPanel Core**
-3. Power-cycle the panels — they register automatically
+1. Requires the **MQTT integration** configured in Home Assistant
+2. Install via **HA Marketplace** (add `https://github.com/ALeXXBody/NSPanelCore`
+   as a custom repository, category *integration*) or copy
+   [`custom_components/nspanel_core/`](custom_components/nspanel_core/) into
+   HA's `config/custom_components/`
+3. Add the **NSPanel Core** integration, then power-cycle your panels
 
-Full details and the legacy add-on install: **[docs/INSTALL_HA.md](docs/INSTALL_HA.md)**
+## Status
 
+- ✅ Panel registration & configuration
+- ✅ Light control (brightness / color temperature / RGB)
+- ✅ Panel sensors + relay switches
+- 🚧 Room/entity-page configuration UI
+- 🚧 Scenes, thermostats
 
-## Documentation
+## Firmware
 
-The original NSPanel Manager documentation still applies to everything except the removed
-OpenHAB parts:
-
-- 🚀 **Install on Home Assistant: [docs/INSTALL_HA.md](docs/INSTALL_HA.md)** — add-on repository install, MQTT setup, panel registration, Docker/NAS route and troubleshooting
-- 📖 Docs: [nspanelmanager.com](https://nspanelmanager.com) (upstream documentation)
-- 🎥 Walkthrough & install guide (upstream): [YouTube demo](https://www.youtube.com/watch?v=EzDDtguwFd4)
-
-## Documentation
-
-The original NSPanel Manager documentation still applies to everything except the removed
-OpenHAB parts:
-
-- 🚀 **Install on Home Assistant: [docs/INSTALL_HA.md](docs/INSTALL_HA.md)** — add-on repository install, MQTT setup, panel registration, Docker/NAS route and troubleshooting
-- 📖 Docs: [nspanelmanager.com](https://nspanelmanager.com) (upstream documentation)
-- 🎥 Walkthrough & install guide (upstream): [YouTube demo](https://www.youtube.com/watch?v=EzDDtguwFd4)
-
-## Building & running
-To modify the panel firmware and flash a panel over USB:
-
-```bash
-cd firmware
-pio run -t upload   # requires PlatformIO
-```
-
-TFT (screen) updates are flashed through the panel manager — the compiled
-`.tft` files for all panel variants live in the legacy add-on repository
-([nspanel-core-addon](https://github.com/ALeXXBody/nspanel-core-addon)).
-
-> **Note:** the HMI design sources (XCF/GIMP + automation scripts) that generate the
-> `.tft` files are not part of this repo; the compiled binaries are kept so panels
-> can always download their theme.
+Panel firmware sources live in [`firmware/`](firmware/). The panels' screen
+protocol and MQTT contract are documented in [`BRIDGE_GO_REWRITE.md`](BRIDGE_GO_REWRITE.md).
 
 ## Support
 
@@ -98,21 +56,11 @@ If NSPanel Core has been useful to you, consider supporting the maintainer:
 
 <div align="center">
 
-### ☕ [Buy Me A Coffee — ALeXXBody](https://buymeacoffee.com/alexxbody)
-
-*All support goes into hardware parts and tokens for building more free tools for the community.*
-
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-alexxbody-FFDD00?logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/alexxbody)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-alexxbody-FFDD00)](https://buymeacoffee.com/alexxbody)
 
 </div>
 
-And if you run the *original* upstream project anywhere, the original NSPanel Manager team
-also deserves your support: [buymeacoffee.com/nspanelmanager](https://buymeacoffee.com/nspanelmanager) ☕
-
 ## License
 
-This project is licensed under the **GPL-3.0** — same as upstream, which it is derived from.
-See [LICENSE](LICENSE).
-
-Original project © the NSPanel Manager team ([NSPManager](https://github.com/NSPManager)).
-This fork © Bogdan Turlea ([ALeXXBody](https://github.com/ALeXXBody)) and contributors.
+GPL-3.0 — see [LICENSE](LICENSE). Based on the NSPanel Manager project by the
+NSPManager team.
