@@ -6,7 +6,7 @@
             <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
         </form>
 
-        {% RC "MultiStep_AddEditEntity" room_id=room_id entities_page_id=entities_page_id room_view_position=room_view_position %}
+        {{ RC("MultiStep_AddEditEntity", room_id=room_id, entities_page_id=entities_page_id, room_view_position=room_view_position) | safe }}
     </div>
 
     <!-- Backdrop that closes dialog/modal on click -->

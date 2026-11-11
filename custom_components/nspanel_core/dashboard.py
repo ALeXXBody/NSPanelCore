@@ -34,10 +34,18 @@ STATIC_DIR = UI_DIR / "static"
 def _render(template_name: str, **context) -> str:
     import jinja2
 
+    import json as _json
+
+    def _RC(component_name, **props):
+        props_json = _json.dumps(props)
+        unique_id = f"react-{component_name}-{id(props)}"
+        return f"<div id='{unique_id}' data-react-component='{component_name}' data-react-props='{props_json}'></div>"
+
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(str(TEMPLATES_DIR)),
         autoescape=True,
     )
+    env.globals["RC"] = _RC
     template = env.get_template(template_name)
     context.setdefault("notifications", [])
     context.setdefault("version", "1.0.0")
@@ -357,21 +365,40 @@ class SettingsView(HomeAssistantView):
         themes = {"nspmwip": "NSPanel Core (dark)"}
         html = _render(
             "settings.html",
-            settings={
-                "manager_address": s.manager_address,
-                "manager_port": s.manager_port,
-                "mqtt_server": s.mqtt_server,
-                "mqtt_port": s.mqtt_port,
-                "mqtt_username": s.mqtt_username,
-                "mqtt_password": s.mqtt_password,
-                "mqttmanager_log_level": s.mqttmanager_log_level,
-                "color_temp_min": s.color_temp_min,
-                "color_temp_max": s.color_temp_max,
-                "reverse_color_temp": s.reverse_color_temp,
-                "optimistic_mode": s.optimistic_mode,
-                "turn_on_light_behaviour": s.turn_on_behaviour,
-                "theme": "nspmwip",
-            },
+            manager_address=s.manager_address,
+            manager_port=s.manager_port,
+            mqtt_server=getattr(s, "mqtt_server", ""),
+            mqtt_port=getattr(s, "mqtt_port", 1883),
+            mqtt_username=getattr(s, "mqtt_username", ""),
+            mqtt_password=getattr(s, "mqtt_password", ""),
+            mqttmanager_log_level=getattr(s, "mqttmanager_log_level", "info"),
+            color_temp_min=s.color_temp_min,
+            color_temp_max=s.color_temp_max,
+            reverse_color_temp=s.reverse_color_temp,
+            optimistic_mode=s.optimistic_mode,
+            turn_on_behaviour=s.turn_on_behaviour,
+            turn_on_behavior=s.turn_on_behaviour,
+            turn_on_light_behaviour=s.turn_on_behaviour,
+            home_assistant_address="",
+            home_assistant_token="",
+            raise_to_100_light_level=0,
+            min_button_push_time=50,
+            button_long_press_time=400,
+            special_mode_trigger_time=350,
+            special_mode_release_time=600,
+            screensaver_activation_timeout=s.screensaver_activation_timeout if hasattr(s, "screensaver_activation_timeout") else 15,
+            screen_dim_level=0,
+            screensaver_dim_level=20,
+            screensaver_mode=0,
+            show_screensaver_inside_temperature=True,
+            show_screensaver_outside_temperature=True,
+            light_turn_on_brightness=s.light_turn_on_brightness,
+            room_status_backoff_time=0,
+            all_rooms_status_backoff_time=0,
+            max_live_log_messages=100,
+            max_log_buffer_size=1000,
+            is_home_assistant_addon=True,
+            default_nspanel_type="sonoff",
             themes=themes,
             theme="nspmwip",
             page_title="Settings",
