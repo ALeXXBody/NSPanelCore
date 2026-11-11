@@ -21,6 +21,11 @@ jobs:
           sudo rm -rf /MQTTManager
           sudo cp -r docker/MQTTManager /MQTTManager
           sudo chmod +x /MQTTManager/compile_mqttmanager.sh
+          # The cache-restore step runs as the non-root 'runner' user and must
+          # be able to create files inside /MQTTManager (the Conan package
+          # cache lives here). Without this the restore fails file-by-file
+          # and every build compiles all dependencies from scratch.
+          sudo chmod -R a+rwX /MQTTManager
 
       - name: Cache Conan dependencies
         uses: actions/cache@v4
