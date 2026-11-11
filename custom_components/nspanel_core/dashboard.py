@@ -705,6 +705,58 @@ class WebappStompView(HomeAssistantView):
         return await manager.stomp.handle_ws(request)
 
 
+class WebappIndexView(HomeAssistantView):
+    """Serve the web app's index.html at /webapp."""
+
+    url = "/webapp"
+    name = "nspanel_core:webapp_index"
+    requires_auth = False
+
+    async def get(self, request):
+        webapp_dir = pathlib.Path(__file__).parent / "ui" / "webapp"
+        index_path = webapp_dir / "index.html"
+        if not index_path.exists():
+            return web.Response(status=404, text="Web app not found")
+        return web.FileResponse(index_path)
+
+
+class WebappAssetView(HomeAssistantView):
+    """Serve web app static assets (js, css, fonts, etc.)."""
+
+    url = "/webapp/{tail:.*}"
+    name = "nspanel_core:webapp_asset"
+    requires_auth = False
+
+    async def get(self, request):
+        webapp_dir = pathlib.Path(__file__).parent / "ui" / "webapp"
+        tail = request.match_info.get("tail", "")
+        if not tail:
+            tail = "index.html"
+        file_path = (webapp_dir / tail).resolve()
+        # Prevent path traversal
+        if not str(file_path).startswith(str(webapp_dir.resolve())):
+            return web.Response(status=403, text="Forbidden")
+        if not file_path.exists() or not file_path.is_file():
+            # SPA fallback: serve index.html for client-side routing
+            index_path = webapp_dir / "index.html"
+            if index_path.exists():
+                return web.FileResponse(index_path)
+            return web.Response(status=404, text="Not found")
+        return web.FileResponse(file_path)
+
+
+
+    """STOMP WebSocket at the original /websocket/stomp path (for the web app)."""
+
+    url = "/websocket/stomp"
+    name = "nspanel_core:webapp_ws"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        return await manager.stomp.handle_ws(request)
+
+
 import re  # noqa: E402
 
 
@@ -720,12 +772,9 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         )
     )
 
-    WEBAPP_DIR = pathlib.Path(__file__).parent / "ui" / "webapp"
-    hass.loop.create_task(
-        hass.http.async_register_static_paths(
-            [StaticPathConfig("/webapp", str(WEBAPP_DIR), cache_headers=True)]
-        )
-    )
+    # Webapp is served via views below (not via static path, because HA's
+    # static path handler returns 403 for the root directory).
+
 
     # Register routes directly via aiohttp (HomeAssistantView.register is
     # fragile across HA versions — it crashed on list-valued urls in 2026.10).
@@ -749,6 +798,9 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         (ThemeView, ["POST"]),
         (MessagesView, ["GET"]),
         (StompView, ["GET"]),
+        (WebappStompView, ["GET"]),
+        (WebappIndexView, ["GET"]),
+        (WebappAssetView, ["GET"]),
         (ComingSoonView, ["GET"]),
     ]
     for view_cls, methods in views:
@@ -757,7 +809,11 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
             handler = getattr(view, method.lower(), None)
             if handler is None:
                 continue
-            hass.http.app.router.add_route(method, view.url, handler)
+            try:
+                hass.http.app.router.add_route(method, view.url, handler)
+            except RuntimeError:
+                # Route already registered (e.g. by static path) — skip
+                pass
 
     from homeassistant.components.frontend import async_register_built_in_panel
 
