@@ -1,8 +1,8 @@
 <script type="module">
-  import { define, html } from '/static/node_modules/hybrids/src/index.js';
+  import { define, html } from '/nspanel_core/static/node_modules/hybrids/src/index.js';
 
-  stomp_subscribe("nspanel/{{ nspanel.mac_address }}/status", (message) => {
-    var element = document.getElementById(`nspanel-wifi-status-{{ nspanel.id }}`);
+  stomp_subscribe("nspanel/{{ nspanel.data.mac_address }}/status", (message) => {
+    var element = document.getElementById(`nspanel-wifi-status-{{ nspanel.data.id }}`);
     var data = JSON.parse(message.body);
     element.state = data.state;
     element.signal_strength = data.rssi;
@@ -64,4 +64,5 @@
   })
 </script>
 
-<nspanel-wifi-status id="nspanel-wifi-status-{{ nspanel.id }}" nspanel_id="{{ nspanel.id }}" state="" signal_strength=""></nspanel-wifi-status>
+<nspanel-wifi-status id="nspanel-wifi-status-{{ nspanel.data.id }}" nspanel_id="{{ nspanel.data.id }}" state="" signal_strength=""></nspanel-wifi-status>
+

@@ -1,8 +1,8 @@
 <script type="module">
-  import { define, html } from '/static/node_modules/hybrids/src/index.js';
+  import { define, html } from '/nspanel_core/static/node_modules/hybrids/src/index.js';
 
-  stomp_subscribe("nspanel/{{ nspanel.mac_address }}/status", (message) => {
-    var element = document.getElementById(`nspanel-temperature-status-{{ nspanel.id }}`);
+  stomp_subscribe("nspanel/{{ nspanel.data.mac_address }}/status", (message) => {
+    var element = document.getElementById(`nspanel-temperature-status-{{ nspanel.data.id }}`);
     var data = JSON.parse(message.body);
     element.state = data.state;
     element.temperature = Math.round(data.temperature*10)/10;
@@ -38,4 +38,5 @@
   })
 </script>
 
-<nspanel-temperature-status id="nspanel-temperature-status-{{ nspanel.id }}" nspanel_id="{{ nspanel.id }}" state="" temperature="" temperature_unit="{{ temperature_unit }}"></nspanel-temperature-status>
+<nspanel-temperature-status id="nspanel-temperature-status-{{ nspanel.data.id }}" nspanel_id="{{ nspanel.data.id }}" state="" temperature="" temperature_unit="{{ temperature_unit }}"></nspanel-temperature-status>
+

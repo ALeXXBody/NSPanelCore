@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static %}
+
 
 {% block head %}
 <script>
@@ -7,11 +7,11 @@
   var nspanel_mac = "{{ panel_info.data.mac_address }}";
 </script>
 
-<script src="{% static 'edit_nspanel.js' %}"></script>
+<script src="/nspanel_core/static/edit_nspanel.js"></script>
 {% endblock %}
 
 {% block content %}
-{% load static %}
+
 {% static "" as static_prefix %}
 
 <!-- Data needed by javascript -->

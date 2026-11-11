@@ -1,8 +1,8 @@
 <script type="module">
-  import { define, html } from '/static/node_modules/hybrids/src/index.js';
+  import { define, html } from '/nspanel_core/static/node_modules/hybrids/src/index.js';
 
-  stomp_subscribe("nspanel/{{ nspanel.mac_address }}/status", (message) => {
-    var element = document.getElementById(`nspanel-ram-status-{{ nspanel.id }}`);
+  stomp_subscribe("nspanel/{{ nspanel.data.mac_address }}/status", (message) => {
+    var element = document.getElementById(`nspanel-ram-status-{{ nspanel.data.id }}`);
     var data = JSON.parse(message.body);
     element.state = data.state;
     element.ram_usage = data.ram_usage;
@@ -37,4 +37,5 @@
   })
 </script>
 
-<nspanel-ram-status id="nspanel-ram-status-{{ nspanel.id }}" nspanel_id="{{ nspanel.id }}" state="" ram_usage=""></nspanel-ram-status>
+<nspanel-ram-status id="nspanel-ram-status-{{ nspanel.data.id }}" nspanel_id="{{ nspanel.data.id }}" state="" ram_usage=""></nspanel-ram-status>
+

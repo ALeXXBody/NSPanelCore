@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
-{% load jsonify %}
-{% load set_var %}
-{% load concat %}
-{% load react_tags %}
+
+
+
+
 
 {% block head %}
-{% load static %}
-<script src="{% static 'modal-select-entity.js' %}?refresh={% now 'U' %}"></script>
-<link rel="stylesheet" href="{% static 'edit_room.css' %}">
+
+<script src="/nspanel_core/static/modal-select-entity.js?refresh=1"></script>
+<link rel="stylesheet" href="/nspanel_core/static/edit_room.css">
 
 <script>
   // This function is used from select_room_temperature_sensor.html to do the final selection of
@@ -30,7 +30,7 @@
 {% endblock %}
 
 {% block content %}
-{% load static %}
+
 
 <!-- Beginning of vissible content-->
 <form method="POST" action="{% url 'update_room_form' room_id=room.id %}">

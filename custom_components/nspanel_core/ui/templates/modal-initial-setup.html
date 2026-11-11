@@ -1,4 +1,4 @@
-{% load static %}
+
 <div id="modal-initial-setup" tabindex="-1" aria-hidden="true"
   class="modal overflow-y-auto overflow-x-hidden fixed top-0 right-0 left-0 z-50 justify-center w-full p-4 mx-auto my-auto sm:w-3/4 md:w-2/4 inset-0 flex items-center">
   <!-- Backdrop -->
@@ -68,7 +68,7 @@
         <!-- Welcome screen -->
         <div id="welcome_screen" class="w-full p-2">
           <div class="flex items-center justify-center">
-            <img class="h-28 bg-slate-500 rounded-md p-1 dark:bg-transparent" src="{% static 'logo.svg' %}">
+            <img class="h-28 bg-slate-500 rounded-md p-1 dark:bg-transparent" src="/nspanel_core/static/logo.svg">
           </div>
           <div class="flex items-center justify-center">
             <span class="text-2xl">Welcome!</span>
@@ -239,7 +239,7 @@
         <!-- Finish/done screen-->
         <div id="finish_screen" class="w-full p-2 hidden">
           <div class="flex items-center justify-center">
-            <img class="h-28 bg-slate-500 rounded-md p-1 dark:bg-transparent" src="{% static 'logo.svg' %}">
+            <img class="h-28 bg-slate-500 rounded-md p-1 dark:bg-transparent" src="/nspanel_core/static/logo.svg">
           </div>
           <div class="flex items-center justify-center">
             <span class="text-2xl">Finished.</span>

@@ -41,6 +41,12 @@ def _render(template_name: str, **context) -> str:
     template = env.get_template(template_name)
     context.setdefault("notifications", [])
     context.setdefault("version", "1.0.0")
+    context.setdefault("enabled_themes", {"nspmwip": "NSPanel Core (dark)"} )
+    context.setdefault("theme", "nspmwip")
+    context.setdefault("current_theme", "nspmwip")
+    context.setdefault("theme_mode", "dark")
+    context.setdefault("ingress_path", "")
+    context.setdefault("request", type("R", (), {"path": context.get("current_path", "/")})())
     return template.render(**context)
 
 

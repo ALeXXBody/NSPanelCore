@@ -54,22 +54,15 @@ stomp_subscribe("nspanel/{{ nspanel.data.mac_address }}/status", (frame) => {
             <div>
                 <div class="my-1">
                     <!-- WiFi strength -->
-                    <div class="info-item">
-                        {% include 'components/nspanel_status_wifi_signal_strength.html' %}
-                    </div>
+                    {% include 'components/nspanel_status_wifi_signal_strength.html' %}
                 </div>
                 <div class="my-1">
                     <!-- Temperature -->
-                    <div class="info-item">
-                        {% include 'components/nspanel_status_temperature.html' %}
-                    </span>
-                    </div>
+                    {% include 'components/nspanel_status_temperature.html' %}
                 </div>
                 <div class="my-1">
                     <!-- RAM usage -->
-                    <div class="info-item">
-                        {% include 'components/nspanel_status_ram_usage.html' %}
-                    </div>
+                    {% include 'components/nspanel_status_ram_usage.html' %}
                 </div>
             </div>
             <div>

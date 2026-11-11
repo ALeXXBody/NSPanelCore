@@ -1,8 +1,8 @@
 <script type="module">
-  import { define, html } from '/static/node_modules/hybrids/src/index.js';
+  import { define, html } from '/nspanel_core/static/node_modules/hybrids/src/index.js';
 
-  stomp_subscribe("nspanel/{{ nspanel.mac_address }}/status", (message) => {
-    var element = document.getElementById(`nspanel-warnings-container-{{ nspanel.id }}`);
+  stomp_subscribe("nspanel/{{ nspanel.data.mac_address }}/status", (message) => {
+    var element = document.getElementById(`nspanel-warnings-container-{{ nspanel.data.id }}`);
     var data = JSON.parse(message.body);
     element.state = data.state;
     element.warnings_string = JSON.stringify(data.warnings);
@@ -67,4 +67,5 @@
 </script>
 
 
-<nspanel-warnings id="nspanel-warnings-container-{{ nspanel.id }}"></nspanel-warnings>
+<nspanel-warnings id="nspanel-warnings-container-{{ nspanel.data.id }}"></nspanel-warnings>
+

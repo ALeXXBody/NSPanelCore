@@ -1,8 +1,8 @@
 <script type="module">
-  import { define, html } from '/static/node_modules/hybrids/src/index.js';
+  import { define, html } from '/nspanel_core/static/node_modules/hybrids/src/index.js';
 
-  stomp_subscribe("nspanel/{{ nspanel.mac_address }}/status", (message) => {
-    var element = document.getElementById(`nspanel-status-header-{{ nspanel.id }}`);
+  stomp_subscribe("nspanel/{{ nspanel.data.mac_address }}/status", (message) => {
+    var element = document.getElementById(`nspanel-status-header-{{ nspanel.data.id }}`);
     var data = JSON.parse(message.body);
     element.state = data.state;
     element.update_progress = data.update_progress;
@@ -40,4 +40,5 @@
   })
 </script>
 
-<nspanel-status-header id="nspanel-status-header-{{ nspanel.id }}" nspanel_id="{{ nspanel.id }}" state="" update_progress=""></nspanel-status-badge>
+<nspanel-status-header id="nspanel-status-header-{{ nspanel.data.id }}" nspanel_id="{{ nspanel.data.id }}" state="" update_progress=""></nspanel-status-badge>
+

@@ -33,7 +33,7 @@
               </svg>
             </div>
             <ul tabindex="0" class="dropdown-content bg-base-300 text-base-content rounded-box z-[1] w-98 p-2 shadow-2xl">
-                {% for theme_option, display_name in enabled_themes.items %}
+                {% for theme_option, display_name in enabled_themes.items() %}
                 <li>
                     <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between" data-theme="{{ theme_option }}">
                         <label class="label">

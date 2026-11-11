@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 
 {% block head %}
-{% load static %}
-  <script src="{% static 'question.js' %}?refresh={% now 'U' %}"></script>
-  <script src="{% static 'settings.js' %}?refresh={% now 'U' %}"></script>
+
+  <script src="/nspanel_core/static/question.js?refresh=1"></script>
+  <script src="/nspanel_core/static/settings.js?refresh=1"></script>
 
   <script>
     function set_manager_address_from_window_location() {
