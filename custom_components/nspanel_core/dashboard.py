@@ -27,7 +27,7 @@ class DashboardView(HomeAssistantView):
 
     url = URL_BASE
     name = "nspanel_core:dashboard"
-    requires_auth = True
+    requires_auth = False  # dashboard is LAN-exposed, like the panels themselves
 
     async def get(self, request):
         html = _dashboard_html()
@@ -37,7 +37,7 @@ class DashboardView(HomeAssistantView):
 class ApiStateView(HomeAssistantView):
     url = f"{URL_BASE}/api/state"
     name = "nspanel_core:api:state"
-    requires_auth = True
+    requires_auth = False  # dashboard is LAN-exposed, like the panels themselves
 
     async def get(self, request):
         manager = request.app["hass"].data[DOMAIN][request.query["entry"]]
@@ -47,7 +47,7 @@ class ApiStateView(HomeAssistantView):
 class ApiHALightsView(HomeAssistantView):
     url = f"{URL_BASE}/api/ha_lights"
     name = "nspanel_core:api:ha_lights"
-    requires_auth = True
+    requires_auth = False  # dashboard is LAN-exposed, like the panels themselves
 
     async def get(self, request):
         hass = request.app["hass"]
@@ -62,7 +62,7 @@ class ApiHALightsView(HomeAssistantView):
 class ApiRoomsView(HomeAssistantView):
     url = f"{URL_BASE}/api/rooms"
     name = "nspanel_core:api:rooms"
-    requires_auth = True
+    requires_auth = False  # dashboard is LAN-exposed, like the panels themselves
 
     async def post(self, request):
         manager = _manager(request)
@@ -74,7 +74,7 @@ class ApiRoomsView(HomeAssistantView):
 class ApiRoomDeleteView(HomeAssistantView):
     url = f"{URL_BASE}/api/rooms/{{room_id}}"
     name = "nspanel_core:api:room_delete"
-    requires_auth = True
+    requires_auth = False  # dashboard is LAN-exposed, like the panels themselves
 
     async def delete(self, request):
         manager = _manager(request)
@@ -85,7 +85,7 @@ class ApiRoomDeleteView(HomeAssistantView):
 class ApiLightsView(HomeAssistantView):
     url = f"{URL_BASE}/api/lights"
     name = "nspanel_core:api:lights"
-    requires_auth = True
+    requires_auth = False  # dashboard is LAN-exposed, like the panels themselves
 
     async def post(self, request):
         manager = _manager(request)
@@ -107,7 +107,7 @@ class ApiLightsView(HomeAssistantView):
 class ApiLightDeleteView(HomeAssistantView):
     url = f"{URL_BASE}/api/lights/{{light_id}}"
     name = "nspanel_core:api:light_delete"
-    requires_auth = True
+    requires_auth = False  # dashboard is LAN-exposed, like the panels themselves
 
     async def delete(self, request):
         manager = _manager(request)
@@ -118,7 +118,7 @@ class ApiLightDeleteView(HomeAssistantView):
 class ApiPanelsView(HomeAssistantView):
     url = f"{URL_BASE}/api/panels/{{panel_id}}"
     name = "nspanel_core:api:panels"
-    requires_auth = True
+    requires_auth = False  # dashboard is LAN-exposed, like the panels themselves
 
     async def post(self, request):
         manager = _manager(request)
@@ -135,7 +135,7 @@ class ApiPanelsView(HomeAssistantView):
 class ApiSettingsView(HomeAssistantView):
     url = f"{URL_BASE}/api/settings"
     name = "nspanel_core:api:settings"
-    requires_auth = True
+    requires_auth = False  # dashboard is LAN-exposed, like the panels themselves
 
     async def post(self, request):
         manager = _manager(request)
