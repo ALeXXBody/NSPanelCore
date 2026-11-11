@@ -33,6 +33,20 @@ def font(size, weight="Light"):
     return f
 
 
+COMFORTAA = os.path.join(BRAND_DIR, "fonts", "Comfortaa.ttf")
+
+
+def tube_font(size):
+    """Comfortaa Bold — rounded, tube-like letterforms (resembles the user's
+    neon-tube artwork lettering)."""
+    f = ImageFont.truetype(COMFORTAA, size)
+    try:
+        f.set_variation_by_axes([700])
+    except Exception:
+        pass
+    return f
+
+
 def rounded_rect(draw, cx, cy, s, radius_ratio, width_ratio, fill):
     draw.rounded_rectangle(
         [cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2],
@@ -43,9 +57,9 @@ def rounded_rect(draw, cx, cy, s, radius_ratio, width_ratio, fill):
 
 
 def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.075):
-    """The letter N — a real Montserrat Black glyph, thick, flat. No dots,
-    no decoration: just the letter, centered in the icon area."""
-    f = font(int(s * 0.62), "Black")
+    """The letter N — Comfortaa Bold (rounded tube look like the artwork),
+    thick, flat, centered, no dots, no decoration."""
+    f = tube_font(int(s * 0.74))
     bbox = draw.textbbox((0, 0), "N", font=f)
     w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     x = cx - w / 2 - bbox[0]
