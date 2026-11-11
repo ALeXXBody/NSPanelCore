@@ -33,13 +33,13 @@
 
 
 <!-- Beginning of vissible content-->
-<form method="POST" action="{% url 'update_room_form' room_id=room.id %}">
-  {% csrf_token %}
+<form method="POST" action="/nspanel_core/update_room_form">
+  
   <div class="flex items-center justify-between" id="nspanel_settings_container">
     <div>
       <h2 class="font-medium text-2xl" id="nspanel_name">Settings for room '{{ room.friendly_name }}'</h2>
       {% for nspanel in nspanels %}
-          <a href="{% url 'edit_nspanel' panel_id=nspanel.id %}">
+          <a href="/nspanel_core/edit_nspanel">
           {{ nspanel.status }}
           {% include 'components/nspanel_status_badge.html' %}
           </a>
@@ -72,7 +72,7 @@
       <div class="my-2 w-full md:ms-1">
           <label for="room_temp_sensor" class="block mb-1 text-sm font-medium">Room temperature sensor</label>
           <div class="flex flex-row-reverse">
-              <button type="button" class="btn btn-info rounded-l-none" hx-get="{% url 'htmx_partial_select_room_temperature_sensor_provider' room_id=room.id %}" hx-swap="none">Select</button>
+              <button type="button" class="btn btn-info rounded-l-none" hx-get="/nspanel_core/htmx_partial_select_room_temperature_sensor_provider" hx-swap="none">Select</button>
               <button type="button" class="btn btn-error rounded-none" onclick="clear_selected_room_temperatuer_sensor()">Clear</button>
               <input class="outline-none bg-base-300 border-neutral border border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/name"
               type="text" id="room_temp_sensor" name="room_temp_sensor" value="{{ room.room_temp_sensor }}" placeholder="None selected" readonly>
@@ -89,7 +89,7 @@
       </div>
       {% endif %}
       <div class="text-right mt-4">
-          <a href="{% if total_num_rooms != 1 %}{% url 'delete_room' room_id=room.id %}{% else %}#{% endif %}"
+          <a href="{% if total_num_rooms != 1 %}/nspanel_core/delete_room{% else %}#{% endif %}"
           class="btn btn-error " {% if total_num_rooms == 1 %}disabled{% endif %}
           {% if total_num_rooms == 1 %}btn-disabled{% endif %}
           >Delete</a>

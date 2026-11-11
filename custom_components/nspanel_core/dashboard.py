@@ -150,12 +150,6 @@ class PlaceholderPageView(HomeAssistantView):
     never falls back to the HA frontend (which caused the 'doubled page')."""
 
     url = [
-        f"{URL_BASE}/relay_groups",
-        f"{URL_BASE}/global_scenes",
-        f"{URL_BASE}/weather_and_time",
-        f"{URL_BASE}/denied_nspanels",
-        f"{URL_BASE}/settings",
-        f"{URL_BASE}/manager_settings",
         f"{URL_BASE}/coming-soon",
     ]
     name = "nspanel_core:placeholder"
@@ -275,6 +269,131 @@ class SavePanelSettingsView(HomeAssistantView):
         await manager.async_save()
         await manager._send_panel_config(panel)
         raise web.HTTPFound(f"{URL_BASE}")
+
+
+class GlobalScenesView(HomeAssistantView):
+    url = f"{URL_BASE}/global_scenes"
+    name = "nspanel_core:global_scenes"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        scenes_ctx = [
+            {"id": s.id, "name": s.name, "ha_entity": s.ha_entity, "page_id": s.page_id}
+            for s in manager.config.scenes
+        ]
+        html = _render(
+            "global_scenes.html",
+            scenes=scenes_ctx,
+            page_title="Global scenes",
+            nspanels=_panels_context(manager),
+        )
+        return web.Response(text=html, content_type="text/html")
+
+
+class RelayGroupsView(HomeAssistantView):
+    url = f"{URL_BASE}/relay_groups"
+    name = "nspanel_core:relay_groups"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        html = _render(
+            "relay_groups.html",
+            relay_groups=[],
+            page_title="Relay/Light groups",
+            nspanels=_panels_context(manager),
+        )
+        return web.Response(text=html, content_type="text/html")
+
+
+class WeatherTimeView(HomeAssistantView):
+    url = f"{URL_BASE}/weather_and_time"
+    name = "nspanel_core:weather_time"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        s = manager.config.settings
+        html = _render(
+            "weather_and_time.html",
+            settings={
+                "location_latitude": s.location_latitude,
+                "location_longitude": s.location_longitude,
+                "weather_update_interval": s.weather_update_interval,
+                "clock_us_style": s.clock_us_style,
+                "date_format": s.date_format,
+                "use_fahrenheit": s.use_fahrenheit,
+            },
+            page_title="Weather & Time",
+            nspanels=_panels_context(manager),
+        )
+        return web.Response(text=html, content_type="text/html")
+
+
+class DeniedPanelsView(HomeAssistantView):
+    url = f"{URL_BASE}/denied_nspanels"
+    name = "nspanel_core:denied"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        denied = [asdict(p) for p in manager.config.panels if p.denied]
+        html = _render(
+            "denied_nspanels.html",
+            nspanels=denied,
+            page_title="Denied NSPanels",
+        )
+        return web.Response(text=html, content_type="text/html")
+
+
+class SettingsView(HomeAssistantView):
+    url = f"{URL_BASE}/settings"
+    name = "nspanel_core:settings"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        s = manager.config.settings
+        themes = {"nspmwip": "NSPanel Core (dark)"}
+        html = _render(
+            "settings.html",
+            settings={
+                "manager_address": s.manager_address,
+                "manager_port": s.manager_port,
+                "mqtt_server": s.mqtt_server,
+                "mqtt_port": s.mqtt_port,
+                "mqtt_username": s.mqtt_username,
+                "mqtt_password": s.mqtt_password,
+                "mqttmanager_log_level": s.mqttmanager_log_level,
+                "color_temp_min": s.color_temp_min,
+                "color_temp_max": s.color_temp_max,
+                "reverse_color_temp": s.reverse_color_temp,
+                "optimistic_mode": s.optimistic_mode,
+                "turn_on_light_behaviour": s.turn_on_behaviour,
+                "theme": "nspmwip",
+            },
+            themes=themes,
+            theme="nspmwip",
+            page_title="Settings",
+            nspanels=_panels_context(manager),
+        )
+        return web.Response(text=html, content_type="text/html")
+
+
+class ManagerSettingsView(HomeAssistantView):
+    url = f"{URL_BASE}/manager_settings"
+    name = "nspanel_core:manager_settings"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        html = _render(
+            "manager_settings.html",
+            page_title="Manager settings",
+            nspanels=_panels_context(manager),
+        )
+        return web.Response(text=html, content_type="text/html")
 
 
 class ComingSoonView(HomeAssistantView):
