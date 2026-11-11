@@ -52,7 +52,17 @@ jobs:
       - name: Build MQTTManager
         run: |
           cd /MQTTManager
-          sudo /MQTTManager/compile_mqttmanager.sh --target-platform ${{ matrix.target }} --strip
+          for attempt in 1 2 3; do
+            echo "Build attempt $attempt"
+            if sudo /MQTTManager/compile_mqttmanager.sh --target-platform ${{ matrix.target }} --strip; then
+              echo "Build succeeded on attempt $attempt"
+              exit 0
+            fi
+            echo "Attempt $attempt failed (likely transient source-download rate limit); retrying in 30s"
+            sleep 30
+          done
+          echo "All attempts failed"
+          exit 1
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
