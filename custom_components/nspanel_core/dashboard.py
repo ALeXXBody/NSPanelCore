@@ -183,6 +183,8 @@ class PlaceholderPageView(HomeAssistantView):
 
 
 class EditPanelView(HomeAssistantView):
+    """The ORIGINAL panel settings page (edit_nspanel template)."""
+
     url = f"{URL_BASE}/edit/{{panel_id}}"
     name = "nspanel_core:edit"
     requires_auth = False
@@ -191,13 +193,89 @@ class EditPanelView(HomeAssistantView):
         manager = _manager(request)
         panel_id = int(request.match_info["panel_id"])
         panel = next((p for p in manager.panels() if p.id == panel_id), None)
-        name = panel.name if panel else "Unknown"
+        if panel is None:
+            html = _render("index_shell.html", page_title="Panel not found", nspanels=[])
+            return web.Response(text=html, content_type="text/html")
+        # Context shaped like the Django view: panel_info wrapper + settings
+        from dataclasses import asdict
+
+        panel_dict = asdict(panel)
+        panel_dict["ip_address"] = ""
+        panel_dict["friendly_name"] = panel.name  # Django model used friendly_name
+        panel_dict["mac_address"] = panel.mac  # MAC shown in settings header
+        panel_info = {"data": panel_dict}
+        nspanel = {"data": panel_dict}
+        rooms = [{"id": r.id, "name": r.name} for r in manager.config.rooms]
+        lights = [
+            {"id": l.id, "name": l.name, "ha_entity": l.ha_entity, "room_id": l.room_id}
+            for l in manager.config.lights
+        ]
+        settings_ctx = dict(panel_dict)
+        settings_ctx["selected_tft"] = ""
+        settings_ctx["us_panel_orientation"] = ""
         html = _render(
-            "index_shell.html",
-            page_title=f"{name} — settings",
+            "edit_nspanel.html",
+            panel_info=panel_info,
+            nspanel=nspanel,
+            settings=settings_ctx,
+            rooms=rooms,
+            lights=lights,
+            page_title=f"{panel.name} — settings",
+            temperature_unit="celsius",
+            current_temperature=0,
+            current_humidity=0,
+            current_pressure=0,
+            current_wifi_signal_strength=0,
+            current_ram_usage=0,
             nspanels=_panels_context(manager),
         )
         return web.Response(text=html, content_type="text/html")
+
+
+class SavePanelSettingsView(HomeAssistantView):
+    url = f"{URL_BASE}/api/panel/{{panel_id}}/save"
+    name = "nspanel_core:api:panel_save"
+    requires_auth = False
+
+    async def post(self, request):
+        manager = _manager(request)
+        panel_id = int(request.match_info["panel_id"])
+        form = await request.post()
+        panel = next((p for p in manager.config.panels if p.id == panel_id), None)
+        if panel is None:
+            return web.Response(status=404)
+        field_map = {
+            "friendly_name": ("name", str),
+            "screensaver_mode": ("screensaver_mode", int),
+            "screensaver_activation_timeout": ("screensaver_activation_timeout", int),
+            "min_button_push_time": ("min_button_push_time", int),
+            "button_long_press_time": ("button_long_press_time", int),
+            "special_mode_trigger_time": ("special_mode_trigger_time", int),
+            "special_mode_release_time": ("special_mode_release_time", int),
+            "screen_dim_level": ("screen_dim_level", int),
+            "screensaver_dim_level": ("screensaver_dim_level", int),
+            "temperature_calibration": ("temperature_calibration", int),
+            "default_page": ("default_page", int),
+            "default_light_brightness": ("default_light_brightness", int),
+        }
+        for form_key, (attr, typ) in field_map.items():
+            if form_key in form:
+                try:
+                    setattr(panel, attr, typ(form[form_key]))
+                except (ValueError, TypeError):
+                    pass
+        for flag in ("clock_us_style", "use_fahrenheit", "is_us_panel",
+                     "reverse_relays", "relay1_default_mode", "relay2_default_mode",
+                     "optimistic_mode"):
+            panel.__setattr__(flag, flag in form)
+        if "room_id" in form:
+            try:
+                panel.room_id = int(form["room_id"])
+            except (ValueError, TypeError):
+                pass
+        await manager.async_save()
+        await manager._send_panel_config(panel)
+        raise web.HTTPFound(f"{URL_BASE}")
 
 
 class ComingSoonView(HomeAssistantView):
@@ -280,6 +358,7 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         HtmxNspanelsSectionView(),
         PanelActionView(),
         EditPanelView(),
+        SavePanelSettingsView(),
         PlaceholderPageView(),
         RestartView(),
         ThemeView(),
