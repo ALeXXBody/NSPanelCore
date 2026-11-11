@@ -57,15 +57,15 @@ def rounded_rect(draw, cx, cy, s, radius_ratio, width_ratio, fill):
 
 
 def draw_circuit_n(draw, cx, cy, s, color, trace_ratio=0.075):
-    """The letter N — Comfortaa Bold (rounded tube look like the artwork),
-    bigger and thicker (stroke-fattened), flat, centered, no dots."""
+    """The letter C — Comfortaa Bold (rounded tube look like the artwork),
+    same size and stroke treatment as the previous N. Flat, no decoration."""
     f = tube_font(int(s * 0.80))
     sw = max(2, int(s * 0.022))  # extra thickness
-    bbox = draw.textbbox((0, 0), "N", font=f, stroke_width=sw)
+    bbox = draw.textbbox((0, 0), "C", font=f, stroke_width=sw)
     w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     x = cx - w / 2 - bbox[0]
     y = cy - h / 2 - bbox[1]
-    draw.text((x, y), "N", font=f, fill=color, stroke_width=sw, stroke_fill=color)
+    draw.text((x, y), "C", font=f, fill=color, stroke_width=sw, stroke_fill=color)
 
 
 def _compose_with_glow(base, glow, px):
