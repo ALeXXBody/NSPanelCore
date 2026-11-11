@@ -26,20 +26,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Cache Conan dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.conan2
-            /MQTTManager/conan_cache
-          key: conan-${{ matrix.arch }}-${{ hashFiles('docker/MQTTManager/conanfile.py', 'docker/MQTTManager/CMakeLists.txt') }}
-          restore-keys: conan-${{ matrix.arch }}-
-
       - name: Prepare source
         run: |
           sudo rm -rf /MQTTManager
           sudo cp -r docker/MQTTManager /MQTTManager
           sudo chmod +x /MQTTManager/compile_mqttmanager.sh
+
+      - name: Cache Conan dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            /root/.conan2
+            /MQTTManager/conan_cache
+          key: conan-${{ matrix.arch }}-${{ hashFiles('docker/MQTTManager/conanfile.py', 'docker/MQTTManager/CMakeLists.txt') }}
+          restore-keys: conan-${{ matrix.arch }}-
 
       - name: Install build tools
         env:
