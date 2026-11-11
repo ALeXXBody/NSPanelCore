@@ -169,14 +169,15 @@ def async_register_views(hass: HomeAssistant, entry_id: str) -> None:
     ):
         hass.http.register_view(view())
 
-    from homeassistant.components.frontend import async_register_panel
+    from homeassistant.components.frontend import async_register_built_in_panel
 
-    async_register_panel(
+    async_register_built_in_panel(
         hass,
-        url_path=URL_BASE,
-        frontend_url_path="nspanel_core",
+        component_name="iframe",
         sidebar_title="NSPanel Core",
         sidebar_icon="mdi:tablet-dashboard",
+        frontend_url_path="nspanel_core",
+        config={"url": URL_BASE},
         require_admin=True,
     )
     # Expose the entry id to the frontend via the state endpoint query default.

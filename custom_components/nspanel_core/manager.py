@@ -82,9 +82,10 @@ class NSPanelManager:
 
         async_register_views(self.hass, self.entry.entry_id)
 
+        # Protobuf topics: binary payloads (encoding=None → bytes)
+        await mqtt.async_subscribe(self.hass, TOPIC_PANEL_COMMAND, self._on_panel_command, encoding=None)
+        await mqtt.async_subscribe(self.hass, TOPIC_PANEL_STATUS_REPORT, self._on_panel_status_report, encoding=None)
         await mqtt.async_subscribe(self.hass, TOPIC_PANEL_STATUS, self._on_panel_status)
-        await mqtt.async_subscribe(self.hass, TOPIC_PANEL_COMMAND, self._on_panel_command)
-        await mqtt.async_subscribe(self.hass, TOPIC_PANEL_STATUS_REPORT, self._on_panel_status_report)
         await mqtt.async_subscribe(self.hass, TOPIC_MANAGER_COMMAND, self._on_manager_command)
         await mqtt.async_subscribe(self.hass, "nspanel/+/relay1_state", self._on_relay_state)
         await mqtt.async_subscribe(self.hass, "nspanel/+/relay2_state", self._on_relay_state)
