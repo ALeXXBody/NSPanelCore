@@ -9,19 +9,9 @@ permissions:
   packages: write
 
 jobs:
-  build-mqttmanager:
-    name: Build MQTTManager (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-            target: linux/amd64
-          - arch: aarch64
-            runner: ubuntu-latest
-            target: linux/arm64
+  build-mqttmanager-amd64:
+    name: Build MQTTManager (amd64)
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,8 +26,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /MQTTManager/conan_cache
-          key: conan-${{ matrix.arch }}-${{ hashFiles('docker/MQTTManager/conanfile.py', 'docker/MQTTManager/CMakeLists.txt') }}
-          restore-keys: conan-${{ matrix.arch }}-
+          key: conan-amd64-${{ hashFiles('docker/MQTTManager/conanfile.py', 'docker/MQTTManager/CMakeLists.txt') }}
+          restore-keys: conan-amd64-
 
       - name: Install build tools
         env:
@@ -52,7 +42,7 @@ jobs:
           cd /MQTTManager
           for attempt in 1 2 3; do
             echo "Build attempt $attempt"
-            if sudo /MQTTManager/compile_mqttmanager.sh --target-platform ${{ matrix.target }} --strip; then
+            if sudo /MQTTManager/compile_mqttmanager.sh --target-platform linux/amd64 --strip; then
               echo "Build succeeded on attempt $attempt"
               sudo chmod -R a+rX /MQTTManager/conan_cache || true
               exit 0
@@ -66,17 +56,68 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: mqttmanager-${{ matrix.arch }}
+          name: mqttmanager-amd64
+          path: /MQTTManager/build/nspm_mqttmanager
+
+  build-mqttmanager-aarch64:
+    name: Build MQTTManager (aarch64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare source
+        run: |
+          sudo rm -rf /MQTTManager
+          sudo cp -r docker/MQTTManager /MQTTManager
+          sudo chmod +x /MQTTManager/compile_mqttmanager.sh
+
+      - name: Cache Conan dependencies
+        uses: actions/cache@v4
+        with:
+          path: /MQTTManager/conan_cache
+          key: conan-aarch64-${{ hashFiles('docker/MQTTManager/conanfile.py', 'docker/MQTTManager/CMakeLists.txt') }}
+          restore-keys: conan-aarch64-
+
+      - name: Install build tools
+        env:
+          PIP_BREAK_SYSTEM_PACKAGES: "1"
+        run: |
+          sudo apt-get update
+          sudo bash docker/build_scripts/install_build_tools.sh "no"
+          sudo mkdir -p /MQTTManager/conan_cache
+
+      - name: Build MQTTManager
+        run: |
+          cd /MQTTManager
+          for attempt in 1 2 3; do
+            echo "Build attempt $attempt"
+            if sudo /MQTTManager/compile_mqttmanager.sh --target-platform linux/arm64 --strip; then
+              echo "Build succeeded on attempt $attempt"
+              sudo chmod -R a+rX /MQTTManager/conan_cache || true
+              exit 0
+            fi
+            echo "Attempt $attempt failed (likely transient source-download rate limit); retrying in 30s"
+            sleep 30
+          done
+          echo "All attempts failed"
+          exit 1
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: mqttmanager-aarch64
           path: /MQTTManager/build/nspm_mqttmanager
 
   publish:
     name: Publish ${{ matrix.arch }}
-    needs: build-mqttmanager
+    needs: build-mqttmanager-amd64
+    if: ${{ always() && needs.build-mqttmanager-amd64.result == 'success' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, aarch64]
+        arch: [amd64]
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v4
@@ -96,7 +137,7 @@ jobs:
       - name: Download pre-built MQTTManager binary
         uses: actions/download-artifact@v4
         with:
-          name: mqttmanager-${{ matrix.arch }}
+          name: mqttmanager-amd64
           path: docker/mqttmanager-build/
 
       - name: Build and push ${{ matrix.arch }} image
@@ -115,9 +156,53 @@ jobs:
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
           cosign: "false"
 
+  publish-aarch64:
+    name: Publish aarch64
+    needs: build-mqttmanager-aarch64
+    if: ${{ always() && needs.build-mqttmanager-aarch64.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+
+      - name: Determine image name
+        id: image
+        run: |
+          echo "name=ghcr.io/alexxbody/nspanel-core-aarch64" >> $GITHUB_OUTPUT
+
+      - name: Update version strings
+        shell: bash
+        run: |
+          sed -i 's/%version%/${{ github.ref_name }}/g' docker/web/nspanelmanager/web/templates/about.html
+          sed -i 's/%version%/${{ github.ref_name }}/g' docker/web/nspanelmanager/web/templates/modals/initial_setup/welcome.html
+          sed -i 's/%version%/${{ github.ref_name }}/g' docker/web/nspanelmanager/web/views.py
+
+      - name: Download pre-built MQTTManager binary
+        uses: actions/download-artifact@v4
+        with:
+          name: mqttmanager-aarch64
+          path: docker/mqttmanager-build/
+
+      - name: Build and push aarch64 image
+        uses: home-assistant/builder/actions/build-image@2026.09.0
+        with:
+          arch: aarch64
+          image: ${{ steps.image.outputs.name }}
+          image-tags: |
+            ${{ github.ref_name }}
+            latest
+          version: ${{ github.ref_name }}
+          push: "true"
+          context: docker
+          build-args: |
+            no_mqttmanager_build=yes
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          cosign: "false"
+
   bump-addon-version:
     name: Bump add-on version in main
-    needs: publish
+    needs: [publish, publish-aarch64]
+    if: ${{ always() && !failure() && !cancelled() && (needs.publish.result == 'success' || needs.publish-aarch64.result == 'success') }}
     permissions:
       contents: write
     runs-on: ubuntu-latest
