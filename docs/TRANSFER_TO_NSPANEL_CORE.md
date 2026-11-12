@@ -155,7 +155,19 @@ A dark panel (no ping, no web UI at its old address, no MQTT traffic for
    If it was stuck mid-download, it reboots into its previous firmware and
    reappears — tell your helper what version its web UI reports and stop
    here.
-2. **If it stays dark: USB serial reflash.** You need physical access, a
+2. **Check for its setup access point.** A panel that lost its Wi-Fi
+   settings (e.g. after a data-partition flash) falls back to AP mode and
+   broadcasts an `NSPanelCore` Wi-Fi network. Seeing that network means the
+   panel is **alive, not bricked** — it just needs its Wi-Fi re-entered
+   (no USB needed). No such network anywhere near it + still dark after a
+   power cycle means it needs step 3.
+3. **AP setup (no USB):** join the `NSPanelCore` network from a phone or
+   laptop, open `192.168.1.1`, enter the Wi-Fi details plus the MQTT broker
+   address, username and password, then restart it. (Tip: create a
+   dedicated MQTT user for panels in your broker instead of reusing old
+   credentials.) It will register with NSPanel Core on its own — accept it
+   in the UI as usual (Step 3 of the main flow).
+4. **If it stays dark: USB serial reflash.** You need physical access, a
    3.3 V USB-serial adapter, and the `merged_flash.bin` attached to the
    NSPanel Core release matching (or newer than) your install:
    download it, open the panel, connect TX→RX, RX→TX, GND→GND at 3.3 V
