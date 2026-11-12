@@ -99,6 +99,12 @@ push an update immediately from the panel's page (**Firmware update** /
 **GUI update** buttons) — the panel downloads, flashes and reboots by
 itself.
 
+> **Never update `data_file.bin` on a panel you can't physically reach.**
+> Flashing the data partition wipes the panel's Wi-Fi credentials and it
+> falls back to access-point mode. Firmware and display updates are safe
+> to do remotely; the manager never triggers a data-file update on its
+> own for exactly this reason.
+
 ## Troubleshooting
 
 | Symptom | Likely cause |

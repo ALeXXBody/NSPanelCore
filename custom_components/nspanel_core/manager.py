@@ -720,8 +720,15 @@ class NSPanelManager:
             await self._publish(panel_mqtt_topic(panel.name, "command"), json.dumps({"command": "firmware_update"}))
 
         if data_md5 and report.get("md5_littlefs") and report["md5_littlefs"] != data_md5:
-            _LOGGER.info("Data file update available for panel %s — triggering OTA", panel.name)
-            await self._publish(panel_mqtt_topic(panel.name, "command"), json.dumps({"command": "data_file_update"}))
+            # NOTE: data_file updates are DELIBERATELY never triggered
+            # automatically. The data partition holds /littlefs/config.json
+            # (WiFi + MQTT credentials); flashing it wipes the panel's network
+            # config and drops it into AP mode — unacceptable without an
+            # explicit user action, especially for remote panels.
+            _LOGGER.info(
+                "Data file update available for panel %s — NOT triggering automatically "
+                "(would wipe its WiFi config; update it manually if needed)", panel.name
+            )
 
         tft_filename = "gui_us.tft" if panel.is_us_panel else "gui.tft"
         tft_md5 = self.ota_md5("tft", tft_filename)
