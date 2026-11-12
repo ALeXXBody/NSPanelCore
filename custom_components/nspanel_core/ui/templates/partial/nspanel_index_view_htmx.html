@@ -25,8 +25,8 @@ stomp_subscribe("nspanel/{{ nspanel.data.mac_address }}/status", (frame) => {
             </div>
             <div class="flex w-full items-center justify-center pt-2 pb-4">
                 <div>
-                <button class="btn btn-error m-1 rounded-btn" hx-post="/nspanel_core/api/panel/nspanel.data.id/deny" hx-target="#nspanel_container-{{ nspanel.data.id }}">Deny</button>
-                <button class="btn btn-info m-1 rounded-btn" hx-post="/nspanel_core/api/panel/nspanel.data.id/accept" hx-target="#nspanel_container-{{ nspanel.data.id }}">Accept</button>
+                <button class="btn btn-error m-1 rounded-btn" hx-post="/nspanel_core/api/panel/{{ nspanel.data.id }}/deny" hx-target="#nspanel_container-{{ nspanel.data.id }}">Deny</button>
+                <button class="btn btn-info m-1 rounded-btn" hx-post="/nspanel_core/api/panel/{{ nspanel.data.id }}/accept" hx-target="#nspanel_container-{{ nspanel.data.id }}">Accept</button>
                 </div>
             </div>
         </div>
@@ -78,7 +78,7 @@ stomp_subscribe("nspanel/{{ nspanel.data.mac_address }}/status", (frame) => {
                     {% include 'components/nspanel_reboot_button.html' %}
                 </li>
                 <li>
-                    <a class="nspanel-settings-link block px-4 py-2 hover:bg-accent hover:text-accent-content" href="/nspanel_core/edit/nspanel.data.id">
+                    <a class="nspanel-settings-link block px-4 py-2 hover:bg-accent hover:text-accent-content" href="/nspanel_core/edit/{{ nspanel.data.id }}">
                         <span class="mdi mdi-cog pr-2"></span>Settings
                     </a>
                 </li>
@@ -102,7 +102,7 @@ stomp_subscribe("nspanel/{{ nspanel.data.mac_address }}/status", (frame) => {
                 </ul>
                 <ul class="py-2 text-sm" aria-labelledby="dropdownLargeButton">
                 <li>
-                    <a hx-delete="/nspanel_core/api/panel/nspanel.data.id/delete" hx-target="#nspanel_container-{{ nspanel.data.id }}" class="block px-4 py-2 hover:bg-accent hover:text-accent-content cursor-pointer">
+                    <a hx-delete="/nspanel_core/api/panel/{{ nspanel.data.id }}/delete" hx-target="#nspanel_container-{{ nspanel.data.id }}" class="block px-4 py-2 hover:bg-accent hover:text-accent-content cursor-pointer">
                         <span class="mdi mdi-minus-circle pr-2"></span>Delete
                     </a>
                 </li>

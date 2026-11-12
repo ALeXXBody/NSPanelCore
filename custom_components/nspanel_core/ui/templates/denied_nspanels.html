@@ -22,11 +22,11 @@
       {% if nspanel.denied %}
         <tr class="hover">
           <th class="">
-            {{ nspanel.friendly_name }}
+            {{ nspanel.name }}
           </th>
-          <td>{{ nspanel.mac_address }}</td>
+          <td>{{ nspanel.mac }}</td>
           <td>
-              <a hx-delete="/nspanel_core/api/nspanel.id/htmx_unblock_nspanel" class="btn btn-info btn-sm">Unblock</a>
+              <a hx-post="/nspanel_core/api/panel/{{ nspanel.id }}/accept" hx-swap="none" class="btn btn-info btn-sm">Unblock</a>
           </td>
         </tr>
         {% endif %}

@@ -38,10 +38,9 @@
   <div class="flex items-center justify-between" id="nspanel_settings_container">
     <div>
       <h2 class="font-medium text-2xl" id="nspanel_name">Settings for room '{{ room.friendly_name }}'</h2>
-      {% for nspanel in nspanels %}
-          <a href="/nspanel_core/edit_nspanel">
-          {{ nspanel.status }}
-          {% include 'components/nspanel_status_badge.html' %}
+      {% for nspanel in room.nspanel_set.all %}
+          <a href="/nspanel_core/edit/{{ nspanel.id }}">
+          {{ nspanel.friendly_name }}
           </a>
       {% endfor %}
     </div>

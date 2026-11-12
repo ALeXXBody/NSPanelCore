@@ -393,9 +393,20 @@ class RelayGroupsView(HomeAssistantView):
 
     async def get(self, request, **kwargs):
         manager = _manager(request)
+        panels_by_mac = {p.mac: p for p in manager.config.panels}
+        groups = []
+        for g in manager.config.relay_groups:
+            members = []
+            for b in g.bindings or []:
+                p = panels_by_mac.get(b.get("panel_mac", ""))
+                members.append({
+                    "panel_name": p.name if p else b.get("panel_mac", "?"),
+                    "relay_num": b.get("relay_num", 1),
+                })
+            groups.append({"id": g.id, "name": g.name, "members": members})
         html = _render(
             "relay_groups.html",
-            relay_groups=[],
+            relay_groups=groups,
             page_title="Relay/Light groups",
             nspanels=_panels_context(manager),
         )
@@ -524,64 +535,110 @@ def _firmware_dir():
     return _os.path.join(_os.path.dirname(__file__), "firmware")
 
 
-class DownloadFirmwareView(HomeAssistantView):
-    url = f"{URL_BASE}/download_firmware"
-    name = "nspanel_core:download_firmware"
-    requires_auth = True
+def _firmware_file(model: str, filename: str) -> str | None:
+    """Resolve a firmware-binary path under a strict allowlist.
+
+    Only sonoff/custom models and fixed filenames — no user-controlled path
+    segments, so directory traversal is impossible.
+    """
+    if model not in ("sonoff", "custom"):
+        return None
+    if filename not in ("firmware.bin", "data_file.bin"):
+        return None
+    path = _os.path.join(_firmware_dir(), model, filename)
+    return path if _os.path.exists(path) else None
+
+
+def _tft_file(region: str) -> str | None:
+    if region not in ("eu", "us"):
+        return None
+    filename = "gui_us.tft" if region == "us" else "gui.tft"
+    path = _os.path.join(_os.path.dirname(__file__), "tft", filename)
+    return path if _os.path.exists(path) else None
+
+
+class OtaFileView(HomeAssistantView):
+    """Base for panel OTA endpoints (firmware/TFT).
+
+    Panels download over plain HTTP with no bearer token, so these stay
+    requires_auth=False. Safety comes from fixed allowlists: only known
+    filenames under the integration's own firmware/tft directories.
+    """
+
+    requires_auth = False
+
+    _kind = ""
+    _filename = ""
 
     async def get(self, request, **kwargs):
         model = request.query.get("model", "sonoff")
-        if model not in ("sonoff", "custom"):
-            return web.Response(status=400, text="Unknown model")
-        path = _os.path.join(_firmware_dir(), model, "firmware.bin")
-        if not _os.path.exists(path):
+        if self._filename in ("eu", "us"):
+            path = _tft_file(self._filename)
+        else:
+            path = _firmware_file(model, self._filename)
+        if path is None:
+            if model not in ("sonoff", "custom") and self._filename not in ("eu", "us"):
+                return web.Response(status=400, text="Unknown model")
             return web.Response(status=404, text="Not found")
+        if self._kind == "checksum":
+            return web.Response(text=_md5(path))
         return web.FileResponse(path)
 
 
-class DownloadDataFileView(HomeAssistantView):
-    url = f"{URL_BASE}/download_data_file"
-    name = "nspanel_core:download_data_file"
-    requires_auth = True
-
-    async def get(self, request, **kwargs):
-        model = request.query.get("model", "sonoff")
-        if model not in ("sonoff", "custom"):
-            return web.Response(status=400, text="Unknown model")
-        path = _os.path.join(_firmware_dir(), model, "data_file.bin")
-        if not _os.path.exists(path):
-            return web.Response(status=404, text="Not found")
-        return web.FileResponse(path)
+class DownloadFirmwareView(OtaFileView):
+    url = "/download_firmware"
+    name = "nspanel_core:ota:download_firmware"
+    _kind = "file"
+    _filename = "firmware.bin"
 
 
-class ChecksumFirmwareView(HomeAssistantView):
-    url = f"{URL_BASE}/checksum_firmware"
-    name = "nspanel_core:checksum_firmware"
-    requires_auth = True
-
-    async def get(self, request, **kwargs):
-        model = request.query.get("model", "sonoff")
-        if model not in ("sonoff", "custom"):
-            return web.Response(status=400, text="Unknown model")
-        path = _os.path.join(_firmware_dir(), model, "firmware.bin")
-        if not _os.path.exists(path):
-            return web.Response(status=404, text="Not found")
-        return web.Response(text=_md5(path))
+class DownloadDataFileView(OtaFileView):
+    url = "/download_data_file"
+    name = "nspanel_core:ota:download_data_file"
+    _kind = "file"
+    _filename = "data_file.bin"
 
 
-class ChecksumDataFileView(HomeAssistantView):
-    url = f"{URL_BASE}/checksum_data_file"
-    name = "nspanel_core:checksum_data_file"
-    requires_auth = True
+class ChecksumFirmwareView(OtaFileView):
+    url = "/checksum_firmware"
+    name = "nspanel_core:ota:checksum_firmware"
+    _kind = "checksum"
+    _filename = "firmware.bin"
 
-    async def get(self, request, **kwargs):
-        model = request.query.get("model", "sonoff")
-        if model not in ("sonoff", "custom"):
-            return web.Response(status=400, text="Unknown model")
-        path = _os.path.join(_firmware_dir(), model, "data_file.bin")
-        if not _os.path.exists(path):
-            return web.Response(status=404, text="Not found")
-        return web.Response(text=_md5(path))
+
+class ChecksumDataFileView(OtaFileView):
+    url = "/checksum_data_file"
+    name = "nspanel_core:ota:checksum_data_file"
+    _kind = "checksum"
+    _filename = "data_file.bin"
+
+
+class DownloadTftEuView(OtaFileView):
+    url = "/download_tft_eu"
+    name = "nspanel_core:ota:download_tft_eu"
+    _kind = "file"
+    _filename = "eu"
+
+
+class DownloadTftUsView(OtaFileView):
+    url = "/download_tft_us"
+    name = "nspanel_core:ota:download_tft_us"
+    _kind = "file"
+    _filename = "us"
+
+
+class ChecksumTftEuView(OtaFileView):
+    url = "/checksum_tft_file_eu"
+    name = "nspanel_core:ota:checksum_tft_eu"
+    _kind = "checksum"
+    _filename = "eu"
+
+
+class ChecksumTftUsView(OtaFileView):
+    url = "/checksum_tft_file_us"
+    name = "nspanel_core:ota:checksum_tft_us"
+    _kind = "checksum"
+    _filename = "us"
 
 
 def _md5(path: str) -> str:
@@ -601,15 +658,15 @@ class DownloadTftView(HomeAssistantView):
 
     async def get(self, request, **kwargs):
         manager = _manager(request)
-        panel_id = int(request.match_info["panel_id"])
+        try:
+            panel_id = int(request.match_info["panel_id"])
+        except (KeyError, ValueError, TypeError):
+            return web.Response(status=400, text="Bad panel id")
         panel = next((p for p in manager.config.panels if p.id == panel_id), None)
         if panel is None:
             return web.Response(status=404, text="Panel not found")
-        tft_dir = _os.path.join(_os.path.dirname(__file__), "tft")
-        # US panels use gui_us.tft
-        filename = "gui_us.tft" if panel.is_us_panel else "gui.tft"
-        path = _os.path.join(tft_dir, filename)
-        if not _os.path.exists(path):
+        path = _tft_file("us" if panel.is_us_panel else "eu")
+        if path is None:
             return web.Response(status=404, text="TFT not found")
         return web.FileResponse(path)
 
@@ -621,14 +678,15 @@ class ChecksumTftView(HomeAssistantView):
 
     async def get(self, request, **kwargs):
         manager = _manager(request)
-        panel_id = int(request.match_info["panel_id"])
+        try:
+            panel_id = int(request.match_info["panel_id"])
+        except (KeyError, ValueError, TypeError):
+            return web.Response(status=400, text="Bad panel id")
         panel = next((p for p in manager.config.panels if p.id == panel_id), None)
         if panel is None:
             return web.Response(status=404, text="Panel not found")
-        tft_dir = _os.path.join(_os.path.dirname(__file__), "tft")
-        filename = "gui_us.tft" if panel.is_us_panel else "gui.tft"
-        path = _os.path.join(tft_dir, filename)
-        if not _os.path.exists(path):
+        path = _tft_file("us" if panel.is_us_panel else "eu")
+        if path is None:
             return web.Response(status=404, text="TFT not found")
         return web.Response(text=_md5(path))
 
@@ -647,7 +705,7 @@ class ComingSoonView(HomeAssistantView):
             page_title="This page is being ported",
             nspanels=[],
         )
-        return web.Response(text=html, content_type="text/html")
+        return web.Response(text=html, content_type="text/html", status=404)
 
 
 def _panel_json_config(manager, panel) -> dict:
@@ -1002,6 +1060,16 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         WebappAssetView,
         PanelConfigByMacView,
         RoomConfigView,
+        DownloadFirmwareView,
+        DownloadDataFileView,
+        ChecksumFirmwareView,
+        ChecksumDataFileView,
+        DownloadTftEuView,
+        DownloadTftUsView,
+        ChecksumTftEuView,
+        ChecksumTftUsView,
+        DownloadTftView,
+        ChecksumTftView,
         ComingSoonView,
     ]
     for view_cls in views:

@@ -28,6 +28,19 @@ document.addEventListener("htmx:configRequest", function (e) {
   if (tok) e.detail.headers["Authorization"] = "Bearer " + tok;
 });
 
+// Close any open modal dialogs (used by modal buttons across pages).
+function close_modals() {
+  document.querySelectorAll("dialog.modal[open], dialog[open]").forEach((d) => {
+    try { d.close(); } catch (e) {}
+  });
+  var modal = document.getElementById("modal");
+  if (modal) {
+    try { modal.close(); } catch (e) {}
+    modal.remove();
+  }
+  document.querySelectorAll(".modal-backdrop").forEach((b) => b.remove());
+}
+
 // Full-page forms can't set headers, so authed document forms are submitted
 // via fetch with the bearer token; the server redirects are followed here.
 document.addEventListener("submit", function (e) {
