@@ -256,7 +256,6 @@ class NSPanelManager:
         """Build and send the NSPanelConfig protobuf for a panel."""
         rooms = self.config.rooms
         room_ids = panel.rooms or [r.id for r in rooms]
-        pages = [p for p in self.config.pages if p.room_id == panel.room_id]
         global_scene_page_ids = [
             p.id for p in self.config.pages if p.room_id is None and p.is_scenes_page
         ]
@@ -297,7 +296,7 @@ class NSPanelManager:
         }
         for rid in room_ids:
             info = {"room_id": rid, "entity_page_ids": [], "scene_page_ids": []}
-            for p in pages:
+            for p in self.config.pages:
                 if p.room_id == rid:
                     if p.is_scenes_page:
                         info["scene_page_ids"].append(p.id)
@@ -410,7 +409,7 @@ class NSPanelManager:
                 return ""
             return h.hexdigest()
         tft_md5 = md5_file(tft_path)
-        if tft_md5 and report.get("md5_tft_file") and report["md5_tft_file"] != tft_md5:
+        if tft_md5 and report.get("md5_tft_gui") and report["md5_tft_gui"] != tft_md5:
             _LOGGER.info("TFT update available for panel %s — triggering OTA", panel.name)
             await self._publish(panel_topic(panel.mac, "command"), json.dumps({"command": "tft_update"}))
 
