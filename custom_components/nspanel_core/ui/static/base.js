@@ -41,6 +41,18 @@ function close_modals() {
   document.querySelectorAll(".modal-backdrop").forEach((b) => b.remove());
 }
 
+// jQuery XHR (entity pickers, legacy posts) carries the same bearer token.
+if (typeof $ !== "undefined" && $.ajaxSetup) {
+  $.ajaxSetup({
+    beforeSend: function (xhr, settings) {
+      if (settings.url && settings.url.indexOf("/nspanel_core/") === 0) {
+        var tok = nspanelGetToken();
+        if (tok) xhr.setRequestHeader("Authorization", "Bearer " + tok);
+      }
+    },
+  });
+}
+
 // Full-page forms can't set headers, so authed document forms are submitted
 // via fetch with the bearer token; the server redirects are followed here.
 document.addEventListener("submit", function (e) {
@@ -51,13 +63,15 @@ document.addEventListener("submit", function (e) {
   var headers = {};
   if (tok) headers["Authorization"] = "Bearer " + tok;
   fetch(form.action, { method: form.method || "POST", body: new FormData(form), headers: headers, redirect: "follow" })
-    .then(function (resp) {
+    .then(async function (resp) {
       if (resp.ok) {
         window.location.href = resp.url;
       } else if (resp.status === 401) {
         alert("Not authorized — please log in to Home Assistant first.");
       } else {
-        alert("Save failed (HTTP " + resp.status + ").");
+        var detail = "";
+        try { detail = (await resp.text()).slice(0, 300); } catch (e) {}
+        alert("Save failed (HTTP " + resp.status + ")" + (detail ? ": " + detail : ""));
       }
     })
     .catch(function (err) { alert("Save failed: " + err); });

@@ -52,35 +52,39 @@ class NSPanelCoreOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             if manager:
-                await manager.apply_settings(user_input)
-            return self.async_create_entry(title="", data={})
+                errors = await manager.apply_settings(user_input)
+                if not errors:
+                    # Persist a copy on the entry so HA shows effective options.
+                    clean, _ = manager.validate_settings(user_input)
+                    self.hass.config_entries.async_update_entry(
+                        self.entry, options=clean
+                    )
+                    return self.async_create_entry(title="", data=clean)
+            else:
+                return self.async_create_entry(title="", data=user_input)
+            # errors -> fall through and re-show the form
+
+        def d(name, fallback):
+            return getattr(current, name, fallback) if current else fallback
 
         schema = vol.Schema(
             {
-                vol.Required(
-                    "manager_address",
-                    default=current.manager_address if current else "core",
-                ): str,
-                vol.Required(
-                    "color_temp_min",
-                    default=current.color_temp_min if current else 2700,
-                ): int,
-                vol.Required(
-                    "color_temp_max",
-                    default=current.color_temp_max if current else 6500,
-                ): int,
-                vol.Required(
-                    "date_format",
-                    default=current.date_format if current else "%d/%m",
-                ): str,
-                vol.Optional(
-                    "location_latitude",
-                    default=current.location_latitude if current else "",
-                ): str,
-                vol.Optional(
-                    "location_longitude",
-                    default=current.location_longitude if current else "",
-                ): str,
+                vol.Required("manager_address", default=d("manager_address", "core")): str,
+                vol.Required("manager_port", default=d("manager_port", 8000)): int,
+                vol.Required("color_temp_min", default=d("color_temp_min", 2700)): int,
+                vol.Required("color_temp_max", default=d("color_temp_max", 6500)): int,
+                vol.Required("date_format", default=d("date_format", "%d/%m")): str,
+                vol.Optional("location_latitude", default=d("location_latitude", "")): str,
+                vol.Optional("location_longitude", default=d("location_longitude", "")): str,
+                vol.Optional("weather_update_interval", default=d("weather_update_interval", 30)): int,
+                vol.Optional("precipitation_format", default=d("precipitation_format", "mm")): str,
+                vol.Optional("wind_speed_format", default=d("wind_speed_format", "kmh")): str,
+                vol.Optional("use_fahrenheit", default=d("use_fahrenheit", False)): bool,
+                vol.Optional("reverse_color_temp", default=d("reverse_color_temp", False)): bool,
+                vol.Optional("clock_us_style", default=d("clock_us_style", False)): bool,
+                vol.Optional("optimistic_mode", default=d("optimistic_mode", False)): bool,
+                vol.Optional("turn_on_behaviour", default=d("turn_on_behaviour", "color_temp")): str,
+                vol.Optional("light_turn_on_brightness", default=d("light_turn_on_brightness", 0)): int,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

@@ -37,7 +37,7 @@ function populate_add_new_entity_dialog(filter, callback) {
   $("#add_new_entity_options").hide();
   $("#add_new_entity_loader").show();
 
-  $.get("/api/get_all_available_entities", filter, function (data) {
+  $.get("/nspanel_core/api/get_all_available_entities", filter, function (data) {
     $("#add_new_entity_errors").html("");
     $("#add_new_entity_options").html("");
     data.errors.forEach((error) => {

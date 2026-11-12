@@ -66,10 +66,13 @@ TEMPLATES_DIR = UI_DIR / "templates"
 STATIC_DIR = UI_DIR / "static"
 
 
-def _render(template_name: str, **context) -> str:
+def _jinja_env():
+    """Module-level Jinja environment (built once, reused every render)."""
     import jinja2
 
     import json as _json
+    import base64 as _b64
+    import json as _json2
 
     def _RC(component_name, **props):
         # Convert undefined/None values to empty strings for JSON serialization
@@ -87,13 +90,6 @@ def _render(template_name: str, **context) -> str:
         unique_id = f"react-{component_name}-{id(props)}"
         return f"<div id='{unique_id}' data-react-component='{component_name}' data-react-props='{props_json}'></div>"
 
-    env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(str(TEMPLATES_DIR)),
-        autoescape=True,
-    )
-    import base64 as _b64
-    import json as _json2
-
     def _jsonify(value):
         try:
             return _json2.dumps(value)
@@ -103,9 +99,43 @@ def _render(template_name: str, **context) -> str:
     def _base64_encode(value):
         return _b64.b64encode(str(value).encode()).decode()
 
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(str(TEMPLATES_DIR)),
+        autoescape=True,
+    )
     env.globals["RC"] = _RC
     env.filters["jsonify"] = _jsonify
     env.filters["base64_encode"] = _base64_encode
+    return env
+
+
+_JINJA_ENV = None
+
+
+def _get_env():
+    global _JINJA_ENV
+    if _JINJA_ENV is None:
+        _JINJA_ENV = _jinja_env()
+    return _JINJA_ENV
+
+
+def _warm_template_cache() -> None:
+    """Pre-compile every template (runs in the executor at startup).
+
+    First render of each template does disk I/O; doing it here keeps all
+    file reads off the event loop.
+    """
+    env = _get_env()
+    for path in TEMPLATES_DIR.rglob("*.html"):
+        name = str(path.relative_to(TEMPLATES_DIR))
+        try:
+            _TEMPLATE_CACHE[name] = env.get_template(name)
+        except Exception:  # noqa: BLE001 — a single bad template must not block startup
+            _LOGGER.exception("Failed to pre-compile template %s", name)
+
+
+def _render(template_name: str, **context) -> str:
+    env = _get_env()
     # Cache templates to avoid blocking I/O in the event loop
     if template_name not in _TEMPLATE_CACHE:
         _TEMPLATE_CACHE[template_name] = env.get_template(template_name)
@@ -168,6 +198,7 @@ class MainPageView(HomeAssistantView):
             nspanels=_panels_context(manager),
             manager_address=manager.config.settings.manager_address,
             temperature_unit="celsius",
+            has_unread_messages=any(not m.read for m in manager.config.messages),
         )
         return web.Response(text=html, content_type="text/html")
 
@@ -201,9 +232,16 @@ class PanelActionView(HomeAssistantView):
 
     async def _act(self, request):
         manager = _manager(request)
-        panel_id = int(request.match_info["panel_id"])
-        action = request.match_info["action"]
+        try:
+            panel_id = int(request.match_info["panel_id"])
+        except (KeyError, ValueError, TypeError):
+            return web.Response(text="Bad panel id", status=400)
+        action = request.match_info.get("action", "")
+        if action not in ("accept", "deny", "delete"):
+            return web.Response(text="Unknown action", status=400)
         panel = next((p for p in manager.config.panels if p.id == panel_id), None)
+        if panel is None:
+            return web.Response(text="Panel not found", status=404)
         if panel is not None:
             if action == "accept":
                 panel.accepted = True
@@ -327,11 +365,14 @@ class SavePanelSettingsView(HomeAssistantView):
 
     async def post(self, request, **kwargs):
         manager = _manager(request)
-        panel_id = int(request.match_info["panel_id"])
+        try:
+            panel_id = int(request.match_info["panel_id"])
+        except (KeyError, ValueError, TypeError):
+            return web.Response(text="Bad panel id", status=400)
         form = await request.post()
         panel = next((p for p in manager.config.panels if p.id == panel_id), None)
         if panel is None:
-            return web.Response(status=404)
+            return web.Response(text="Panel not found", status=404)
         field_map = {
             "friendly_name": ("name", str),
             "screensaver_mode": ("screensaver_mode", int),
@@ -358,12 +399,15 @@ class SavePanelSettingsView(HomeAssistantView):
             panel.__setattr__(flag, flag in form)
         if "room_id" in form:
             try:
-                panel.room_id = int(form["room_id"])
+                room_id = int(form["room_id"])
             except (ValueError, TypeError):
-                pass
+                return web.Response(text="Bad room id", status=400)
+            if manager._room_by_id(room_id) is None:
+                return web.Response(text="Unknown room", status=404)
+            panel.room_id = room_id
         await manager.async_save()
         await manager._send_panel_config(panel)
-        raise web.HTTPFound(UI_PATH)
+        return _redirect(request, UI_PATH)
 
 
 class GlobalScenesView(HomeAssistantView):
@@ -436,6 +480,36 @@ class WeatherTimeView(HomeAssistantView):
         )
         return web.Response(text=html, content_type="text/html")
 
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        form = await request.post()
+        data = {
+            "location_latitude": form.get("location_latitude", ""),
+            "location_longitude": form.get("location_longitude", ""),
+            "weather_update_interval": form.get("weather_update_interval", ""),
+            "clock_us_style": form.get("clock_us_style", ""),
+            "date_format": form.get("date_format", ""),
+            "use_fahrenheit": form.get("use_fahrenheit", ""),
+            "precipitation_format": form.get("precipitation_format", ""),
+            "wind_speed_format": form.get("wind_speed_format", ""),
+            "outside_temp_provider": form.get("outside_temp_provider", ""),
+            "outside_temp_sensor_entity": form.get("outside_temp_sensor", ""),
+        }
+        if data["outside_temp_sensor_entity"]:
+            import re as _re
+
+            if not _re.fullmatch(r"[a-z_]+\.[a-z0-9_]+", data["outside_temp_sensor_entity"]):
+                return web.Response(text="Bad outside temperature sensor entity id", status=422)
+        if data["outside_temp_provider"] not in ("", "homeassistant", "openhab", "manual"):
+            return web.Response(text="Bad outside temperature provider", status=422)
+        errors = await manager.apply_settings(data)
+        if errors:
+            return web.Response(
+                text="Weather errors: " + "; ".join(f"{k}: {v}" for k, v in errors.items()),
+                status=422,
+            )
+        return _redirect(request, f"{URL_BASE}/weather_and_time")
+
 
 class DeniedPanelsView(HomeAssistantView):
     url = f"{URL_BASE}/denied_nspanels"
@@ -499,11 +573,64 @@ class SettingsView(HomeAssistantView):
             is_home_assistant_addon=True,
             default_nspanel_type="sonoff",
             themes=themes,
-            theme="nspmwip",
+            theme=s.theme,
             page_title="Settings",
             nspanels=_panels_context(manager),
         )
         return web.Response(text=html, content_type="text/html")
+
+
+class SaveSettingsView(HomeAssistantView):
+    """Persist the global settings form (POST /nspanel_core/save_settings).
+
+    Only GlobalSettings fields are stored; legacy add-on fields in the form
+    (mqtt_*, home_assistant_*, backoff times, log levels) are ignored.
+    Panel timing defaults in the form are pushed down to every panel.
+    """
+
+    url = f"{URL_BASE}/save_settings"
+    name = "nspanel_core:save_settings"
+    requires_auth = True
+
+    _PANEL_DEFAULTS = {
+        "min_button_push_time": (0, 10000),
+        "button_long_press_time": (0, 10000),
+        "special_mode_trigger_time": (0, 10000),
+        "special_mode_release_time": (0, 10000),
+        "screen_dim_level": (1, 100),
+        "screensaver_dim_level": (0, 100),
+        "screensaver_activation_timeout": (0, 86400),
+        "screensaver_mode": (0, 2),
+    }
+
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        form = await request.post()
+        data = dict(form)
+        # The form uses turn_on_behavior (or); the model uses our spelling.
+        if "turn_on_behavior" in data and "turn_on_behaviour" not in data:
+            data["turn_on_behaviour"] = data["turn_on_behavior"]
+        errors = await manager.apply_settings(data)
+        if errors:
+            return web.Response(
+                text="Settings errors: " + "; ".join(f"{k}: {v}" for k, v in errors.items()),
+                status=422,
+            )
+        pushed = []
+        for key, (lo, hi) in self._PANEL_DEFAULTS.items():
+            if key in form:
+                try:
+                    n = int(str(form[key]).strip())
+                except (ValueError, TypeError):
+                    return web.Response(text=f"Bad {key}: must be a number", status=422)
+                if not (lo <= n <= hi):
+                    return web.Response(text=f"Bad {key}: must be {lo}..{hi}", status=422)
+                for panel in manager.config.panels:
+                    setattr(panel, key, n)
+                pushed.append(key)
+        if pushed:
+            await manager.async_save()
+        return _redirect(request, f"{URL_BASE}/settings")
 
 
 class ManagerSettingsView(HomeAssistantView):
@@ -557,6 +684,15 @@ def _tft_file(region: str) -> str | None:
     return path if _os.path.exists(path) else None
 
 
+def _ota_checksum(request, kind: str, name: str, path: str) -> str:
+    """MD5 for an OTA file: startup cache first, disk fallback."""
+    try:
+        digest = _manager(request).ota_md5(kind, name)
+    except Exception:  # noqa: BLE001 — manager not ready
+        digest = ""
+    return digest or _md5(path)
+
+
 class OtaFileView(HomeAssistantView):
     """Base for panel OTA endpoints (firmware/TFT).
 
@@ -573,15 +709,19 @@ class OtaFileView(HomeAssistantView):
     async def get(self, request, **kwargs):
         model = request.query.get("model", "sonoff")
         if self._filename in ("eu", "us"):
+            kind, name = "tft", ("gui_us.tft" if self._filename == "us" else "gui.tft")
             path = _tft_file(self._filename)
         else:
-            path = _firmware_file(model, self._filename)
+            kind, name, path = "firmware", f"{model}/{self._filename}", None
+            if model in ("sonoff", "custom"):
+                path = _firmware_file(model, self._filename)
         if path is None:
             if model not in ("sonoff", "custom") and self._filename not in ("eu", "us"):
                 return web.Response(status=400, text="Unknown model")
             return web.Response(status=404, text="Not found")
         if self._kind == "checksum":
-            return web.Response(text=_md5(path))
+            # Serve the startup-computed hash (no disk I/O per request).
+            return web.Response(text=_ota_checksum(request, kind, name, path))
         return web.FileResponse(path)
 
 
@@ -665,7 +805,8 @@ class DownloadTftView(HomeAssistantView):
         panel = next((p for p in manager.config.panels if p.id == panel_id), None)
         if panel is None:
             return web.Response(status=404, text="Panel not found")
-        path = _tft_file("us" if panel.is_us_panel else "eu")
+        region = "us" if panel.is_us_panel else "eu"
+        path = _tft_file(region)
         if path is None:
             return web.Response(status=404, text="TFT not found")
         return web.FileResponse(path)
@@ -685,10 +826,126 @@ class ChecksumTftView(HomeAssistantView):
         panel = next((p for p in manager.config.panels if p.id == panel_id), None)
         if panel is None:
             return web.Response(status=404, text="Panel not found")
-        path = _tft_file("us" if panel.is_us_panel else "eu")
+        region = "us" if panel.is_us_panel else "eu"
+        filename = "gui_us.tft" if panel.is_us_panel else "gui.tft"
+        path = _tft_file(region)
         if path is None:
             return web.Response(status=404, text="TFT not found")
-        return web.Response(text=_md5(path))
+        return web.Response(text=_ota_checksum(request, "tft", filename, path))
+
+
+class OtaUploadView(HomeAssistantView):
+    """Base for panel firmware/TFT uploads (multipart POST, admin only).
+
+    Files land in the integration's own firmware/<model>/ and tft/
+    directories under fixed names — no user-controlled paths. After a
+    successful write the OTA hash cache is refreshed so checksums and
+    triggers use the new file immediately.
+    """
+
+    requires_auth = True
+    _max_bytes = 32 * 1024 * 1024
+
+    async def _save_upload(self, request, field: str, dest_path: str) -> web.Response | None:
+        # Single multipart parse: request.post() already consumed the body,
+        # so file fields come from it as FileFields (no second read).
+        form = await request.post()
+        file_field = form.get(field)
+        filename = getattr(file_field, "filename", "") or ""
+        if not filename:
+            return web.Response(text="No file uploaded", status=400)
+        stream = getattr(file_field, "file", None)
+        if stream is None:
+            return web.Response(text="No file uploaded", status=400)
+
+        def _write() -> int | None:
+            size = 0
+            try:
+                with open(dest_path, "wb") as f:
+                    while True:
+                        chunk = stream.read(65536)
+                        if not chunk:
+                            break
+                        size += len(chunk)
+                        if size > self._max_bytes:
+                            return None
+                        f.write(chunk)
+            except OSError:
+                return None
+            return size if size > 0 else None
+
+        size = await _manager(request).hass.async_add_executor_job(_write)
+        if size is None:
+            try:
+                _os.remove(dest_path)
+            except OSError:
+                pass
+            return web.Response(text="File too large, empty or unwritable", status=413)
+        return None
+
+
+class SaveFirmwareView(OtaUploadView):
+    url = f"{URL_BASE}/save_new_firmware"
+    name = "nspanel_core:save_firmware"
+
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        form = await request.post()
+        model = str(form.get("model", "sonoff"))
+        if model not in ("sonoff", "custom"):
+            return web.Response(text="Unknown model", status=400)
+        dest = _os.path.join(_firmware_dir(), model, "firmware.bin")
+        err = await self._save_upload(request, "firmware", dest)
+        if err is not None:
+            return err
+        await manager.hass.async_add_executor_job(
+            manager.invalidate_ota_cache, "firmware", f"{model}/firmware.bin", dest
+        )
+        return _redirect(request, f"{URL_BASE}/settings")
+
+
+class SaveDataFileView(OtaUploadView):
+    url = f"{URL_BASE}/save_new_data_file"
+    name = "nspanel_core:save_data_file"
+
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        form = await request.post()
+        model = str(form.get("model", "sonoff"))
+        if model not in ("sonoff", "custom"):
+            return web.Response(text="Unknown model", status=400)
+        dest = _os.path.join(_firmware_dir(), model, "data_file.bin")
+        err = await self._save_upload(request, "data_file", dest)
+        if err is not None:
+            return err
+        await manager.hass.async_add_executor_job(
+            manager.invalidate_ota_cache, "firmware", f"{model}/data_file.bin", dest
+        )
+        return _redirect(request, f"{URL_BASE}/settings")
+
+
+class SaveTftFileView(OtaUploadView):
+    url = f"{URL_BASE}/save_new_tft_file"
+    name = "nspanel_core:save_tft_file"
+
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        form = await request.post()
+        variant = str(form.get("tft_file_type", "") or form.get("file_version", "")).strip()
+        if variant.lower().startswith("us"):
+            filename = "gui_us.tft"
+        elif variant.lower().startswith(("eu", "europe")):
+            filename = "gui.tft"
+        else:
+            return web.Response(text="Unknown TFT variant", status=400)
+        dest = _os.path.join(_os.path.dirname(__file__), "tft", filename)
+        err = await self._save_upload(request, "tft_file", dest)
+        if err is not None:
+            return err
+        await manager.hass.async_add_executor_job(
+            manager.invalidate_ota_cache, "tft", filename, dest
+        )
+        return _redirect(request, f"{URL_BASE}/settings")
 
 
 class ComingSoonView(HomeAssistantView):
@@ -792,6 +1049,96 @@ def _room_json_config(manager, room_id: int) -> dict | None:
     return {"name": room.name, "lights": lights, "scenes": scenes}
 
 
+class EntitiesListView(HomeAssistantView):
+    """JSON entity list for the in-UI entity pickers (XHR, authed).
+
+    Shape matches what modal-select-entity.js expects:
+    {errors: [], home_assistant_entities: [{entity_id, label}], ...}.
+    """
+
+    url = "/api/get_all_available_entities"
+    name = "nspanel_core:api:entities"
+    requires_auth = True
+
+    async def get(self, request, **kwargs):
+        domains = request.query.get("domain", "")
+        wanted = {d.strip() for d in domains.split(",") if d.strip()} if domains else None
+        entities = []
+        for state in self._states_sorted(request):
+            if wanted and state.domain not in wanted:
+                continue
+            entities.append({
+                "entity_id": state.entity_id,
+                "label": state.attributes.get("friendly_name") or state.entity_id,
+            })
+
+        return web.json_response({
+            "errors": [],
+            "home_assistant_entities": entities,
+            "openhab_entities": [],
+            "manual_entities": [],
+        })
+
+    @staticmethod
+    def _states_sorted(request):
+        hass = request.app["hass"]
+        return sorted(hass.states.async_all(), key=lambda s: s.entity_id)
+
+
+class EntityPickerModalView(HomeAssistantView):
+    """Serve the existing entity-picker modal partials (XHR, authed)."""
+
+    requires_auth = True
+    url = ""
+    name = ""
+    template = ""
+
+    async def get(self, request, **kwargs):
+        manager = _manager(request)
+        entities = [
+            {"type": "homeassistant", "label": s.attributes.get("friendly_name") or s.entity_id,
+             "item_id": s.entity_id}
+            for s in sorted(manager.hass.states.async_all(), key=lambda s: s.entity_id)
+        ]
+        html = _render(self.template, entities=entities)
+        return web.Response(text=html, content_type="text/html")
+
+
+class SelectRoomTempSensorView(EntityPickerModalView):
+    url = f"{URL_BASE}/htmx_partial_select_room_temperature_sensor"
+    name = "nspanel_core:picker:room_temp_sensor"
+    template = "partial/select_room_temperature_sensor.html"
+
+
+class SelectRoomTempSensorProviderView(EntityPickerModalView):
+    url = f"{URL_BASE}/htmx_partial_select_room_temperature_sensor_provider"
+    name = "nspanel_core:picker:room_temp_provider"
+    template = "partial/select_room_temperature_sensor_provider.html"
+
+
+class SelectWeatherOutsideTempSensorView(EntityPickerModalView):
+    url = f"{URL_BASE}/htmx_partial_select_weather_outside_temperature_sensor"
+    name = "nspanel_core:picker:weather_outside_temp"
+    template = "partial/select_weather_outside_temperature_sensor.html"
+
+
+class SelectWeatherOutsideTempProviderView(EntityPickerModalView):
+    url = f"{URL_BASE}/htmx_partial_select_weather_outside_temperature_sensor_provider"
+    name = "nspanel_core:picker:weather_outside_temp_provider"
+    template = "partial/select_weather_outside_temperature_sensor_provider.html"
+
+
+class SelectWeatherLocationView(EntityPickerModalView):
+    url = f"{URL_BASE}/htmx_partial_select_weather_location"
+    name = "nspanel_core:picker:weather_location"
+    template = "partial/select_weather_location.html"
+
+
+class EntitiesListNamespacedView(EntitiesListView):
+    url = f"{URL_BASE}/api/get_all_available_entities"
+    name = "nspanel_core:api:entities_ns"
+
+
 class PanelConfigByMacView(HomeAssistantView):
     """Panel firmware config download: GET /api/get_nspanel_config?mac=<mac>.
 
@@ -893,6 +1240,13 @@ class EditRoomView(HomeAssistantView):
         return web.Response(text=html, content_type="text/html")
 
 
+def _redirect(request, location: str) -> web.Response:
+    """Redirect that works for full-page loads, fetch and htmx alike."""
+    if request.headers.get("HX-Request"):
+        return web.Response(status=204, headers={"HX-Redirect": location})
+    raise web.HTTPFound(location)
+
+
 class SaveNewRoomView(HomeAssistantView):
     url = f"{URL_BASE}/save_new_room"
     name = "nspanel_core:save_new_room"
@@ -902,8 +1256,48 @@ class SaveNewRoomView(HomeAssistantView):
         manager = _manager(request)
         form = await request.post()
         name = str(form.get("friendly_name", "")).strip()
+        if not name:
+            return web.Response(text="Room name must not be empty", status=400)
+        if len(name) > 64:
+            return web.Response(text="Room name too long (max 64)", status=400)
+        await manager.add_room(name)
+        return _redirect(request, f"{URL_BASE}/rooms")
+
+
+class UpdateRoomView(HomeAssistantView):
+    url = f"{URL_BASE}/update_room_form"
+    name = "nspanel_core:update_room"
+    requires_auth = True
+
+    _ENTITY_RE = None
+
+    async def post(self, request, **kwargs):
+        import re
+
+        manager = _manager(request)
+        form = await request.post()
+        try:
+            room_id = int(form.get("room_id", 0))
+        except (ValueError, TypeError):
+            return web.Response(text="Bad room id", status=400)
+        room = manager._room_by_id(room_id)
+        if room is None:
+            # edit_room.html posts without room_id (legacy form): fall back to
+            # the single-room case is ambiguous -> require explicit id.
+            return web.Response(text="Unknown room", status=404)
+        name = str(form.get("friendly_name", "")).strip()
         if name:
-            await manager.add_room(name)
+            if len(name) > 64:
+                return web.Response(text="Room name too long (max 64)", status=400)
+            room.name = name
+        provider = str(form.get("room_temp_provider", "") or "").strip()
+        sensor = str(form.get("room_temp_sensor", "") or "").strip()
+        if sensor and not re.fullmatch(r"[a-z_]+\.[a-z0-9_]+", sensor):
+            return web.Response(text="Bad temperature sensor entity id", status=422)
+        if provider and provider not in ("homeassistant", "openhab", "manual", ""):
+            return web.Response(text="Bad temperature provider", status=400)
+        room.temp_sensor_entity = sensor
+        await manager.async_save()
         raise web.HTTPFound(f"{URL_BASE}/rooms")
 
 
@@ -914,8 +1308,16 @@ class DeleteRoomView(HomeAssistantView):
 
     async def post(self, request, **kwargs):
         manager = _manager(request)
-        await manager.remove_room(int(request.match_info["room_id"]))
-        raise web.HTTPFound(f"{URL_BASE}/rooms")
+        try:
+            room_id = int(request.match_info["room_id"])
+        except (KeyError, ValueError, TypeError):
+            return web.Response(text="Bad room id", status=400)
+        if manager._room_by_id(room_id) is None:
+            return web.Response(text="Unknown room", status=404)
+        if len(manager.config.rooms) <= 1:
+            return web.Response(text="Cannot delete the last room", status=400)
+        await manager.remove_room(room_id)
+        return _redirect(request, f"{URL_BASE}/rooms")
 
 
 class RestartView(HomeAssistantView):
@@ -936,7 +1338,20 @@ class ThemeView(HomeAssistantView):
     requires_auth = True
 
     async def post(self, request, **kwargs):
-        # Theme switching is ported with the settings page.
+        manager = _manager(request)
+        form = await request.post()
+        # htmx posts the radio value as theme-controller; be liberal.
+        theme = (
+            form.get("theme")
+            or form.get("theme-controller")
+            or form.get("value")
+            or ""
+        )
+        theme = str(theme).strip()
+        if theme not in ("nspmwip",):
+            return web.Response(text="Unknown theme", status=400)
+        manager.config.settings.theme = theme
+        await manager.async_save()
         return web.Response(text="", status=200)
 
 
@@ -946,7 +1361,14 @@ class MessagesView(HomeAssistantView):
     requires_auth = True
 
     async def get(self, request, **kwargs):
-        return web.Response(text="", status=200)
+        manager = _manager(request)
+        messages = manager.get_messages()
+        html = _render(
+            "partial/show_messages.html",
+            messages=messages,
+        )
+        manager.mark_messages_read()
+        return web.Response(text=html, content_type="text/html")
 
 
 class StompView(HomeAssistantView):
@@ -1031,6 +1453,12 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
     # Webapp is served via views below (not via static path, because HA's
     # static path handler returns 403 for the root directory).
 
+    # Pre-compile templates off the event loop (first render does disk I/O).
+    async def _warm_templates() -> None:
+        await hass.async_add_executor_job(_warm_template_cache)
+
+    hass.async_create_task(_warm_templates())
+
 
     # Register via HA (enforces requires_auth + auth middleware). The old
     # direct add_route bypassed auth entirely even with requires_auth=True.
@@ -1060,6 +1488,23 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         WebappAssetView,
         PanelConfigByMacView,
         RoomConfigView,
+        SaveSettingsView,
+        UpdateRoomView,
+        SaveFirmwareView,
+        SaveDataFileView,
+        SaveTftFileView,
+        EntitiesListView,
+        EntitiesListNamespacedView,
+        SelectRoomTempSensorView,
+        SelectRoomTempSensorProviderView,
+        SelectWeatherOutsideTempSensorView,
+        SelectWeatherOutsideTempProviderView,
+        SelectWeatherLocationView,
+        SaveSettingsView,
+        UpdateRoomView,
+        SaveFirmwareView,
+        SaveDataFileView,
+        SaveTftFileView,
         DownloadFirmwareView,
         DownloadDataFileView,
         ChecksumFirmwareView,

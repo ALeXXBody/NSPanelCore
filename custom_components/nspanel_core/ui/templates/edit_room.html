@@ -33,7 +33,8 @@
 
 
 <!-- Beginning of vissible content-->
-<form method="POST" action="/nspanel_core/update_room_form">
+<form method="POST" action="/nspanel_core/update_room_form" data-authed>
+  <input type="hidden" name="room_id" value="{{ room.id }}">
   
   <div class="flex items-center justify-between" id="nspanel_settings_container">
     <div>
@@ -88,10 +89,12 @@
       </div>
       {% endif %}
       <div class="text-right mt-4">
-          <a href="{% if total_num_rooms != 1 %}/nspanel_core/delete_room{% else %}#{% endif %}"
-          class="btn btn-error " {% if total_num_rooms == 1 %}disabled{% endif %}
-          {% if total_num_rooms == 1 %}btn-disabled{% endif %}
-          >Delete</a>
+          {% if total_num_rooms == 1 %}
+          <span class="btn btn-error btn-disabled" aria-disabled="true">Delete</span>
+          {% else %}
+          <a hx-post="/nspanel_core/api/rooms/{{ room.id }}/delete" hx-confirm="Delete room '{{ room.friendly_name }}'?" href="#"
+          class="btn btn-error">Delete</a>
+          {% endif %}
           <button type="submit" class="btn btn-success">Save</button>
       </div>
     </div>

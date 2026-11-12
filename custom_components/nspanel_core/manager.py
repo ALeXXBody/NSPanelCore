@@ -24,6 +24,7 @@ from homeassistant.components import mqtt
 import aiohttp
 from homeassistant.core import HomeAssistant, Event, State
 from homeassistant.helpers.event import (
+    async_call_later,
     async_track_state_change_event,
     async_track_time_interval,
 )
@@ -78,6 +79,9 @@ class NSPanelManager:
         self._relay_listeners: dict[str, list] = {}
         self._relay_state: dict[str, bool] = {}
         self._log_backlog: dict[str, list] = {}
+        self._save_timer = None
+        self._weather_unsubs: list = []
+        self._ota_md5: dict[str, str] | None = None
         self.stomp = None
 
     # ------------------------------------------------------------------
@@ -142,25 +146,223 @@ class NSPanelManager:
         # Republish all state for already-accepted panels.
         await self._republish_all_state()
         # Weather polling (open-meteo) — mirrors the C++/Go weather package.
-        self._unsub.append(async_track_time_interval(self.hass, self._poll_weather, timedelta(minutes=self.config.settings.weather_update_interval or 30)))
+        self._reschedule_weather()
         self.hass.async_create_task(self._poll_weather(None))
+        self._ota_md5 = await self.hass.async_add_executor_job(self._hash_ota_files)
         _LOGGER.info("NSPanel Core manager started")
 
     async def async_stop(self) -> None:
         for unsub in self._unsub:
             unsub()
         self._unsub = []
+        for unsub in self._weather_unsubs:
+            try:
+                unsub()
+            except Exception:  # noqa: BLE001
+                pass
+        self._weather_unsubs = []
+        if self._save_timer is not None:
+            try:
+                self._save_timer()
+            except Exception:  # noqa: BLE001
+                pass
+            self._save_timer = None
 
-    async def apply_settings(self, user_input: dict) -> None:
-        s = self.config.settings
+    @staticmethod
+    def validate_settings(user_input: dict, current: dict | None = None) -> tuple[dict, dict[str, str]]:
+        """Validate + coerce settings input. Returns (clean, errors).
+
+        Unknown keys are ignored (legacy form fields); known keys are
+        coerced to their GlobalSettings types and range-checked. Nothing is
+        written — call apply_settings() with the clean dict afterwards.
+        """
+        from .const import topic_safe
+
+        current = current or {}
+        user_input = dict(user_input)
+        # The settings form posts the "or" spelling; the model uses "our".
+        if "turn_on_behavior" in user_input and "turn_on_behaviour" not in user_input:
+            user_input["turn_on_behaviour"] = user_input.pop("turn_on_behavior")
+        clean: dict = {}
+        errors: dict[str, str] = {}
+
+        def _bool(v) -> bool | None:
+            if isinstance(v, bool):
+                return v
+            s = str(v).strip().lower()
+            if s in ("true", "1", "yes", "on", "optimistic"):
+                return True
+            if s in ("false", "0", "no", "off", "wait", ""):
+                return False
+            return None
+
+        def _int(key, v, lo=None, hi=None):
+            try:
+                n = int(str(v).strip())
+            except (ValueError, TypeError):
+                errors[key] = "must be a number"
+                return None
+            if lo is not None and n < lo:
+                errors[key] = f"must be >= {lo}"
+                return None
+            if hi is not None and n > hi:
+                errors[key] = f"must be <= {hi}"
+                return None
+            return n
+
         for key, value in user_input.items():
-            if hasattr(s, key) and key in s.__dataclass_fields__:
-                setattr(s, key, value)
+            if key == "manager_address":
+                v = str(value or "").strip()
+                if not v or not topic_safe(v):
+                    errors[key] = "address must not be empty"
+                else:
+                    clean[key] = v
+            elif key == "manager_port":
+                n = _int(key, value, 1, 65535)
+                if n is not None:
+                    clean[key] = n
+            elif key in ("color_temp_min", "color_temp_max"):
+                n = _int(key, value, 1000, 10000)
+                if n is not None:
+                    clean[key] = n
+            elif key == "date_format":
+                v = str(value or "").strip() or "%d/%m"
+                clean[key] = v
+            elif key in ("location_latitude", "location_longitude"):
+                v = str(value or "").strip()
+                if v == "":
+                    clean[key] = ""
+                else:
+                    try:
+                        f = float(v)
+                    except (ValueError, TypeError):
+                        errors[key] = "must be a number"
+                        continue
+                    lo, hi = (-90, 90) if key == "location_latitude" else (-180, 180)
+                    if not (lo <= f <= hi):
+                        errors[key] = f"must be between {lo} and {hi}"
+                    else:
+                        clean[key] = v
+            elif key == "weather_update_interval":
+                n = _int(key, value, 5, 120)
+                if n is not None:
+                    clean[key] = n
+            elif key == "precipitation_format":
+                if str(value) in ("mm", "inch"):
+                    clean[key] = str(value)
+                else:
+                    errors[key] = "must be mm or inch"
+            elif key == "wind_speed_format":
+                if str(value) in ("kmh", "ms", "mph", "kn"):
+                    clean[key] = str(value)
+                else:
+                    errors[key] = "must be kmh, ms, mph or kn"
+            elif key in ("use_fahrenheit", "reverse_color_temp", "optimistic_mode",
+                         "clock_us_style"):
+                b = _bool(value)
+                if b is None:
+                    errors[key] = "must be true or false"
+                else:
+                    clean[key] = b
+            elif key == "turn_on_behaviour":
+                if str(value) in ("color_temp", "restore"):
+                    clean[key] = str(value)
+                else:
+                    errors[key] = "must be color_temp or restore"
+            elif key in ("light_turn_on_brightness", "raise_to_100_light_level"):
+                n = _int(key, value, 0, 100)
+                if n is not None:
+                    clean[key] = n
+            elif key == "theme":
+                if str(value) in ("nspmwip",):
+                    clean[key] = str(value)
+                else:
+                    errors[key] = "unknown theme"
+            elif key in ("outside_temp_sensor_entity", "outside_temp_provider"):
+                clean[key] = str(value or "").strip()
+            # else: legacy/unknown form field — ignored deliberately
+        cmin = clean.get("color_temp_min", current.get("color_temp_min", 2700))
+        cmax = clean.get("color_temp_max", current.get("color_temp_max", 6500))
+        if cmin >= cmax:
+            errors["color_temp_max"] = "max must be greater than min"
+            clean.pop("color_temp_min", None)
+            clean.pop("color_temp_max", None)
+        return clean, errors
+
+    async def apply_settings(self, user_input: dict) -> dict[str, str]:
+        """Validate, persist and apply settings. Returns validation errors."""
+        clean, errors = self.validate_settings(user_input, self.config.settings.to_dict())
+        if errors:
+            return errors
+        s = self.config.settings
+        old_interval = s.weather_update_interval
+        for key, value in clean.items():
+            setattr(s, key, value)
         await self.async_save()
         await self._publish_manager_status()
+        if clean.get("weather_update_interval", old_interval) != old_interval:
+            self._reschedule_weather()
+        return {}
+
+    def _reschedule_weather(self) -> None:
+        for unsub in list(self._weather_unsubs):
+            try:
+                unsub()
+            except Exception:  # noqa: BLE001
+                pass
+        self._weather_unsubs = []
+        self._weather_unsubs.append(
+            async_track_time_interval(
+                self.hass, self._poll_weather,
+                timedelta(minutes=self.config.settings.weather_update_interval or 30),
+            )
+        )
 
     async def async_save(self) -> None:
         await self._store.async_save(self.config.to_dict())
+
+    def add_message(self, title: str, message: str) -> None:
+        """Add an inbox notification (shown by the navbar inbox)."""
+        from .models import MessageConfig
+
+        self.config.messages.append(MessageConfig(
+            id=self.config.next_id_for("message"),
+            title=str(title)[:120],
+            message=str(message)[:500],
+            read=False,
+        ))
+        del self.config.messages[:-50]
+        self._schedule_save()
+
+    def get_messages(self) -> list[dict]:
+        return [asdict(m) for m in self.config.messages]
+
+    def mark_messages_read(self) -> None:
+        if any(not m.read for m in self.config.messages):
+            for m in self.config.messages:
+                m.read = True
+            self._schedule_save()
+
+    def _schedule_save(self) -> None:
+        """Coalesced storage write for high-frequency state paths.
+
+        State events can arrive many times per second; writing the full JSON
+        store on each one burns disk and risks corruption. Coalesce to one
+        write ~5s after the last change.
+        """
+        if self._save_timer is not None:
+            try:
+                self._save_timer()
+            except Exception:  # noqa: BLE001
+                pass
+        self._save_timer = async_call_later(self.hass, 5, self._delayed_save)
+
+    async def _delayed_save(self, _now) -> None:
+        self._save_timer = None
+        try:
+            await self.async_save()
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Delayed storage save failed")
 
     # ------------------------------------------------------------------
     # MQTT helpers
@@ -257,6 +459,10 @@ class NSPanelManager:
             self.config.panels.append(panel)
             await self.async_save()
             _LOGGER.info("New panel registered as awaiting accept: %s (%s)", friendly, mac)
+            self.add_message(
+                "Panel requesting access",
+                f"NSPanel '{friendly}' ({mac}) wants to join. Accept or deny it on the NSPanels page.",
+            )
 
         await self._publish_panel_status(panel, "awaiting_accept")
 
@@ -369,7 +575,7 @@ class NSPanelManager:
             "state": state,
             "progress": data.get("progress", 0),
         }
-        await self.async_save()
+        self._schedule_save()
         if panel.online != was_online:
             for listener in list(self._new_panel_listeners):
                 try:
@@ -436,23 +642,18 @@ class NSPanelManager:
         return list(self.config.pages)
 
     async def _maybe_trigger_firmware_ota(self, panel: PanelConfig, report: dict) -> None:
-        import hashlib, os
+        """Trigger OTA when the panel's checksums differ from the cached ones.
 
-        firmware_dir = os.path.join(os.path.dirname(__file__), "firmware")
+        Uses the startup-computed MD5 cache — no disk I/O on the event loop.
+        Panels only send md5s in the register request, so this is evaluated
+        there (status reports carry no checksums).
+        """
+        if self._ota_md5 is None:
+            return
         model = panel.model if panel.model in ("sonoff", "custom") else "sonoff"
 
-        def md5_file(path: str) -> str:
-            h = hashlib.md5()
-            try:
-                with open(path, "rb") as f:
-                    for chunk in iter(lambda: f.read(65536), b""):
-                        h.update(chunk)
-            except FileNotFoundError:
-                return ""
-            return h.hexdigest()
-
-        fw_md5 = md5_file(os.path.join(firmware_dir, model, "firmware.bin"))
-        data_md5 = md5_file(os.path.join(firmware_dir, model, "data_file.bin"))
+        fw_md5 = self.ota_md5("firmware", f"{model}/firmware.bin")
+        data_md5 = self.ota_md5("firmware", f"{model}/data_file.bin")
 
         if fw_md5 and report.get("md5_firmware") and report["md5_firmware"] != fw_md5:
             _LOGGER.info("Firmware update available for panel %s — triggering OTA", panel.name)
@@ -462,26 +663,69 @@ class NSPanelManager:
             _LOGGER.info("Data file update available for panel %s — triggering OTA", panel.name)
             await self._publish(panel_mqtt_topic(panel.name, "command"), json.dumps({"command": "data_file_update"}))
 
-        import hashlib, os
-        tft_dir = os.path.join(os.path.dirname(__file__), "tft")
         tft_filename = "gui_us.tft" if panel.is_us_panel else "gui.tft"
-        tft_path = os.path.join(tft_dir, tft_filename)
-        def md5_file(p):
-            h = hashlib.md5()
-            try:
-                with open(p, "rb") as f:
-                    for chunk in iter(lambda: f.read(65536), b""):
-                        h.update(chunk)
-            except FileNotFoundError:
-                return ""
-            return h.hexdigest()
-        tft_md5 = md5_file(tft_path)
-        if tft_md5 and report.get("md5_tft_gui") and report["md5_tft_gui"] != tft_md5:
+        tft_md5 = self.ota_md5("tft", tft_filename)
+        if tft_md5 and report.get("md5_tft_file") and report["md5_tft_file"] != tft_md5:
             _LOGGER.info("TFT update available for panel %s — triggering OTA", panel.name)
             await self._publish(panel_mqtt_topic(panel.name, "command"), json.dumps({"command": "tft_update"}))
 
     def relay_state(self, topic: str) -> bool:
         return self._relay_state.get(topic, False)
+
+    @staticmethod
+    def _hash_ota_files() -> dict[str, str]:
+        """MD5 of every servable OTA binary (runs in the executor).
+
+        Keyed "firmware/<model>/<file>" and "tft/<file>". Missing files map
+        to "" — callers treat "" as 'unknown, never trigger'.
+        """
+        import hashlib
+        import os
+
+        base = os.path.join(os.path.dirname(__file__), "firmware")
+        out: dict[str, str] = {}
+
+        def md5_file(path: str) -> str:
+            h = hashlib.md5()
+            try:
+                with open(path, "rb") as f:
+                    for chunk in iter(lambda: f.read(65536), b""):
+                        h.update(chunk)
+            except OSError:
+                return ""
+            return h.hexdigest()
+
+        for model in ("sonoff", "custom"):
+            for filename in ("firmware.bin", "data_file.bin"):
+                out[f"firmware/{model}/{filename}"] = md5_file(
+                    os.path.join(base, model, filename)
+                )
+        tft_dir = os.path.join(os.path.dirname(__file__), "tft")
+        for filename in ("gui.tft", "gui_us.tft"):
+            out[f"tft/{filename}"] = md5_file(os.path.join(tft_dir, filename))
+        return out
+
+    def ota_md5(self, kind: str, name: str) -> str:
+        """Cached MD5 for an OTA file; "" when unknown (startup race)."""
+        if self._ota_md5 is None:
+            return ""
+        return self._ota_md5.get(f"{kind}/{name}", "")
+
+    def invalidate_ota_cache(self, kind: str, name: str, path: str) -> None:
+        """Re-hash one file after an upload (call from the executor)."""
+        import hashlib
+
+        h = hashlib.md5()
+        try:
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(65536), b""):
+                    h.update(chunk)
+            digest = h.hexdigest()
+        except OSError:
+            digest = ""
+        if self._ota_md5 is None:
+            self._ota_md5 = {}
+        self._ota_md5[f"{kind}/{name}"] = digest
 
     async def set_relay(self, panel: PanelConfig, relay: int, state: bool) -> None:
         await self._publish(
@@ -707,8 +951,8 @@ class NSPanelManager:
                 light.hue = int(hs[0])
                 light.saturation = int(hs[1])
 
-        await self.async_save()
         if changed:
+            self._schedule_save()
             await self._publish_light_state(light)
 
     async def _publish_light_state(self, light: LightConfig) -> None:
@@ -1017,6 +1261,19 @@ class NSPanelManager:
             cur = data.get("current", {}) or {}
             daily = data.get("daily", {}) or {}
 
+            # Outside temperature from a HA sensor instead of open-meteo
+            # when the user picked a sensor provider on the weather page.
+            outside_temp = None
+            provider = (s.outside_temp_provider or "").strip()
+            sensor_entity = (s.outside_temp_sensor_entity or "").strip()
+            if provider and sensor_entity:
+                st = self.hass.states.get(sensor_entity)
+                if st is not None and st.state not in ("unknown", "unavailable", ""):
+                    try:
+                        outside_temp = float(st.state)
+                    except (ValueError, TypeError):
+                        outside_temp = None
+
             def dl(key, i, default=0):
                 vals = daily.get(key) or []
                 return vals[i] if i < len(vals) else default
@@ -1033,7 +1290,7 @@ class NSPanelManager:
                 })
             payload = {
                 "icon": icon(cur.get("weather_code", 0)),
-                "temp": fmt_temp(cur.get("temperature_2m", 0)),
+                "temp": fmt_temp(outside_temp if outside_temp is not None else cur.get("temperature_2m", 0)),
                 "wind": fmt_wind(cur.get("wind_speed_10m", 0)),
                 "sunrise": fmt_time_local(dl("sunrise", 0, 0)),
                 "sunset": fmt_time_local(dl("sunset", 0, 0)),

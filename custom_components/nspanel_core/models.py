@@ -211,6 +211,7 @@ class MessageConfig:
 class GlobalSettings:
     manager_address: str = "core"
     manager_port: int = 8000
+    theme: str = "nspmwip"
     mqtt_wait_time: int = 0
     clock_us_style: bool = False
     date_format: str = "%d/%m"
@@ -251,7 +252,7 @@ class IntegrationConfig:
     scenes: list[SceneConfig] = field(default_factory=list)
     panels: list[PanelConfig] = field(default_factory=list)
     messages: list[MessageConfig] = field(default_factory=list)
-    next_id: dict[str, int] = field(default_factory=lambda: {"room": 1, "light": 1, "page": 1, "scene": 1, "panel": 1})
+    next_id: dict[str, int] = field(default_factory=lambda: {"room": 1, "light": 1, "thermostat": 1, "relay_group": 1, "page": 1, "scene": 1, "panel": 1, "message": 1})
 
     def next_id_for(self, kind: str) -> int:
         value = self.next_id.get(kind, 1)
