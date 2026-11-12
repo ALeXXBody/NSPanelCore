@@ -1,5 +1,8 @@
 # Adding an NSPanel to NSPanel Core
 
+> Moving a panel from another system (original NSPanel Manager, ESPHome,
+> Tasmota)? Start with [Transferring a panel to NSPanel Core](TRANSFER_TO_NSPANEL_CORE.md), then continue at Step 0 below.
+
 This guide covers the full flow from the original NSPanel Manager app,
 ported to **NSPanel Core** (the Home Assistant-native integration — no
 add-on, no Docker, no separate process).

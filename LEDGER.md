@@ -83,8 +83,8 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P7 | Full audit — every linkage, every file, every piece of code; app is currently a mess | 🔄 In progress (audit pass 6) |
 | P8 | Fix audit findings in order 1–6 | ✅ All 6 done, committed, browser/MQTT-verified (v1.3.5) |
 | P9 | User guide: how to add NSPanel devices, based on the original app flow, branded NSPanel Core | ✅ Done (docs/ADDING_A_PANEL.md, all claims verified against code; docs-only, no version bump) |
-| P10 | Firmware check: is it working + branded NSPanel Core? Test everything in a venv | 🔄 In progress |
-| P11 | Migration guide: transfer a panel from NSPanel Manager / ESPHome / other apps | ⬜ Queued |
+| P10 | Firmware check: is it working + branded NSPanel Core? Test everything in a venv | ✅ Done (branding sweep; 11-test contract suite green; esp32dev build SUCCESS) |
+| P11 | Migration guide: transfer a panel from NSPanel Manager / ESPHome / other apps | ✅ Done (docs/TRANSFER_TO_NSPANEL_CORE.md, cross-linked from ADDING_A_PANEL.md) |
 
 > **P6 evidence (2026-11-12, on the user's real HA 192.168.50.20, HA 2026.11.1 /
 > frontend 20261028.5):** the panel rendered fine in a clean browser profile,
