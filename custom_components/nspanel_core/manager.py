@@ -66,9 +66,11 @@ def _read_manifest_version() -> str:
 
 
 def mac_from_topic(topic: str, suffix: str) -> str:
+    from .const import topic_safe
+
     parts = topic.split("/")
     if len(parts) >= 3 and parts[2] == suffix:
-        return parts[1]
+        return topic_safe(parts[1])
     return ""
 
 
@@ -107,7 +109,7 @@ class NSPanelManager:
 
         dashboard._DASHBOARD_VERSION = _MANAGER_VERSION
 
-        self.stomp = StompServer()
+        self.stomp = StompServer(self.hass)
         async_register_ui(self.hass, self.entry.entry_id)
 
         # Protobuf topics: binary payloads (encoding=None → bytes)
@@ -216,8 +218,15 @@ class NSPanelManager:
                 await self._publish_panel_status(panel, "online")
 
     async def _handle_register_request(self, mac: str, data: dict) -> None:
+        from .const import topic_safe
+
+        mac = topic_safe(mac)
+        if not mac:
+            _LOGGER.warning("Ignoring register request with empty MAC")
+            return
         panel = self._panel_by_mac(mac)
-        if panel is None:
+        created = panel is None
+        if created:
             friendly = data.get("friendly_name", f"NSPanel {mac[-4:].upper()}")
             if not self.config.rooms:
                 _LOGGER.error("Cannot register NSPanel: no rooms exist. Create a room first.")
@@ -248,16 +257,15 @@ class NSPanelManager:
 
         reply = self._register_accept_reply(panel)
         if panel.accepted and not panel.denied:
-            # Accepted panels get the accept reply on both topics + config,
-            # exactly like the C++ bridge.
-            await self._publish(
-                panel_topic(data.get("friendly_name") or mac, "command"), reply
-            )
+            # Accepted panels get the accept reply on the panel's own command
+            # topic only. (Never publish to a friendly-name topic: free-form
+            # names contain spaces/case and would fork the topic namespace —
+            # panels subscribe to nspanel/<mac>/command exclusively.)
             await self._publish(panel_topic(mac, "command"), reply)
             await self._send_panel_config(panel)
             await self._publish_panel_status(panel, "online")
 
-        if panel.id == self.config.panels[-1].id and not panel.accepted:
+        if created and not panel.accepted:
             # New registration: notify the UI (original event chain)
             if self.stomp is not None:
                 self.stomp.update_topic(
@@ -339,10 +347,16 @@ class NSPanelManager:
         panel.littlefs_md5 = report.get("md5_littlefs", "")
         await self.async_save()
         if panel.online != was_online:
-            for listener in self._new_panel_listeners:
-                listener()
-        for listener in self._report_listeners:
-            listener(mac, report)
+            for listener in list(self._new_panel_listeners):
+                try:
+                    listener()
+                except Exception:  # noqa: BLE001 — one bad listener must not break the rest
+                    _LOGGER.exception("New-panel listener failed")
+        for listener in list(self._report_listeners):
+            try:
+                listener(mac, report)
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Report listener failed")
         if self.stomp is not None and panel.accepted:
             state_map = {0: "online", 1: "offline", 2: "updating_tft", 3: "updating_fw", 4: "updating_fs"}
             await self._publish_panel_status(
@@ -355,8 +369,11 @@ class NSPanelManager:
             await self._maybe_trigger_firmware_ota(panel, report)
 
     def _panel_by_mac(self, mac: str) -> PanelConfig | None:
+        from .const import topic_safe
+
+        want = topic_safe(mac)
         for panel in self.config.panels:
-            if panel.mac == mac:
+            if topic_safe(panel.mac) == want:
                 return panel
         return None
 
@@ -443,18 +460,39 @@ class NSPanelManager:
             if mac:
                 await self.set_relay(mac, relay, state)
 
-    def add_new_panel_listener(self, listener) -> None:
+    def add_new_panel_listener(self, listener):
+        """Register a listener; returns an unsubscribe closure for async_on_unload."""
         self._new_panel_listeners.append(listener)
 
-    def add_report_listener(self, listener) -> None:
+        def _unsubscribe() -> None:
+            try:
+                self._new_panel_listeners.remove(listener)
+            except ValueError:
+                pass
+
+        return _unsubscribe
+
+    def add_report_listener(self, listener):
+        """Register a listener; returns an unsubscribe closure for async_on_unload."""
         self._report_listeners.append(listener)
+
+        def _unsubscribe() -> None:
+            try:
+                self._report_listeners.remove(listener)
+            except ValueError:
+                pass
+
+        return _unsubscribe
 
     def add_relay_listener(self, mac: str, relay: int, listener):
         topic = f"nspanel/{mac}/relay{relay}_state"
         self._relay_listeners.setdefault(topic, []).append(listener)
 
         def _unsubscribe() -> None:
-            self._relay_listeners.get(topic, []).remove(listener)
+            try:
+                self._relay_listeners.get(topic, []).remove(listener)
+            except ValueError:
+                pass
 
         return _unsubscribe
 
@@ -779,8 +817,11 @@ class NSPanelManager:
     async def _on_relay_state(self, msg) -> None:
         state = str(msg.payload).strip().lower() in ("1", "true", "on")
         self._relay_state[msg.topic] = state
-        for listener in self._relay_listeners.get(msg.topic, []):
-            listener(state)
+        for listener in list(self._relay_listeners.get(msg.topic, [])):
+            try:
+                listener(state)
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Relay listener failed")
 
     def _register_accept_reply(self, panel: PanelConfig) -> str:
         return json.dumps({

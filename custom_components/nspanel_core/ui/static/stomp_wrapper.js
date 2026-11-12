@@ -49,7 +49,7 @@ function stomp_subscribe(topic, callback) {
     }
   } else {
     stomp_subscription_callbacks[topic] = {
-      subscription: subscription,
+      subscription: null,
       callbacks: [callback],
     };
   }
@@ -88,7 +88,28 @@ function stomp_message_callback(message) {
 
 function stomp_reconnect_callback() {
   // No username or password required to connect to STOMP websocket. Set dummy values.
+  // Refresh the token on every (re)connect — it may have rotated.
+  stomp_client.connectHeaders["access_token"] = nspanelStompToken();
   stomp_client.connect("user", "pass", stomp_connected_callback, stomp_disconnected_callback, stomp_error_callback);
+}
+
+function nspanelStompToken() {
+  if (typeof nspanelGetToken === "function") {
+    try { return nspanelGetToken(); } catch (e) { return ""; }
+  }
+  var scopes = [];
+  try { scopes.push(window.localStorage); } catch (e) {}
+  try { if (window.parent && window.parent !== window) scopes.push(window.parent.localStorage); } catch (e) {}
+  for (var i = 0; i < scopes.length; i++) {
+    try {
+      var raw = scopes[i].getItem("hassTokens");
+      if (raw) {
+        var tok = JSON.parse(raw);
+        if (tok && tok.access_token) return tok.access_token;
+      }
+    } catch (e) {}
+  }
+  return "";
 }
 
 // Setup base Stomp connection so that all other components can it use
@@ -105,6 +126,7 @@ const stomp_client = new StompJs.Client({
   connectHeaders: {
     login: "user",
     passcode: "pass",
+    "access_token": nspanelStompToken(),
   },
   reconnectDelay: 2500,
   heartbeatIncoming: 1000,

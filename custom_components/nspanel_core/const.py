@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 DOMAIN = "nspanel_core"
 
 # MQTT topic templates (wire-compatible with the panels' firmware).
@@ -12,9 +14,31 @@ TOPIC_PANEL_COMMAND = "nspanel/+/command"
 TOPIC_PANEL_STATUS_REPORT = "nspanel/+/status_report"
 TOPIC_MANAGER_COMMAND = "nspanel/mqttmanager/command"
 
+
+def topic_safe(value: str | None) -> str:
+    """Normalize an arbitrary string for use as a single MQTT topic segment.
+
+    Lowercases, strips colons/dashes (MAC forms), and maps anything outside
+    [a-z0-9_] to underscore. Never returns slashes or wildcards, so the
+    result can never escape its topic level or act as a wildcard.
+    """
+    s = (value or "").strip().lower().replace(":", "").replace("-", "")
+    s = re.sub(r"[^a-z0-9_]", "_", s)
+    s = re.sub(r"_+", "_", s).strip("_")
+    return s
+
+
+def mac_for_connection(mac: str | None) -> str | None:
+    """Format a 12-hex-digit MAC as aa:bb:cc:dd:ee:ff for device connections."""
+    s = topic_safe(mac)
+    if len(s) == 12 and all(c in "0123456789abcdef" for c in s):
+        return ":".join(s[i:i + 2] for i in range(0, 12, 2))
+    return None
+
+
 # Per-panel (mac formatted without colons, lowercase — as the firmware uses)
 def panel_topic(mac: str, suffix: str) -> str:
-    return f"nspanel/{mac}/{suffix}"
+    return f"nspanel/{topic_safe(mac)}/{suffix}"
 
 
 def manager_prefix(manager_address: str) -> str:

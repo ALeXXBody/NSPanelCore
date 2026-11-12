@@ -2,41 +2,38 @@ var mac_address;
 var nspanel_id;
 
 function push_log_message_to_view(data) {
-  var add_html = "<tr class='hover'><td class='py-1'>";
-  add_html += data.time;
   var level_tag;
   var level_tag_background;
   if (data.level == "ERROR") {
     level_tag_background = "bg-error";
-    level_tag = '<span class="text-error-content">ERROR</span>';
+    level_tag = 'ERROR';
   } else if (data.level == "WARNING") {
     level_tag_background = "bg-warning";
-    level_tag = '<span classtextbg-warning-content">WARNING</span>';
+    level_tag = 'WARNING';
   } else if (data.level == "INFO") {
     level_tag_background = "bg-info";
-    level_tag = '<span classtextbg-info-content">INFO</span>';
+    level_tag = 'INFO';
   } else if (data.level == "DEBUG") {
     level_tag_background = "bg-neutral";
-    level_tag = '<span class="text-neutral-content">DEBUG</span>';
+    level_tag = 'DEBUG';
   } else if (data.level == "TRACE") {
-    level_tag = '<span class="text-gray-800">TRACE</span>';
+    level_tag = 'TRACE';
   } else {
-    level_tag = '<span class="tag is-light">???UNKNOWN???</span>';
+    level_tag = '???UNKNOWN???';
   }
-  add_html += `</td><td class='py-1 text-center ${level_tag_background}'>`;
-  add_html += level_tag;
-  add_html += "</td>";
-  add_html += "<td class='py-1'>";
-  add_html += data.message;
-  add_html += "</td>";
-  add_html += "</tr>";
+  // Build DOM nodes with text() — never concatenate device-controlled
+  // strings into HTML (stored XSS via panel log messages).
+  var row = $("<tr class='hover'>");
+  row.append($("<td class='py-1'>").text(data.time));
+  row.append($("<td class='py-1 text-center " + level_tag_background + "'>").text(level_tag));
+  row.append($("<td class='py-1'>").text(data.message));
 
   var row_count = $("#log_body tr").length;
   if (row_count >= $("#max_live_log_messages").text()) {
     $("#log_body tr:last-child").remove();
   }
 
-  $("#log_body").prepend(add_html);
+  $("#log_body").prepend(row);
 }
 
 function update_shown_elements() {

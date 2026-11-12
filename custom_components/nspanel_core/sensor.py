@@ -4,20 +4,24 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.const import UnitOfTemperature, UnitOfPressure, PERCENTAGE, SIGNAL_STRENGTH_DECIBELS_MILLIWATT
 
-from .const import DOMAIN
+from .const import DOMAIN, mac_for_connection, topic_safe
 
 _LOGGER = logging.getLogger(__name__)
 
 KINDS = {
-    "temperature": ("°C", "temperature"),
-    "humidity": ("%", "humidity"),
-    "pressure": ("hPa", "pressure"),
-    "rssi": ("dBm", "signal_strength"),
+    "temperature": (UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT),
+    "humidity": (PERCENTAGE, SensorDeviceClass.HUMIDITY, SensorStateClass.MEASUREMENT),
+    "pressure": (UnitOfPressure.HPA, SensorDeviceClass.PRESSURE, SensorStateClass.MEASUREMENT),
+    "rssi": (SIGNAL_STRENGTH_DECIBELS_MILLIWATT, SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT),
 }
 
 
@@ -42,20 +46,22 @@ async def async_setup_entry(
     entry.async_on_unload(manager.add_new_panel_listener(_add_new))
 
 
-class PanelSensor(CoordinatorEntity, SensorEntity):
+class PanelSensor(SensorEntity):
     """Reports live values from a panel's NSPanelStatusReport."""
 
     _attr_should_poll = False
+    _attr_has_entity_name = True
 
     def __init__(self, entry: ConfigEntry, manager, panel, kind: str) -> None:
         self._manager = manager
         self._panel = panel
         self._kind = kind
-        unit, device_class = KINDS[kind]
+        unit, device_class, state_class = KINDS[kind]
         self._attr_native_unit_of_measurement = unit
         self._attr_device_class = device_class
-        self._attr_name = f"{panel.name} {kind}"
-        self._attr_unique_id = f"{DOMAIN}_{panel.mac}_{kind}"
+        self._attr_state_class = state_class
+        self._attr_name = kind
+        self._attr_unique_id = f"{DOMAIN}_{topic_safe(panel.mac)}_{kind}"
         self._value = None
         entry.async_on_unload(manager.add_report_listener(self._on_report))
 
@@ -74,12 +80,15 @@ class PanelSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
+        from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
+
+        conn = mac_for_connection(self._panel.mac)
         return DeviceInfo(
-            identifiers={(DOMAIN, self._panel.mac)},
+            identifiers={(DOMAIN, topic_safe(self._panel.mac))},
+            connections={(CONNECTION_NETWORK_MAC, conn)} if conn else set(),
             name=self._panel.name,
             manufacturer="Sonoff",
             model=f"NSPanel ({self._panel.model})",
-            entry_type=DeviceEntryType.SERVICE,
         )
 
     @property

@@ -161,7 +161,7 @@ class MainPageView(HomeAssistantView):
     name = "nspanel_core:page"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         html = _render(
             "index_htmx.html",
@@ -175,9 +175,9 @@ class MainPageView(HomeAssistantView):
 class HtmxNspanelsSectionView(HomeAssistantView):
     url = f"{URL_BASE}/htmx/nspanels"
     name = "nspanel_core:htmx:nspanels"
-    requires_auth = False
+    requires_auth = True
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         html = _render(
             "index_htmx_nspanels_section.html",
@@ -191,12 +191,12 @@ class PanelActionView(HomeAssistantView):
 
     url = "/nspanel_core/api/panel/{panel_id}/{action}"
     name = "nspanel_core:api:panel_action"
-    requires_auth = False
+    requires_auth = True
 
-    async def post(self, request):
+    async def post(self, request, **kwargs):
         return await self._act(request)
 
-    async def delete(self, request):
+    async def delete(self, request, **kwargs):
         return await self._act(request)
 
     async def _act(self, request):
@@ -235,7 +235,7 @@ class PlaceholderPageView(HomeAssistantView):
     name = "nspanel_core:placeholder"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         page = request.path.rsplit("/", 1)[-1]
         titles = {
@@ -262,7 +262,7 @@ class EditPanelView(HomeAssistantView):
     name = "nspanel_core:edit"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         panel_id = int(request.match_info["panel_id"])
         panel = next((p for p in manager.panels() if p.id == panel_id), None)
@@ -323,9 +323,9 @@ class EditPanelView(HomeAssistantView):
 class SavePanelSettingsView(HomeAssistantView):
     url = f"{URL_BASE}/api/panel/{{panel_id}}/save"
     name = "nspanel_core:api:panel_save"
-    requires_auth = False
+    requires_auth = True
 
-    async def post(self, request):
+    async def post(self, request, **kwargs):
         manager = _manager(request)
         panel_id = int(request.match_info["panel_id"])
         form = await request.post()
@@ -371,7 +371,7 @@ class GlobalScenesView(HomeAssistantView):
     name = "nspanel_core:global_scenes"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         scenes_ctx = [
             {"id": s.id, "name": s.name, "ha_entity": s.ha_entity, "page_id": s.page_id}
@@ -391,7 +391,7 @@ class RelayGroupsView(HomeAssistantView):
     name = "nspanel_core:relay_groups"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         html = _render(
             "relay_groups.html",
@@ -407,7 +407,7 @@ class WeatherTimeView(HomeAssistantView):
     name = "nspanel_core:weather_time"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         s = manager.config.settings
         html = _render(
@@ -431,7 +431,7 @@ class DeniedPanelsView(HomeAssistantView):
     name = "nspanel_core:denied"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         denied = [asdict(p) for p in manager.config.panels if p.denied]
         html = _render(
@@ -447,7 +447,7 @@ class SettingsView(HomeAssistantView):
     name = "nspanel_core:settings"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         s = manager.config.settings
         themes = {"nspmwip": "NSPanel Core (dark)"}
@@ -500,7 +500,7 @@ class ManagerSettingsView(HomeAssistantView):
     name = "nspanel_core:manager_settings"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         room_views = []
         for r in manager.config.rooms:
@@ -527,9 +527,9 @@ def _firmware_dir():
 class DownloadFirmwareView(HomeAssistantView):
     url = f"{URL_BASE}/download_firmware"
     name = "nspanel_core:download_firmware"
-    requires_auth = False
+    requires_auth = True
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         model = request.query.get("model", "sonoff")
         if model not in ("sonoff", "custom"):
             return web.Response(status=400, text="Unknown model")
@@ -542,9 +542,9 @@ class DownloadFirmwareView(HomeAssistantView):
 class DownloadDataFileView(HomeAssistantView):
     url = f"{URL_BASE}/download_data_file"
     name = "nspanel_core:download_data_file"
-    requires_auth = False
+    requires_auth = True
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         model = request.query.get("model", "sonoff")
         if model not in ("sonoff", "custom"):
             return web.Response(status=400, text="Unknown model")
@@ -557,9 +557,9 @@ class DownloadDataFileView(HomeAssistantView):
 class ChecksumFirmwareView(HomeAssistantView):
     url = f"{URL_BASE}/checksum_firmware"
     name = "nspanel_core:checksum_firmware"
-    requires_auth = False
+    requires_auth = True
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         model = request.query.get("model", "sonoff")
         if model not in ("sonoff", "custom"):
             return web.Response(status=400, text="Unknown model")
@@ -572,9 +572,9 @@ class ChecksumFirmwareView(HomeAssistantView):
 class ChecksumDataFileView(HomeAssistantView):
     url = f"{URL_BASE}/checksum_data_file"
     name = "nspanel_core:checksum_data_file"
-    requires_auth = False
+    requires_auth = True
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         model = request.query.get("model", "sonoff")
         if model not in ("sonoff", "custom"):
             return web.Response(status=400, text="Unknown model")
@@ -597,9 +597,9 @@ def _md5(path: str) -> str:
 class DownloadTftView(HomeAssistantView):
     url = f"{URL_BASE}/download_tft/{{panel_id}}"
     name = "nspanel_core:download_tft"
-    requires_auth = False
+    requires_auth = True
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         panel_id = int(request.match_info["panel_id"])
         panel = next((p for p in manager.config.panels if p.id == panel_id), None)
@@ -617,9 +617,9 @@ class DownloadTftView(HomeAssistantView):
 class ChecksumTftView(HomeAssistantView):
     url = f"{URL_BASE}/checksum_tft_file/{{panel_id}}"
     name = "nspanel_core:checksum_tft"
-    requires_auth = False
+    requires_auth = True
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         panel_id = int(request.match_info["panel_id"])
         panel = next((p for p in manager.config.panels if p.id == panel_id), None)
@@ -641,7 +641,7 @@ class ComingSoonView(HomeAssistantView):
     name = "nspanel_core:catchall"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         html = _render(
             "index_shell.html",
             page_title="This page is being ported",
@@ -655,7 +655,7 @@ class RoomsPageView(HomeAssistantView):
     name = "nspanel_core:rooms"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         rooms_ctx = []
         for room in manager.config.rooms:
@@ -678,7 +678,7 @@ class EditRoomView(HomeAssistantView):
     name = "nspanel_core:edit_room"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         room_id = int(request.match_info["room_id"])
         room = next((r for r in manager.config.rooms if r.id == room_id), None)
@@ -707,9 +707,9 @@ class EditRoomView(HomeAssistantView):
 class SaveNewRoomView(HomeAssistantView):
     url = f"{URL_BASE}/save_new_room"
     name = "nspanel_core:save_new_room"
-    requires_auth = False
+    requires_auth = True
 
-    async def post(self, request):
+    async def post(self, request, **kwargs):
         manager = _manager(request)
         form = await request.post()
         name = str(form.get("friendly_name", "")).strip()
@@ -721,9 +721,9 @@ class SaveNewRoomView(HomeAssistantView):
 class DeleteRoomView(HomeAssistantView):
     url = f"{URL_BASE}/api/rooms/{{room_id}}/delete"
     name = "nspanel_core:api:room_delete2"
-    requires_auth = False
+    requires_auth = True
 
-    async def post(self, request):
+    async def post(self, request, **kwargs):
         manager = _manager(request)
         await manager.remove_room(int(request.match_info["room_id"]))
         raise web.HTTPFound(f"{URL_BASE}/rooms")
@@ -732,9 +732,9 @@ class DeleteRoomView(HomeAssistantView):
 class RestartView(HomeAssistantView):
     url = f"{URL_BASE}/api/restart"
     name = "nspanel_core:api:restart"
-    requires_auth = False
+    requires_auth = True
 
-    async def post(self, request):
+    async def post(self, request, **kwargs):
         manager = _manager(request)
         await manager.async_stop()
         await manager.async_start()
@@ -744,9 +744,9 @@ class RestartView(HomeAssistantView):
 class ThemeView(HomeAssistantView):
     url = f"{URL_BASE}/api/theme"
     name = "nspanel_core:api:theme"
-    requires_auth = False
+    requires_auth = True
 
-    async def post(self, request):
+    async def post(self, request, **kwargs):
         # Theme switching is ported with the settings page.
         return web.Response(text="", status=200)
 
@@ -754,9 +754,9 @@ class ThemeView(HomeAssistantView):
 class MessagesView(HomeAssistantView):
     url = f"{URL_BASE}/api/messages"
     name = "nspanel_core:api:messages"
-    requires_auth = False
+    requires_auth = True
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         return web.Response(text="", status=200)
 
 
@@ -767,7 +767,7 @@ class StompView(HomeAssistantView):
     name = "nspanel_core:ws"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         return await manager.stomp.handle_ws(request)
 
@@ -779,7 +779,7 @@ class WebappStompView(HomeAssistantView):
     name = "nspanel_core:webapp_ws"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         return await manager.stomp.handle_ws(request)
 
@@ -791,7 +791,7 @@ class WebappIndexView(HomeAssistantView):
     name = "nspanel_core:webapp_index"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         webapp_dir = pathlib.Path(__file__).parent / "ui" / "webapp"
         index_path = webapp_dir / "index.html"
         if not index_path.exists():
@@ -806,7 +806,7 @@ class WebappAssetView(HomeAssistantView):
     name = "nspanel_core:webapp_asset"
     requires_auth = False
 
-    async def get(self, request):
+    async def get(self, request, **kwargs):
         webapp_dir = pathlib.Path(__file__).parent / "ui" / "webapp"
         tail = request.match_info.get("tail", "")
         if not tail:
@@ -822,18 +822,6 @@ class WebappAssetView(HomeAssistantView):
                 return web.FileResponse(index_path)
             return web.Response(status=404, text="Not found")
         return web.FileResponse(file_path)
-
-
-class WebappStompView(HomeAssistantView):
-    """STOMP WebSocket at the original /websocket/stomp path (for the web app)."""
-
-    url = "/websocket/stomp"
-    name = "nspanel_core:webapp_ws"
-    requires_auth = False
-
-    async def get(self, request):
-        manager = _manager(request)
-        return await manager.stomp.handle_ws(request)
 
 
 import re  # noqa: E402
@@ -855,45 +843,40 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
     # static path handler returns 403 for the root directory).
 
 
-    # Register routes directly via aiohttp (HomeAssistantView.register is
-    # fragile across HA versions — it crashed on list-valued urls in 2026.10).
+    # Register via HA (enforces requires_auth + auth middleware). The old
+    # direct add_route bypassed auth entirely even with requires_auth=True.
     views = [
-        (MainPageView, ["GET"]),
-        (HtmxNspanelsSectionView, ["GET"]),
-        (PanelActionView, ["POST", "DELETE"]),
-        (EditPanelView, ["GET"]),
-        (SavePanelSettingsView, ["POST"]),
-        (RoomsPageView, ["GET"]),
-        (EditRoomView, ["GET"]),
-        (SaveNewRoomView, ["POST"]),
-        (DeleteRoomView, ["POST"]),
-        (GlobalScenesView, ["GET"]),
-        (RelayGroupsView, ["GET"]),
-        (WeatherTimeView, ["GET"]),
-        (DeniedPanelsView, ["GET"]),
-        (SettingsView, ["GET"]),
-        (ManagerSettingsView, ["GET"]),
-        (PlaceholderPageView, ["GET"]),
-        (RestartView, ["POST"]),
-        (ThemeView, ["POST"]),
-        (MessagesView, ["GET"]),
-        (StompView, ["GET"]),
-        (WebappStompView, ["GET"]),
-        (WebappIndexView, ["GET"]),
-        (WebappAssetView, ["GET"]),
-        (ComingSoonView, ["GET"]),
+        MainPageView,
+        HtmxNspanelsSectionView,
+        PanelActionView,
+        EditPanelView,
+        SavePanelSettingsView,
+        RoomsPageView,
+        EditRoomView,
+        SaveNewRoomView,
+        DeleteRoomView,
+        GlobalScenesView,
+        RelayGroupsView,
+        WeatherTimeView,
+        DeniedPanelsView,
+        SettingsView,
+        ManagerSettingsView,
+        PlaceholderPageView,
+        RestartView,
+        ThemeView,
+        MessagesView,
+        StompView,
+        WebappStompView,
+        WebappIndexView,
+        WebappAssetView,
+        ComingSoonView,
     ]
-    for view_cls, methods in views:
-        view = view_cls()
-        for method in methods:
-            handler = getattr(view, method.lower(), None)
-            if handler is None:
-                continue
-            try:
-                hass.http.app.router.add_route(method, view.url, handler)
-            except RuntimeError:
-                # Route already registered (e.g. by static path) — skip
-                pass
+    for view_cls in views:
+        try:
+            hass.http.register_view(view_cls())
+        except RuntimeError:
+            # Route already registered (e.g. reload) — skip
+            pass
 
     # Sidebar panel via panel_custom(embed_iframe=True): renders a bare iframe
     # filling the content area — no hass-subpage title bar above the UI.

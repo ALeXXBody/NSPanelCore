@@ -101,7 +101,7 @@ function show_error_toast(level, error_text, error_source, timeout = 0) {
   new_toast.querySelector('.alert').id = error_toast_id;
   new_toast.querySelector('.dismiss-button').setAttribute("data-toast-id", error_toast_id);
   new_toast.querySelector('.dismiss-button').setAttribute("data-toast-text", error_text);
-  new_toast.querySelector('.toast-text').innerHTML = error_text;
+  new_toast.querySelector('.toast-text').textContent = error_text;
   new_toast.querySelector('.alert').setAttribute('data-timeout', timeout);
 
   if(timeout > 0) {
@@ -128,7 +128,7 @@ function dismiss_error(toast_id) {
   if(toast_container.getAttribute('data-error-source') == ERROR_TOAST_SOURCE_WEB_INTERFACE) {
     remove_error_toast_element_by_id(toast_id);
   } else if(toast_container.getAttribute('data-error-source') == ERROR_TOAST_SOURCE_MANAGER) {
-    stomp_send("mqttmanager/warnings/dismiss", toast_container.querySelector(".toast-text").innerHTML);
+    stomp_send("mqttmanager/warnings/dismiss", toast_container.querySelector(".toast-text").textContent);
   } else {
     console.error("Unknown error source: " + toast_container.getAttribute('data-error-source'));
   }

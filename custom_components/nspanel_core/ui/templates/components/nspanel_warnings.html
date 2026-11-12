@@ -19,40 +19,39 @@
         return html``;
       } else if(warnings_string.length > 0) {
         var warnings = JSON.parse(warnings_string);
-        var warning_divs = "";
         var alert_badge_color = "badge-info";
         var alert_border_color = "border-info";
-        if(warnings.length > 0) {
-          warnings.forEach(warning => {
-            if(warning.level == "error") {
-              if(alert_badge_color == "badge-info" || alert_badge_color == "badge-warning") {
-                alert_badge_color = "badge-error";
-                alert_border_color = "border-error";
-              }
-              warning_divs += `
-                <div role="alert" class="alert alert-error my-1">${warning.text}</div>
-              `;
-            } else if(warning.level == "warning") {
-              if(alert_badge_color == "badge-info") {
-                alert_badge_color = "badge-warning";
-                alert_border_color = "border-warning";
-              }
-              warning_divs += `
-                <div role="alert" class="alert alert-warning my-1">${warning.text}</div>
-              `;
-            } else if(warning.level == "info") {
-              warning_divs += `
-                <div role="alert" class="alert alert-info my-1">${warning.text}</div>
-              `;
-            } else {
-              warning_divs += `
-                <div role="alert" class="alert alert-error my-1">UNKNOWN LEVEL ${warning.level} FOR WARNING: ${warning.text}</div>
-              `;
+        // Render each warning as a hybrids template with ${warning.text} in a
+        // text position (escaped) — never pre-concatenate into innerHTML
+        // (stored XSS via device-controlled warning text).
+        var items = warnings.map(warning => {
+          var cls = "alert alert-info my-1";
+          var label = warning.text;
+          if(warning.level == "error") {
+            if(alert_badge_color == "badge-info" || alert_badge_color == "badge-warning") {
+              alert_badge_color = "badge-error";
+              alert_border_color = "border-error";
             }
-          });
+            cls = "alert alert-error my-1";
+          } else if(warning.level == "warning") {
+            if(alert_badge_color == "badge-info") {
+              alert_badge_color = "badge-warning";
+              alert_border_color = "border-warning";
+            }
+            cls = "alert alert-warning my-1";
+          } else if(warning.level == "info") {
+            cls = "alert alert-info my-1";
+          } else {
+            cls = "alert alert-error my-1";
+            label = "UNKNOWN LEVEL " + warning.level + " FOR WARNING: " + warning.text;
+          }
+          return html`<div role="alert" class=${cls}>${label}</div>`;
+        });
 
+        if (items.length > 0) {
           return html`
-            <div class="mb-2" id="nspanel_warnings" innerHTML="${warning_divs}">
+            <div class="mb-2" id="nspanel_warnings">
+              ${items}
             </div>
           `;
         } else {

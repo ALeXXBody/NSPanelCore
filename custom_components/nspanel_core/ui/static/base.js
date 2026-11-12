@@ -1,6 +1,55 @@
 var _last_dropdown_id_activated = "";
 var _last_collapse_id_activated = "";
 
+// HA access token for authenticated API calls. The UI runs in HA's sidebar
+// iframe (same origin), so HA's own tokens in localStorage are readable.
+// Sent as Authorization: Bearer on every htmx/fetch call and as the STOMP
+// CONNECT access_token header. Document loads (iframe src) can't carry it,
+// which is why only XHR/mutations require auth server-side.
+function nspanelGetToken() {
+  var scopes = [];
+  try { scopes.push(window.localStorage); } catch (e) {}
+  try { if (window.parent && window.parent !== window) scopes.push(window.parent.localStorage); } catch (e) {}
+  try { if (window.top && window.top !== window && window.top !== window.parent) scopes.push(window.top.localStorage); } catch (e) {}
+  for (var i = 0; i < scopes.length; i++) {
+    try {
+      var raw = scopes[i].getItem("hassTokens");
+      if (raw) {
+        var tok = JSON.parse(raw);
+        if (tok && tok.access_token) return tok.access_token;
+      }
+    } catch (e) {}
+  }
+  return "";
+}
+
+document.addEventListener("htmx:configRequest", function (e) {
+  var tok = nspanelGetToken();
+  if (tok) e.detail.headers["Authorization"] = "Bearer " + tok;
+});
+
+// Full-page forms can't set headers, so authed document forms are submitted
+// via fetch with the bearer token; the server redirects are followed here.
+document.addEventListener("submit", function (e) {
+  var form = e.target;
+  if (!form || !form.hasAttribute || !form.hasAttribute("data-authed")) return;
+  e.preventDefault();
+  var tok = nspanelGetToken();
+  var headers = {};
+  if (tok) headers["Authorization"] = "Bearer " + tok;
+  fetch(form.action, { method: form.method || "POST", body: new FormData(form), headers: headers, redirect: "follow" })
+    .then(function (resp) {
+      if (resp.ok) {
+        window.location.href = resp.url;
+      } else if (resp.status === 401) {
+        alert("Not authorized — please log in to Home Assistant first.");
+      } else {
+        alert("Save failed (HTTP " + resp.status + ").");
+      }
+    })
+    .catch(function (err) { alert("Save failed: " + err); });
+});
+
 function attach_cursor_change_events() {
   $(".cursor-grab")
     .on("mousedown", function () {
@@ -140,7 +189,7 @@ $(document).ready(function () {
         document.getElementById("modal_confirm").close();
       });
 
-    document.getElementById("modal_confirm_text").innerHTML = e.detail.question;
+    document.getElementById("modal_confirm_text").textContent = e.detail.question;
     dialog.showModal();
   });
 

@@ -75,7 +75,16 @@ class StompConnection:
 class StompServer:
     """Topic registry + connections. Mirror MQTT publishes via mirror()."""
 
-    def __init__(self) -> None:
+    # Only these topic namespaces may be subscribed/published via STOMP.
+    # The browser UI only needs panel status + manager events/warnings.
+    _TOPIC_ALLOWLIST = ("nspanel/", "mqttmanager/", "mqtt/")
+
+    # Last-will must never be retained (retained poisoning) and must never
+    # contain wildcards or leave the allowlisted namespaces.
+    _LAST_WILL_MAX_LEN = 2048
+
+    def __init__(self, hass=None) -> None:
+        self.hass = hass
         self.topics: dict[str, dict] = {}  # topic -> {retained, value, subscribers: {conn: sub_id}}
         self.connections: set[StompConnection] = set()
         self.send_callbacks: dict[str, Callable] = {}
@@ -97,7 +106,7 @@ class StompServer:
             t["value"] = value
             t["has_value"] = True
         if t["subscribers"]:
-            asyncio.create_task(self._fanout(t, value))
+            asyncio.create_task(self._fanout(topic, t, value))
 
     def mirror_mqtt(self, topic: str, payload: str | bytes, retain: bool) -> None:
         """Mirror an MQTT publish to 'mqtt/<topic>' — base64 payload, exactly
@@ -120,6 +129,38 @@ class StompServer:
 
     # -- internals -------------------------------------------------------
 
+    @classmethod
+    def _topic_allowed(cls, topic: str) -> bool:
+        if not topic or len(topic) > 256:
+            return False
+        if any(c in topic for c in ("#", "+", "\x00")):
+            return False
+        return topic.startswith(cls._TOPIC_ALLOWLIST)
+
+    def _check_last_will(self, topic: str, message: str) -> bool:
+        if not self._topic_allowed(topic):
+            return False
+        if len(message) > self._LAST_WILL_MAX_LEN:
+            return False
+        return True
+
+    def _check_auth(self, headers: dict[str, str]) -> bool:
+        """Validate the STOMP CONNECT access_token against HA auth.
+
+        Browser WebSocket handshakes cannot carry an Authorization header,
+        so the UI sends its HA access token as a CONNECT header (same-origin
+        localStorage). No token (or a bad one) = no connection.
+        """
+        if self.hass is None:
+            return True  # standalone/test use
+        token = headers.get("access_token", "") or headers.get("access-token", "")
+        if not token:
+            return False
+        try:
+            return self.hass.auth.async_validate_access_token(token) is not None
+        except Exception:  # noqa: BLE001
+            return False
+
     def _topic(self, name: str) -> dict:
         t = self.topics.get(name)
         if t is None:
@@ -127,12 +168,12 @@ class StompServer:
             self.topics[name] = t
         return t
 
-    async def _fanout(self, t: dict, value: str) -> None:
+    async def _fanout(self, topic: str, t: dict, value: str) -> None:
         for conn, sub_id in list(t["subscribers"].items()):
             await conn.send("MESSAGE", {
                 "message-id": str(uuid.uuid4()),
                 "content-type": "text/plain",
-                "destination": t["name"],
+                "destination": topic,
                 "subscription": sub_id,
             }, value)
 
@@ -202,6 +243,10 @@ class StompServer:
             return
 
         if command == "CONNECT":
+            if not self._check_auth(headers):
+                await conn.send("ERROR", {"message": "Not authorized"}, "Missing or invalid access_token")
+                await conn.ws.close()
+                return
             accept_version = headers.get("accept-version", "")
             versions = [v.strip() for v in accept_version.split(",") if v.strip()]
             if accept_version == "" or "1.2" in versions:
@@ -216,12 +261,14 @@ class StompServer:
                 await conn.send("CONNECTED", connected_headers, "")
                 topic = headers.get("last_will_topic", "")
                 if topic:
-                    conn.last_will = {
-                        "topic": topic,
-                        "message": headers.get("last_will_message", ""),
-                        "retained": headers.get("last_will_retained", "").lower() == "true",
-                    }
-                    _LOGGER.info("Client last will: '%s' retained? %s", topic, conn.last_will["retained"])
+                    message = headers.get("last_will_message", "")
+                    # Last-will may never be retained and must stay inside the
+                    # allowlisted namespaces (no retained poisoning, no wildcards).
+                    if not self._check_last_will(topic, message):
+                        _LOGGER.warning("Rejected last will for topic %r", topic)
+                    else:
+                        conn.last_will = {"topic": topic, "message": message, "retained": False}
+                        _LOGGER.info("Client last will: '%s'", topic)
             else:
                 await conn.send("ERROR", {"version": "1.2"}, "Supported protocol versions are 1.2")
 
@@ -229,6 +276,9 @@ class StompServer:
             destination = headers.get("destination", "")
             sub_id = headers.get("id", "")
             if not destination or not sub_id:
+                return
+            if not self._topic_allowed(destination):
+                await conn.send("ERROR", {"message": "Topic not allowed"}, destination)
                 return
             _LOGGER.debug("STOMP subscribing to topic %s (id: %s)", destination, sub_id)
             self._subscribe(conn, destination, sub_id)
@@ -238,6 +288,9 @@ class StompServer:
 
         elif command == "SEND":
             destination = headers.get("destination", "")
+            if not self._topic_allowed(destination):
+                await conn.send("ERROR", {"message": "Topic not allowed"}, destination)
+                return
             for cb in self.global_callbacks:
                 cb({"destination": destination, "body": body})
             cb = self.send_callbacks.get(destination)
