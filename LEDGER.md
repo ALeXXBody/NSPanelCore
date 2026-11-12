@@ -89,7 +89,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P13 | Remote firmware update to transfer the live panel (.23) from NSPanel Manager (.20:8000) to NSPanel Core | ⚠️ Panel went dark during OTA flash (~15:05 UTC) and hasn't returned. Awaiting user power-cycle; USB reflash prepped (fresh 0.1.152 merged image in repo) |
 | P14 | Accept fails: browser sent no valid token (server log 401s) + toast hid real errors | ✅ Done: v1.3.7 visible errors + proactive refresh; v1.3.8 override (reverted); v1.3.10+ login banner; v1.3.12 sessionStorage lookup; v1.3.13 live-token postMessage path |
 | P15 | Investigate: working HA + sidebar access yet no hassTokens in localStorage | ✅ Root cause: unchecked "Remember me" keeps tokens in sessionStorage only; fixed by reading both stores |
-| P16 | Panel dark post-OTA (no ping/ARP/web/MQTT): merged_flash.bin (fresh 0.1.152) attached to v1.3.14 release; recovery section added to transfer doc | 🔄 Panel likely alive in AP setup mode (data-file OTA wiped its WiFi before the safeguard existed — my miss, now fixed). 6h broker watch running for any reappearance; awaiting user: power-cycle + check for "NSPanelCore" WiFi |
+| P16 | Panel dark post-OTA (no ping/ARP/web/MQTT): merged_flash.bin (fresh 0.1.152) attached to v1.3.14 release; recovery section added to transfer doc | 🔄 Likely alive in AP setup mode (data-file OTA wiped WiFi before the safeguard). Watch running for reappearance; awaiting user: on-site power-cycle/AP check when possible; create dedicated MQTT user meanwhile |
 
 > **P13 recon (read-only, 2026-11-12):**
 > - Panel `.23:80` serves its own config UI: `wifi_hostname=KitchenPanel`,

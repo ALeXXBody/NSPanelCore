@@ -178,9 +178,13 @@ A dark panel (no ping, no web UI at its old address, no MQTT traffic for
    blank filesystem in one shot.
 3. After a USB flash the panel has **no Wi-Fi credentials**: join its
    `NSPanelCore` access point from a phone/laptop, open `192.168.1.1`, enter
-   the Wi-Fi details plus the MQTT broker address, username and password,
-   then restart it. It will register with NSPanel Core on its own — accept
-   it in the UI as usual (Step 3 of the main flow).
+   the Wi-Fi details plus the MQTT broker address and a **dedicated panel
+   MQTT user** (create one in your broker up front — e.g. in the Mosquitto
+   add-on settings — instead of hunting down old passwords), then restart
+   it. It will register with NSPanel Core on its own — accept it in the UI
+   as usual (Step 3 of the main flow). Make sure NSPanel Core is on the
+   latest version *before* the panel comes back, so it is served current
+   files and never receives an automatic data-partition update.
 
 ## After the move
 
