@@ -72,7 +72,40 @@ Full details: [Adding a panel](ADDING_A_PANEL.md), Steps 3–4
 
 ## System-specific notes
 
-### From the original NSPanel Manager (add-on / bridge)
+### Live remote transfer (no USB, same broker)
+
+When the panel already talks MQTT on a broker that Home Assistant also
+uses, no screwdriver is needed. This was validated against a live
+NSPanel Manager 2.x setup (panel on old firmware, old manager on the same
+broker as HA):
+
+1. **Prepare NSPanel Core**: install/update it to the latest version,
+   set the manager address to your Home Assistant LAN IP and the port to
+   `8123` (Settings page), and make sure at least one room exists.
+   Registration is refused without rooms, and the panel learns its manager
+   address from the accept reply — so these must be right *before* the
+   panel reboots.
+2. **Stop the old manager** for the duration of the window. Both managers
+   would otherwise answer the panel's registration and the winner is
+   nondeterministic. (It can be removed for good once the panel is over.)
+3. **Reboot the panel** (power cycle, or its own web UI). On boot it sends
+   `register_request`, which only NSPanel Core answers now.
+4. **Accept** the panel when it appears under NSPanels (you also get an
+   inbox message). Nothing is flashed before this click — the OTA consent
+   gate guarantees it.
+5. On accept, NSPanel Core compares the checksums the panel reported with
+   its own files and triggers `firmware_update` (plus data/TFT as needed).
+   The panel downloads, flashes, reboots into NSPanel Core firmware,
+   re-registers (already accepted), updates its display if needed, and
+   shows **online**.
+6. Verify sensors, relays, lights and weather on the panel, then repeat
+   per extra panel and decommission the old system.
+
+If the panel does not appear within a couple of minutes, reboot it once
+more (a lost race with a still-running old manager is the usual cause —
+it can only win while the old manager is up).
+
+## From the original NSPanel Manager (add-on / bridge)
 
 - Easiest case: your panels already speak the same JSON protocol family.
   Still reflash with the NSPanel Core image so ESP, filesystem and display

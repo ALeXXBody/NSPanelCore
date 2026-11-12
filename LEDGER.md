@@ -86,7 +86,37 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P10 | Firmware check: is it working + branded NSPanel Core? Test everything in a venv | ✅ Done (branding sweep; 11-test contract suite green; esp32dev build SUCCESS) |
 | P11 | Migration guide: transfer a panel from NSPanel Manager / ESPHome / other apps | ✅ Done (docs/TRANSFER_TO_NSPANEL_CORE.md, cross-linked from ADDING_A_PANEL.md) |
 | P12 | Simple transfer/first-use guide in readme.md | ✅ Done (README "First use" section, links both guides) |
-| P13 | Remote firmware update to transfer the live panel (.23) from NSPanel Manager (.20:8000) to NSPanel Core — proper process | 🔄 In progress (recon first, no changes to the live panel yet) |
+| P13 | Remote firmware update to transfer the live panel (.23) from NSPanel Manager (.20:8000) to NSPanel Core — proper process | 🔄 Ready for user go-ahead (see runbook below + docs/TRANSFER_TO_NSPANEL_CORE.md "Live remote transfer") |
+
+> **P13 recon (read-only, 2026-11-12):**
+> - Panel `.23:80` serves its own config UI: `wifi_hostname=KitchenPanel`,
+>   fw `0.3.1102`, MQTT `.20:1883` user `ALeXX`, manager `.20:8000`
+>   ("Accepted"). No manager field, no upload endpoint on the panel.
+> - Old manager `.20:8000` = NSPanel Manager v2.1.9-beta3, public UI, same
+>   broker (`.20:1883`), has firmware upload + per-panel OTA.
+> - LAN scan: only `.20` and `.200` (sandbox) have 1883 open → HA's Mosquitto
+>   add-on broker IS `.20:1883`, shared by panel + old manager + HA.
+> - Proven live on the shared broker via HA WS `mqtt/subscribe`: panels
+>   `E4:65:B8:49:A1:00` (= KitchenPanel, id 2) and `B0:CB:D8:99:37:54`
+>   (= DressingRoom, id 3) publish status/relay/screen/config traffic.
+> - Our firmware takes `manager_address` ONLY from `register_accept`
+>   (RAM, re-acquired every boot AFTER register — no persistence trap).
+> - Consent gate added (v1.3.6): OTA fires only for accepted panels, and is
+>   evaluated at accept time from stored md5s (sandbox-verified: none while
+>   unaccepted, firmware+data+tft after accept).
+>
+> **Runbook (needs: Core v1.3.6 on prod, manager address = HA LAN IP,
+> port 8123, ≥1 room; then during the window):**
+> 1. User stops the old NSPanel Manager (kills the accept race; both
+>    managers would otherwise reply and last-writer-wins per reboot).
+> 2. User reboots the panel (power cycle; its web UI stays up as fallback).
+> 3. Panel registers → appears in NSPanel Core as awaiting accept (+ inbox
+>    message). No flash happens before accept (gate).
+> 4. User accepts → accept+reload sent → checksums differ → firmware_update
+>    (+ data/TFT as needed) → panel flashes, reboots into NSPanel Core,
+>    re-registers (already accepted), TFT updates, online.
+> 5. Verify entities/control in HA; then decommission the old manager.
+> 6. Same flow per extra panel (DressingRoom).
 
 > **P6 evidence (2026-11-12, on the user's real HA 192.168.50.20, HA 2026.11.1 /
 > frontend 20261028.5):** the panel rendered fine in a clean browser profile,
