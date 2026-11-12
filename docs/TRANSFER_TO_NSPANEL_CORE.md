@@ -146,6 +146,30 @@ it can only win while the old manager is up).
 - If the panel was part of a larger Tasmota fleet, nothing else is
   affected — only the flashed panel changes identity.
 
+## If a panel goes dark during a remote update
+
+A dark panel (no ping, no web UI at its old address, no MQTT traffic for
+>10 minutes) is not coming back on its own. Steps in order:
+
+1. **Power-cycle it** (unplug 10 seconds, plug back in) and wait 5 minutes.
+   If it was stuck mid-download, it reboots into its previous firmware and
+   reappears — tell your helper what version its web UI reports and stop
+   here.
+2. **If it stays dark: USB serial reflash.** You need physical access, a
+   3.3 V USB-serial adapter, and the `merged_flash.bin` attached to the
+   NSPanel Core release matching (or newer than) your install:
+   download it, open the panel, connect TX→RX, RX→TX, GND→GND at 3.3 V
+   (**never 5 V**), put the ESP32 into download mode (GPIO0 held low at
+   reset — on the NSPanel this is the onboard button), then run:
+   `esptool.py --baud 921600 --port /dev/ttyUSB0 write_flash 0x0 merged_flash.bin`
+   (adjust the port). This installs the app firmware, partition table and
+   blank filesystem in one shot.
+3. After a USB flash the panel has **no Wi-Fi credentials**: join its
+   `NSPanelCore` access point from a phone/laptop, open `192.168.1.1`, enter
+   the Wi-Fi details plus the MQTT broker address, username and password,
+   then restart it. It will register with NSPanel Core on its own — accept
+   it in the UI as usual (Step 3 of the main flow).
+
 ## After the move
 
 - Remap dashboards and automations to the new entity IDs.
