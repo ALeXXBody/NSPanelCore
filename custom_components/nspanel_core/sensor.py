@@ -63,10 +63,10 @@ class PanelSensor(CoordinatorEntity, SensorEntity):
         if mac != self._panel.mac:
             return
         value = {
-            "temperature": lambda: report.temperature,
-            "humidity": lambda: report.humidity if report.has_humidity else None,
-            "pressure": lambda: report.pressure if report.has_pressure else None,
-            "rssi": lambda: report.rssi,
+            "temperature": lambda: report.get("temperature"),
+            "humidity": lambda: report.get("humidity") if report.get("has_humidity") else None,
+            "pressure": lambda: report.get("pressure") if report.get("has_pressure") else None,
+            "rssi": lambda: report.get("rssi"),
         }[self._kind]()
         if value is not None:
             self._value = value
