@@ -90,6 +90,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P14 | Accept fails: browser sent no valid token (server log 401s) + toast hid real errors | ✅ Done: v1.3.7 visible errors + proactive refresh; v1.3.8 override (reverted); v1.3.10+ login banner; v1.3.12 sessionStorage lookup; v1.3.13 live-token postMessage path |
 | P15 | Investigate: working HA + sidebar access yet no hassTokens in localStorage | ✅ Root cause: unchecked "Remember me" keeps tokens in sessionStorage only; fixed by reading both stores |
 | P16 | Panel dark post-OTA (no ping/ARP/web/MQTT): merged_flash.bin (fresh 0.1.152) attached to v1.3.14 release; recovery section added to transfer doc | 🔄 Likely alive in AP setup mode (data-file OTA wiped WiFi before the safeguard). Watch running for reappearance; awaiting user: on-site power-cycle/AP check when possible; create dedicated MQTT user meanwhile |
+| P17 | Branding leftovers: panel setup page title + About dialog still referenced old project | ✅ Done v1.3.15 (rebuilt littlefs + merged images, content bytes verified) |
 
 > **P13 recon (read-only, 2026-11-12):**
 > - Panel `.23:80` serves its own config UI: `wifi_hostname=KitchenPanel`,
@@ -256,6 +257,16 @@ iframe at the new UI path.
 | v1.3.3 | 2026-11-12 | UI moved to `/nspanel_core/ui` (fixes refresh bounce/blank panel), dynamic version, 40px logo |
 | v1.3.4 | 2026-11-12 | Cache-busted panel module + all UI assets (fixes blank panel caused by a 31-day cached panel.js), fixed 4 status components importing hybrids from `/static/...` |
 | v1.3.5 | 2026-11-12 | Full-audit remediation: authenticated API + STOMP token + XSS fixes; entities load; topic_safe + accept-to-MAC + STOMP fanout; JSON/hostname wire contract vs field firmware; OTA routes at firmware paths + dead-link/typo cleanup; validated settings, working forms/uploads, storage debounce, OTA hash cache |
+| v1.3.6 | 2026-11-12 | OTA consent gate (never flash unaccepted panels) + eval on accept from stored md5s |
+| v1.3.7 | 2026-11-12 | Visible HTTP error toasts; proactive HA token refresh |
+| v1.3.8 | 2026-11-12 | Manual token override (later reverted in favor of proper login flow) |
+| v1.3.9 | 2026-11-12 | Legacy (protobuf) status reports + OTA cooldown |
+| v1.3.10 | 2026-11-12 | Login banner for missing sessions |
+| v1.3.11 | 2026-11-12 | Diagnostic login banner with recheck |
+| v1.3.12 | 2026-11-12 | sessionStorage token lookup (unchecked Remember-me) |
+| v1.3.13 | 2026-11-12 | Live-token postMessage path + banner-hide fix |
+| v1.3.14 | 2026-11-12 | Fresh 0.1.152 firmware build shipped; auto data-file OTA disabled (wipes remote WiFi) |
+| v1.3.15 | 2026-11-12 | Panel setup page + About dialog rebranded to NSPanel Core; rebuilt data fs + merged images |
 
 ---
 
