@@ -19,7 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN, PLATFORMS
-from .manager import NSPanelManager
+from .manager import NSPanelCoreManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if "mqtt" not in hass.config.components:
         raise ConfigEntryNotReady("The MQTT integration is required")
 
-    manager = NSPanelManager(hass, entry)
+    manager = NSPanelCoreManager(hass, entry)
     await manager.async_start()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = manager
@@ -44,7 +44,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    manager: NSPanelManager = hass.data[DOMAIN][entry.entry_id]
+    manager: NSPanelCoreManager = hass.data[DOMAIN][entry.entry_id]
     await manager.async_stop()
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

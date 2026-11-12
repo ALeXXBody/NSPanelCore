@@ -65,7 +65,7 @@ def mac_from_topic(topic: str, suffix: str) -> str:
     return ""
 
 
-class NSPanelManager:
+class NSPanelCoreManager:
     """Central coordinator."""
 
     def __init__(self, hass: HomeAssistant, entry) -> None:

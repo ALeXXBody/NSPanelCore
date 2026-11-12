@@ -253,7 +253,7 @@ class StompServer:
                 connected_headers = {
                     "version": "1.2",
                     "session": str(uuid.uuid4()),
-                    "server": "NSPanelManager",
+                    "server": "NSPanelCore",
                 }
                 hb = headers.get("heart-beat", "0,0")
                 if hb.split(",")[0] != "0":

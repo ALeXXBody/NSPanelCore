@@ -92,6 +92,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P16 | Panel dark post-OTA | ✅ Panel came back on its own running OUR 0.1.152 firmware (JSON reports on hostname topics, entities live: temp + rssi updating). No USB needed. Remaining: TFT display file still old (needs explicit tft_update + EU/US variant confirm), panel hostname is default "NSPanelCore". |
 | P17 | Live-transfer runbook validated end-to-end on real hardware | ✅ Done (accept → auto OTA → re-register → entities live), documented in TRANSFER_TO_NSPANEL_CORE.md "Live remote transfer" + recovery sections |
 | P17 | Branding leftovers: panel setup page title + About dialog still referenced old project | ✅ Done v1.3.15 (rebuilt littlefs + merged images, content bytes verified) |
+| P18 | REDO ALL FIRMWARES: clean full rebuild from current source (fresh ESP fw 0.1.152 + rebranded web UI data fs + merged images), class rename, verified byte-for-byte; TFT display files cannot be rebuilt here (need Windows Nextion Editor + rebranded HMI) — documented honestly | ✅ Done, needs release |
 
 > **P13 recon (read-only, 2026-11-12):**
 > - Panel `.23:80` serves its own config UI: `wifi_hostname=KitchenPanel`,
