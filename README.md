@@ -37,6 +37,24 @@ Full guide: **[INSTALL_HA.md](INSTALL_HA.md)**
    HA's `config/custom_components/`
 3. Add the **NSPanel Core** integration, then power-cycle your panels
 
+## First use (5 minutes)
+
+New panel? Follow the [adding guide](docs/ADDING_A_PANEL.md). The short
+version:
+
+1. In the NSPanel Core sidebar panel → **Settings**, set the manager
+   address to your Home Assistant LAN IP and the port to `8123`.
+2. Create at least one **Room** (registration is refused without one).
+3. Power up the panel — it announces itself automatically.
+4. Back in NSPanel Core → **NSPanels**, press **Accept** on the new panel.
+   It downloads its configuration, shows **online**, and appears as a Home
+   Assistant device (sensors + two relay switches).
+
+Moving a panel from another system (original NSPanel Manager, ESPHome,
+Tasmota, …)? Panels must run the NSPanel Core firmware — see the
+[transfer guide](docs/TRANSFER_TO_NSPANEL_CORE.md) for the reflash +
+move procedure.
+
 ## Status
 
 - ✅ Panel registration & configuration
