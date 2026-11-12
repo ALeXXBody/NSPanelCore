@@ -124,7 +124,11 @@ def _render(template_name: str, **context) -> str:
 
 def _manager(request) -> Any:
     hass: HomeAssistant = request.app["hass"]
-    entry_id = hass.data.get(f"{DOMAIN}_entry_id") or next(iter(hass.data[DOMAIN]))
+    entry_id = hass.data.get(f"{DOMAIN}_entry_id")
+    if entry_id is None and DOMAIN in hass.data and hass.data[DOMAIN]:
+        entry_id = next(iter(hass.data[DOMAIN]))
+    if entry_id is None:
+        raise RuntimeError("NSPanel Core not initialized")
     return hass.data[DOMAIN][entry_id]
 
 

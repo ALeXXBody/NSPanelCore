@@ -52,7 +52,7 @@ class NSPanelCoreOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             if manager:
-                manager.apply_settings(user_input)
+                await manager.apply_settings(user_input)
             return self.async_create_entry(title="", data={})
 
         schema = vol.Schema(

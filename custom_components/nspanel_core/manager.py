@@ -643,11 +643,15 @@ class NSPanelManager:
 
     async def _publish_light_state(self, light: LightConfig) -> None:
         settings = self.config.settings
-        kelvin_pct = (
-            (light.color_temp - settings.color_temp_min)
-            / (settings.color_temp_max - settings.color_temp_min)
-            * 100
-        )
+        denom = settings.color_temp_max - settings.color_temp_min
+        if denom == 0:
+            kelvin_pct = 50.0
+        else:
+            kelvin_pct = (
+                (light.color_temp - settings.color_temp_min)
+                / denom
+                * 100
+            )
         if settings.reverse_color_temp:
             kelvin_pct = 100 - kelvin_pct
         payload = pbw.build_nspanel_entity_state_light({
