@@ -822,18 +822,33 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
                 # Route already registered (e.g. by static path) — skip
                 pass
 
-    from homeassistant.components.frontend import async_register_built_in_panel
+    # Sidebar panel via panel_custom(embed_iframe=True): renders a bare iframe
+    # filling the content area — no hass-subpage title bar above the UI.
+    async def _register_sidebar_panel() -> None:
+        from homeassistant.components.frontend import async_remove_panel
+        from homeassistant.components.panel_custom import async_register_panel
 
-    async_register_built_in_panel(
-        hass,
-        update=hass.data.get(f"{DOMAIN}_panel_registered", False),
-        component_name="iframe",
-        sidebar_title="NSPanel Core",
-        sidebar_icon="mdi:tablet-dashboard",
-        frontend_url_path="nspanel_core",
-        config={"url": URL_BASE},
-        require_admin=True,
-    )
+        try:
+            async_remove_panel(hass, "nspanel_core", warn_if_unknown=False)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            await async_register_panel(
+                hass,
+                frontend_url_path="nspanel_core",
+                webcomponent_name="nspanel-core-panel",
+                sidebar_title="NSPanel Core",
+                sidebar_icon="mdi:tablet-dashboard",
+                module_url=f"{URL_BASE}/static/panel.js",
+                embed_iframe=True,
+                config={"url": URL_BASE},
+                require_admin=True,
+            )
+            _LOGGER.info("NSPanel Core sidebar panel registered at %s", URL_BASE)
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Failed to register NSPanel Core sidebar panel")
+
+    hass.async_create_task(_register_sidebar_panel())
+
     hass.data[f"{DOMAIN}_entry_id"] = entry_id
-    hass.data[f"{DOMAIN}_panel_registered"] = True
     _LOGGER.info("NSPanel Core UI registered at %s", URL_BASE)
