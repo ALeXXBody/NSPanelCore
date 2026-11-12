@@ -1,0 +1,172 @@
+# NSPanel Core — Master Ledger (Guide & Rule Book)
+
+> **RULE: Before starting ANY development, modification, or removal task,
+> write the request in this ledger first, then begin work.**
+> If this ledger is not respected, the repository will be audited 100 times.
+
+---
+
+## 1. What is NSPanel Core?
+
+NSPanel Core is a **Home Assistant-native replacement** for the NSPanel Manager add-on.
+It manages Sonoff NSPanel panels over MQTT using the same protobuf/JSON wire protocol
+the panels' firmware already speaks. No separate process, no WebSocket client, no token.
+
+**Architecture:**
+- **Panel ↔ Integration**: MQTT, protobuf + JSON (same topics as the original add-on)
+- **Integration ↔ HA**: event bus (state changes), service calls
+- **UI**: Original NSPanel Manager web UI ported to Jinja2, served by the integration
+- **Zero external dependencies**: hand-rolled protobuf codec (byte-identical to generated code)
+
+**Repository:** `ALeXXBody/NSPanelCore` (GitHub)
+**Current version:** v1.3.1
+**License:** GPL-3.0
+**Credits:** Original NSPanel Manager team (upstream)
+
+---
+
+## 2. Ledger — What the user wants/needs
+
+### 2.1 Integration (HA custom component)
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| I1 | Panel registration flow (register_request → accept → config) | ✅ Done | 1:1 with original add-on |
+| I2 | Light state machines (HA events, service calls, optimistic mode) | ✅ Done | Brightness, color temp, RGB |
+| I3 | Room aggregation (NSPanelRoomStatus protobuf) | ✅ Done | Ceiling/table light counts, dim levels |
+| I4 | Entity pages (NSPanelRoomEntitiesPage protobuf) | ✅ Done | Slot positions, scene pages |
+| I5 | Command routing (light, toggle, first-page, save scene, thermostat) | ✅ Done | All command types handled |
+| I6 | Scene activation (HA scenes/scripts + NSPM saved states) | ✅ Done | 1:1 with original |
+| I7 | Weather polling (open-meteo → NSPanelWeatherUpdate protobuf) | ✅ Done | Configurable units, every N minutes |
+| I8 | Time/date publishing (minute-aligned) | ✅ Done | US/24h style, date format |
+| I9 | Firmware OTA (checksum comparison → firmware_update command) | ✅ Done | Binary committed (5.2MB) |
+| I10 | Data-file OTA (checksum comparison → data_file_update command) | ✅ Done | Binary committed |
+| I11 | TFT OTA (checksum comparison → tft_update command) | ✅ Done | TFT files committed (12MB each) |
+| I12 | Thermostat support (climate service calls, state publishing) | ✅ Done | HA climate integration |
+| I13 | Relay groups (group on/off controls all bound relays) | ✅ Done | Model + manager method |
+| I14 | Panel sensors (temperature, humidity, pressure, RSSI as HA entities) | ✅ Done | Sensor platform |
+| I15 | Relay switches (button1/button2 as HA switch entities) | ✅ Done | Switch platform |
+| I16 | STOMP server (live UI updates, MQTT mirroring) | ✅ Done | Base64 payload mirroring |
+| I17 | Original UI (all 9 pages ported from Django to Jinja2) | ✅ Done | Served by aiohttp views |
+| I18 | Panel settings page (edit_nspanel template) | ✅ Done | Save flow wired |
+| I19 | Rooms page (create, delete, list) | ✅ Done | Full CRUD |
+| I20 | Web app (PWA browser preview at /webapp) | ✅ Done | Served via views |
+| I21 | Brand icons for HA Marketplace | ✅ Done | brand/ + www/brand/ directories |
+| I22 | Panel registration without black header bar | ✅ Done | panel_custom(embed_iframe=True) |
+| I23 | Responsive layout | ✅ Done | w-screen → w-full |
+| I24 | No external dependencies | ✅ Done | Hand-rolled protobuf codec |
+| I25 | Messages support | ⚠️ Partial | Model exists, UI not fully wired |
+
+### 2.2 Firmware (ESP32)
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| F1 | WebSocket client with masked pong frames | ✅ Done | Critical fix for connection stability |
+| F2 | Ping timeout configuration (60s) | ✅ Done | Prevents premature disconnections |
+| F3 | Pre-built firmware binaries committed | ✅ Done | sonoff + custom models |
+| F4 | OTA partitioning (ESP-IDF) | ✅ Done | Firmware/data/TFT updates |
+| F5 | Panel registration (register_request every 3s) | ✅ Done | JSON on nspanel/mqttmanager/command |
+| F6 | Status reporting (temp, humidity, pressure, RSSI) | ✅ Done | JSON on nspanel/<mac>/status |
+| F7 | Command handling (light, scene, thermostat, etc.) | ✅ Done | Protobuf on nspanel/<mac>/command |
+| F8 | Config reception (NSPanelConfig protobuf) | ✅ Done | On nspanel/<mac>/config (retained) |
+
+### 2.3 Cross-cutting
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| C1 | MQTT topic consistency | ✅ Done | Same topics as original add-on |
+| C2 | Protobuf wire format compatibility | ✅ Done | Byte-identical to generated code |
+| C3 | Firmware needs no reflashing | ✅ Done | Same MQTT/protobuf protocol |
+| C4 | Panel registration flow 1:1 with original | ✅ Done | Verified against C++ bridge |
+| C5 | Zero secrets in codebase | ✅ Done | Audited |
+| C6 | GPL-3.0 license preserved | ✅ Done | README credits upstream |
+
+---
+
+## 3. Rules for development
+
+1. **Write in this ledger FIRST** before starting any task
+2. **Verify every change** — run full audit after every modification
+3. **Test end-to-end** — check that integration and firmware work together
+4. **No hardcoded IPs** — ever
+5. **No quick dirty fixes** — do it properly
+6. **Verify entity IDs** against the actual HA entity registry
+7. **Verify MQTT topics** match between firmware and integration
+8. **Verify state payloads** match between publisher and subscriber
+9. **Verify command handlers** are registered and match
+10. **Bump version** and create release after every change
+    - Bug fixes → increment patch (v1.3.1 → v1.3.2)
+    - Major improvements → increment minor (v1.3.x → v1.4.0)
+    - Breaking changes → increment major (v1.x.x → v2.0.0)
+11. **Never reuse a version number** for different changes
+12. **Verify templates render** after any template change
+13. **Verify imports resolve** after any code change
+14. **Run full audit** after every change — no exceptions
+
+---
+
+## 4. Audit history
+
+| Pass | Date | Issues found | Issues fixed |
+|------|------|-------------|-------------|
+| 1 | 2026-11-11 | Missing _on_relay_state, merged classes, 14 template errors | v1.3.1 |
+| 2 | 2026-11-12 | sensor.py attribute access, _send_panel_config pages filtering, division by zero, date format, apply_settings await, _manager null guard, model to_dict/from_dict, blocking I/O | v1.3.1 |
+| 3 | 2026-11-12 | (pending) | — |
+
+---
+
+## 5. Pending / future work
+
+### High priority
+- [ ] Wire up messages (MessageConfig → UI notifications)
+- [ ] Config UI for rooms/lights mapping (currently form-based dashboard)
+- [ ] Thermostat entity platform (expose thermostats as HA climate entities)
+- [ ] Scenes platform (expose scenes as HA scene entities)
+- [ ] Relay groups UI (create, edit, delete, add relays)
+- [ ] Weather settings save (location, units, interval)
+
+### Medium priority
+- [ ] Browser kiosk preview (web app improvements)
+- [ ] TFT file upload via UI
+- [ ] Firmware upload via UI
+- [ ] Panel denied/unblock functionality
+- [ ] Relay group light registration (register_as_light)
+
+### Low priority / Phase 2
+- [ ] Multi-room panel support (panel.rooms list)
+- [ ] Button detached mode entity mapping
+- [ ] Outside temperature sensor from HA entities
+- [ ] Alarm/weather alerts
+- [ ] Energy monitoring
+- [ ] Go bridge completion (10/12 stages)
+
+### Known issues to investigate
+- [ ] Panel registration requires at least one room (user must create room first)
+- [ ] md5 comparison for OTA uses "sonoff" model by default (should use panel.model)
+- [ ] Weather polling uses UTC for sunrise/sunset (should use location timezone)
+- [ ] _publish_panel_status only updates STOMP, not MQTT (panel status is published by panel itself)
+
+---
+
+## 6. Version history
+
+| Version | Date | Key changes |
+|---------|------|-------------|
+| v1.0.0 | 2026-11-11 | Initial release |
+| v1.1.0 | 2026-11-11 | Full app conversion |
+| v1.2.0 | 2026-11-11 | All pages ported, firmware OTA |
+| v1.3.0 | 2026-11-12 | Panel header removal, responsive, brand icons |
+| v1.3.1 | 2026-11-12 | Full audit fixes (25+ bugs) |
+
+---
+
+## 7. How to use this ledger
+
+1. **Before any task**: Write the request in section 2 (or a new subsection)
+2. **During work**: Update status as you go (building → done)
+3. **After work**: Verify end-to-end, update version, create release
+4. **Rules**: Follow section 3 — no exceptions
+5. **Audit**: Run full audit after every change
+6. **Version**: Follow semver (bug fix = patch, feature = minor, breaking = major)
+7. **Never reuse a version number** for different changes
+8. **Never skip verification** — if you skip, you audit 100 times
