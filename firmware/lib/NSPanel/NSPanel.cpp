@@ -92,6 +92,10 @@ void NSPanel::setComponentVisible(const char *componentId, bool visible) {
   this->_sendCommandWithoutResponse(cmd.c_str());
 }
 
+void NSPanel::sendCustomCommand(const char *cmd) {
+  this->_sendCommandWithoutResponse(cmd);
+}
+
 int NSPanel::getComponentIntVal(const char *componentId) {
   // Wait for command queue to clear (bounded — don't let a busy command
   // queue stall slider reads for seconds).

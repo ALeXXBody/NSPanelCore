@@ -50,6 +50,7 @@ public:
   void setComponentPic1(const char *componentId, uint8_t value);
   void setComponentForegroundColor(const char *componentId, uint value);
   void setComponentVisible(const char *componentId, bool visible);
+  void sendCustomCommand(const char *cmd);
   bool getUpdateState();
   uint8_t getUpdateProgress();
   int getComponentIntVal(const char *componentId);

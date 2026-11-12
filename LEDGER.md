@@ -93,7 +93,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P17 | Live-transfer runbook validated end-to-end on real hardware | ✅ Done (accept → auto OTA → re-register → entities live), documented in TRANSFER_TO_NSPANEL_CORE.md "Live remote transfer" + recovery sections |
 | P17 | Branding leftovers: panel setup page title + About dialog still referenced old project | ✅ Done v1.3.15 (rebuilt littlefs + merged images, content bytes verified) |
 | P18 | REDO ALL FIRMWARES: clean full rebuild from current source (fresh ESP fw 0.1.152 + rebranded web UI data fs + merged images), class rename, verified byte-for-byte; TFT display files cannot be rebuilt here (need Windows Nextion Editor + rebranded HMI) — documented honestly | ✅ Done, needs release |
-| P19 | Full firmware audit: 40+ findings across 6 modules; fixed critical crash guards (stoi/OOB/null-cb/GoBack/dim-0/auto-sleep/scene-loop/bool-case/relay-OOB), naming authority (manager wins for accepted panels), unique default hostname, OTA cooldown on all paths, web validation, progress div-zero | ✅ Done, fw 0.1.153, needs release |
+| P19 | Full firmware audit + boot-animation rebrand: audit fixes (0.1.153); boot frames rebranded CORE (EU+US, staged); editor path blocked by env (Xvfb crash/hung MSI) — animation killed in fw via tm_animation.en=0 (0.1.154) as immediate mitigation | ✅ Done, needs release + OTA |
 
 > **P13 recon (read-only, 2026-11-12):**
 > - Panel `.23:80` serves its own config UI: `wifi_hostname=KitchenPanel`,

@@ -7,6 +7,16 @@ void NSpanelManagerPage::show() {
 
   PageManager::SetCurrentPage(this);
   NSPanel::instance->goToPage(NSPANELMANAGER_PAGE_NAME);
+  // Kill the stock boot animation (tm_animation cycles branded
+  // p_animation frames 0-46). Without this the old "NSPANEL MANAGER"
+  // logo plays on every boot until our own TFT ships. Park the picture
+  // component hidden and show the status texts immediately instead of
+  // waiting for frame 46 (the HMI hides them on page load).
+  NSPanel::instance->sendCustomCommand("tm_animation.en=0");
+  NSPanel::instance->setComponentVisible("bootscreen.p_animation", false);
+  NSPanel::instance->setComponentVisible("bootscreen.p_light", false);
+  NSPanel::instance->setComponentVisible(NSPANELMANAGER_TEXT_NAME, true);
+  NSPanel::instance->setComponentVisible(NSPANELMANAGER_TEXT_IP_NAME, true);
 }
 
 void NSpanelManagerPage::update() {
