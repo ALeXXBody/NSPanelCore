@@ -2,25 +2,38 @@ var _last_dropdown_id_activated = "";
 var _last_collapse_id_activated = "";
 
 // HA access token for authenticated API calls. The UI runs in HA's sidebar
-// iframe (same origin), so HA's own tokens in localStorage are readable.
+// iframe (same origin), so HA's own tokens are readable. HA stores them in
+// localStorage ("Remember me" checked) or sessionStorage (unchecked —
+// same-tab only, which is exactly our iframe's case). Check both, in every
+// reachable same-origin scope, mirroring what the HA frontend itself does.
 // Sent as Authorization: Bearer on every htmx/fetch call and as the STOMP
 // CONNECT access_token header. Document loads (iframe src) can't carry it,
 // which is why only XHR/mutations require auth server-side.
-function nspanelGetToken() {
+function nspanelTokenStore() {
+  // Returns {store, raw} for the first scope holding usable tokens.
   var scopes = [];
   try { scopes.push(window.localStorage); } catch (e) {}
-  try { if (window.parent && window.parent !== window) scopes.push(window.parent.localStorage); } catch (e) {}
-  try { if (window.top && window.top !== window && window.top !== window.parent) scopes.push(window.top.localStorage); } catch (e) {}
+  try { scopes.push(window.sessionStorage); } catch (e1) {}
+  try { if (window.parent && window.parent !== window) { scopes.push(window.parent.localStorage); scopes.push(window.parent.sessionStorage); } } catch (e2) {}
+  try { if (window.top && window.top !== window && window.top !== window.parent) { scopes.push(window.top.localStorage); scopes.push(window.top.sessionStorage); } } catch (e3) {}
   for (var i = 0; i < scopes.length; i++) {
     try {
       var raw = scopes[i].getItem("hassTokens");
       if (raw) {
         var tok = JSON.parse(raw);
-        if (tok && tok.access_token) return tok.access_token;
+        if (tok && tok.access_token) return { store: scopes[i], raw: raw, tokens: tok };
       }
-    } catch (e) {}
+    } catch (e4) {}
   }
-  return "";
+  return null;
+}
+function nspanelGetToken() {
+  try {
+    var found = nspanelTokenStore();
+    return found ? found.tokens.access_token : "";
+  } catch (e) {
+    return "";
+  }
 }
 
 document.addEventListener("htmx:configRequest", function (e) {
@@ -221,23 +234,17 @@ try {
   function nspanelClientId() {
     var base = "";
     try {
-      var raw = window.localStorage.getItem("hassTokens");
-      if (raw) base = JSON.parse(raw).hassUrl || "";
+      var found = nspanelTokenStore();
+      if (found && found.tokens) base = found.tokens.hassUrl || "";
     } catch (e) {}
-    if (!base) {
-      try { base = window.parent.localStorage.getItem("hassTokens"); } catch (e2) {}
-      try { if (base) base = JSON.parse(base).hassUrl || ""; } catch (e3) { base = ""; }
-    }
     base = base || location.origin;
     return base.replace(/\/+$/, "") + "/";
   }
   async function nspanelRefreshTokenIfNeeded() {
-    var raw = null;
-    try { raw = window.localStorage.getItem("hassTokens"); } catch (e) { return; }
-    if (!raw) return;
-    var tok;
-    try { tok = JSON.parse(raw); } catch (e) { return; }
-    if (!tok || !tok.refresh_token) return;
+    var found = null;
+    try { found = nspanelTokenStore(); } catch (e) { return; }
+    if (!found || !found.tokens || !found.tokens.refresh_token) return;
+    var tok = found.tokens;
     var expiresAt = tok.expires || 0;
     if (expiresAt - Date.now() > 120000) return; // still fresh
     try {
@@ -254,7 +261,7 @@ try {
       tok.expires_in = fresh.expires_in;
       tok.expires = Date.now() + fresh.expires_in * 1000;
       tok.token_type = "Bearer";
-      try { window.localStorage.setItem("hassTokens", JSON.stringify(tok)); } catch (e) {}
+      try { found.store.setItem("hassTokens", JSON.stringify(tok)); } catch (e) {}
     } catch (e) { /* offline — keep the old token; calls will 401 visibly */ }
   }
 

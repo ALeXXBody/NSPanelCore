@@ -95,18 +95,9 @@ function stomp_reconnect_callback() {
 
 function nspanelStompToken() {
   if (typeof nspanelGetToken === "function") {
-    try { return nspanelGetToken(); } catch (e) { return ""; }
-  }
-  var scopes = [];
-  try { scopes.push(window.localStorage); } catch (e) {}
-  try { if (window.parent && window.parent !== window) scopes.push(window.parent.localStorage); } catch (e) {}
-  for (var i = 0; i < scopes.length; i++) {
     try {
-      var raw = scopes[i].getItem("hassTokens");
-      if (raw) {
-        var tok = JSON.parse(raw);
-        if (tok && tok.access_token) return tok.access_token;
-      }
+      var t = nspanelGetToken();
+      if (t) return t;
     } catch (e) {}
   }
   return "";
