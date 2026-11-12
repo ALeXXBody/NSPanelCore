@@ -19,7 +19,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 - **Zero external dependencies**: hand-rolled protobuf codec (byte-identical to generated code)
 
 **Repository:** `ALeXXBody/NSPanelCore` (GitHub)
-**Current version:** v1.3.1
+**Current version:** v1.3.2
 **License:** GPL-3.0
 **Credits:** Original NSPanel Manager team (upstream)
 
@@ -111,7 +111,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 |------|------|-------------|-------------|
 | 1 | 2026-11-11 | Missing _on_relay_state, merged classes, 14 template errors | v1.3.1 |
 | 2 | 2026-11-12 | sensor.py attribute access, _send_panel_config pages filtering, division by zero, date format, apply_settings await, _manager null guard, model to_dict/from_dict, blocking I/O | v1.3.1 |
-| 3 | 2026-11-12 | (pending) | — |
+| 3 | 2026-11-12 | Blocking I/O, sensor attribute access, _send_panel_config, _manager guard, apply_settings await, kelvin_pct guard, date_format, model to_dict/from_dict, EditRoomView, hs_color bounds | v1.3.2 |
 
 ---
 
@@ -157,6 +157,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | v1.2.0 | 2026-11-11 | All pages ported, firmware OTA |
 | v1.3.0 | 2026-11-12 | Panel header removal, responsive, brand icons |
 | v1.3.1 | 2026-11-12 | Full audit fixes (25+ bugs) |
+| v1.3.2 | 2026-11-12 | Audit round 2: 18 more bugs fixed |
 
 ---
 
