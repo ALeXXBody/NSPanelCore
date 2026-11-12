@@ -86,7 +86,8 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P10 | Firmware check: is it working + branded NSPanel Core? Test everything in a venv | ✅ Done (branding sweep; 11-test contract suite green; esp32dev build SUCCESS) |
 | P11 | Migration guide: transfer a panel from NSPanel Manager / ESPHome / other apps | ✅ Done (docs/TRANSFER_TO_NSPANEL_CORE.md, cross-linked from ADDING_A_PANEL.md) |
 | P12 | Simple transfer/first-use guide in readme.md | ✅ Done (README "First use" section, links both guides) |
-| P13 | Remote firmware update to transfer the live panel (.23) from NSPanel Manager (.20:8000) to NSPanel Core — proper process | 🔄 Ready for user go-ahead (see runbook below + docs/TRANSFER_TO_NSPANEL_CORE.md "Live remote transfer") |
+| P13 | Remote firmware update to transfer the live panel (.23) from NSPanel Manager (.20:8000) to NSPanel Core — proper process | 🔄 Blocked on user Accept (their click 401s — stale browser token, see P14). Runbook ready |
+| P14 | Accept fails with "Error while processing error response": browser sent no valid token (server log: 401 on /api/panel/1/accept ×2) + toast hides real errors | ✅ Done (v1.3.7: toasts show real HTTP status/body; 401 guides re-login; proactive token refresh with normalized client_id; verified: expired→refreshed→200) |
 
 > **P13 recon (read-only, 2026-11-12):**
 > - Panel `.23:80` serves its own config UI: `wifi_hostname=KitchenPanel`,

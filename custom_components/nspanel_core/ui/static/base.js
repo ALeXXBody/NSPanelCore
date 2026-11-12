@@ -59,11 +59,13 @@ document.addEventListener("submit", function (e) {
   var form = e.target;
   if (!form || !form.hasAttribute || !form.hasAttribute("data-authed")) return;
   e.preventDefault();
-  var tok = nspanelGetToken();
-  var headers = {};
-  if (tok) headers["Authorization"] = "Bearer " + tok;
-  fetch(form.action, { method: form.method || "POST", body: new FormData(form), headers: headers, redirect: "follow" })
-    .then(async function (resp) {
+  (async function () {
+    try { await nspanelRefreshTokenIfNeeded(); } catch (err) {}
+    var tok = nspanelGetToken();
+    var headers = {};
+    if (tok) headers["Authorization"] = "Bearer " + tok;
+    fetch(form.action, { method: form.method || "POST", body: new FormData(form), headers: headers, redirect: "follow" })
+      .then(async function (resp) {
       if (resp.ok) {
         window.location.href = resp.url;
       } else if (resp.status === 401) {
@@ -75,6 +77,7 @@ document.addEventListener("submit", function (e) {
       }
     })
     .catch(function (err) { alert("Save failed: " + err); });
+  })();
 });
 
 function attach_cursor_change_events() {
@@ -145,45 +148,85 @@ $(document).ready(function () {
     }
   });
 
-  // Something went wrong while sending/processing AJAX request via HTMX. Show error toast.
-  document.addEventListener("htmx:responseError", (event) => {
-    console.log("Got error: ");
-    console.log(event.detail);
-
+  // Proactively refresh the HA access token when it is about to expire.
+  // HA access tokens live ~30 min; a stale one makes every authed call
+  // 401. The refresh uses the stored refresh_token and updates the same
+  // localStorage entry the frontend uses. client_id must match the one
+  // used at login (origin with trailing slash).
+  function nspanelClientId() {
+    var base = "";
     try {
-      const obj = JSON.parse(event.detail.xhr.response);
-      if ("status" in obj) {
-        if (obj.status == "error") {
-          if ("text" in obj) {
-            show_error_toast(0, obj["text"], ERROR_TOAST_SOURCE_MANAGER);
-          } else {
-            show_error_toast(
-              0,
-              "Request error but no message specified.",
-              ERROR_TOAST_SOURCE_MANAGER,
-            );
-          }
-        } else {
-          show_error_toast(
-            0,
-            "Unknown request error.",
-            ERROR_TOAST_SOURCE_MANAGER,
-          );
-        }
-      } else {
-        show_error_toast(
-          0,
-          "Unknown request error.",
-          ERROR_TOAST_SOURCE_MANAGER,
-        );
-      }
-    } catch (error) {
+      var raw = window.localStorage.getItem("hassTokens");
+      if (raw) base = JSON.parse(raw).hassUrl || "";
+    } catch (e) {}
+    if (!base) {
+      try { base = window.parent.localStorage.getItem("hassTokens"); } catch (e2) {}
+      try { if (base) base = JSON.parse(base).hassUrl || ""; } catch (e3) { base = ""; }
+    }
+    base = base || location.origin;
+    return base.replace(/\/+$/, "") + "/";
+  }
+  async function nspanelRefreshTokenIfNeeded() {
+    var raw = null;
+    try { raw = window.localStorage.getItem("hassTokens"); } catch (e) { return; }
+    if (!raw) return;
+    var tok;
+    try { tok = JSON.parse(raw); } catch (e) { return; }
+    if (!tok || !tok.refresh_token) return;
+    var expiresAt = tok.expires || 0;
+    if (expiresAt - Date.now() > 120000) return; // still fresh
+    try {
+      var body = "grant_type=refresh_token&refresh_token=" + encodeURIComponent(tok.refresh_token) +
+                 "&client_id=" + encodeURIComponent(nspanelClientId());
+      var resp = await fetch("/auth/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body,
+      });
+      if (!resp.ok) return;
+      var fresh = await resp.json();
+      tok.access_token = fresh.access_token;
+      tok.expires_in = fresh.expires_in;
+      tok.expires = Date.now() + fresh.expires_in * 1000;
+      tok.token_type = "Bearer";
+      try { window.localStorage.setItem("hassTokens", JSON.stringify(tok)); } catch (e) {}
+    } catch (e) { /* offline — keep the old token; calls will 401 visibly */ }
+  }
+
+  // Refresh on load and periodically so authed calls rarely hit expiry.
+  try { nspanelRefreshTokenIfNeeded(); } catch (e) {}
+  setInterval(function () { try { nspanelRefreshTokenIfNeeded(); } catch (e) {} }, 60000);
+
+  // Something went wrong while sending/processing AJAX request via HTMX. Show error toast.
+  // The server usually answers errors as plain text/HTML (not JSON), so
+  // surface the HTTP status + body instead of dying in JSON.parse — the old
+  // code swallowed every real message behind a generic one.
+  document.addEventListener("htmx:responseError", (event) => {
+    var xhr = event.detail.xhr;
+    var status = xhr ? xhr.status : 0;
+    var body = "";
+    try { body = (xhr.responseText || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200); } catch (e) {}
+    if (status === 401) {
       show_error_toast(
         0,
-        "Error while processing error response from server.",
+        "Not authorized (HTTP 401). Log out and back in to Home Assistant, reload this page, and try again." + (body ? " Server said: " + body : ""),
         ERROR_TOAST_SOURCE_WEB_INTERFACE,
       );
+      try { nspanelRefreshTokenIfNeeded(); } catch (e) {}
+      return;
     }
+    try {
+      const obj = JSON.parse(xhr.response);
+      if (obj && obj.status == "error") {
+        show_error_toast(0, obj.text || "Request error but no message specified.", ERROR_TOAST_SOURCE_MANAGER);
+        return;
+      }
+    } catch (error) { /* not JSON — fall through to status/body */ }
+    show_error_toast(
+      0,
+      "Request failed (HTTP " + status + ")" + (body ? ": " + body : "."),
+      ERROR_TOAST_SOURCE_MANAGER,
+    );
   });
 
   // Use custom confirm modal with HTMX

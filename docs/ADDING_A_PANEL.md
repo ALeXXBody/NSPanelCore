@@ -103,6 +103,7 @@ itself.
 
 | Symptom | Likely cause |
 |---|---|
+| Accept shows "Not authorized (HTTP 401)" | The browser's login token expired (common on long-open tabs or remote sessions). Log out and back in to Home Assistant, hard-refresh the page, and Accept again. |
 | Panel never appears under NSPanels | Wrong manager address/port on the panel, or no MQTT route to the broker. Check the panel can reach `http://<manager address>:<manager port>/`. |
 | "Cannot register NSPanel: no rooms exist" in the HA log | Create a room first (Step 1). |
 | Panel accepted but stays offline | Status reports (`nspanel/<name>/status_report`) not arriving — check the broker ACLs/topics. |
