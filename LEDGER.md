@@ -79,6 +79,36 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P3 | No HA `hass-subpage` title bar above the UI; navbar stays | ✅ Done (v1.3.0) |
 | P4 | Logo slightly bigger; version read from `manifest.json` with `v` prefix; responsive | ✅ Done (v1.3.3: 40px logo, v1.3.3, 820px viewport OK) |
 | P5 | Verify in a real browser (Playwright + Chromium), not by inspection | ✅ Done (direct load + reload, 1184×900) |
+| P6 | A new release must never be masked by a stale browser cache: panel module + UI assets must be cache-busted per version | ✅ Done (v1.3.4, stale-cache simulation verified) |
+
+> **P6 evidence (2026-11-12, on the user's real HA 192.168.50.20, HA 2026.11.1 /
+> frontend 20261028.5):** the panel rendered fine in a clean browser profile,
+> yet stayed blank in the user's browser. Cause: `/nspanel_core/static/*` is
+> registered with `cache_headers=True`, so HA serves `panel.js` with
+> `Cache-Control: public, max-age=2678400` (31 days), and the panel's
+> `module_url` never changed between releases. A browser that had cached the
+> v1.3.2 `panel.js` (which pointed its iframe at `/nspanel_core`, the SPA route)
+> kept running that old file forever: the panel iframe recursed into the SPA
+> and showed a blank page. Reproduced with Playwright by serving the cached
+> v1.3.2 file: frames `[..., '/nspanel_core', ..., 'about:blank']`, zero UI,
+> no error. With the current file the same URL renders the UI (159 nodes).
+> Fix: version the module URL (`panel.js?v=<version>`) and version every
+> UI static reference (`?v={{ version }}` instead of `?refresh=1`).
+>
+> **P6 verification (2026-11-12, exact stack HA 2026.11.1 + frontend
+> 20261028.5):**
+> - Panel config now reports `module_url=/nspanel_core/static/panel.js?v=v1.3.4`.
+> - Browser requests only the versioned URL; the stale unversioned URL is never
+>   fetched (route counter 0/0 while an old v1.3.2 file was planted at the
+>   unversioned URL), and the panel renders 159 nodes with `v1.3.4` on load and
+>   on reload.
+> - All 8 UI pages render with every static reference versioned
+>   (`?version=v1.3.4`), `refresh=1` gone, 19/19 referenced assets HTTP 200.
+> - Responsive check: 1440×900 and 820×1180, no horizontal overflow,
+>   40px logo, version `v1.3.4`.
+> - Also fixed during the audit: 4 status components imported hybrids from
+>   `/static/...` (missing `/nspanel_core` prefix → 404 when those tiles
+>   render).
 
 **Root cause found (evidence):** `MainPageView` was registered at the exact
 path `/nspanel_core`, the same path `panel_custom` reserves for HA's SPA.
@@ -135,6 +165,7 @@ iframe at the new UI path.
 | 2 | 2026-11-12 | sensor.py attribute access, _send_panel_config pages filtering, division by zero, date format, apply_settings await, _manager null guard, model to_dict/from_dict, blocking I/O | v1.3.1 |
 | 3 | 2026-11-12 | Blocking I/O, sensor attribute access, _send_panel_config, _manager guard, apply_settings await, kelvin_pct guard, date_format, model to_dict/from_dict, EditRoomView, hs_color bounds | v1.3.2 |
 | 4 | 2026-11-12 | Route collision (`/nspanel_core` UI shadowed HA SPA → refresh bounce), redirect script, hardcoded version, blocking manifest read | v1.3.3 |
+| 5 | 2026-11-12 | Stale 31-day browser cache masking new panel.js (blank panel), unversioned UI assets, 4 status components importing hybrids from `/static/...` (404) | v1.3.4 |
 
 ---
 
@@ -182,6 +213,7 @@ iframe at the new UI path.
 | v1.3.1 | 2026-11-12 | Full audit fixes (25+ bugs) |
 | v1.3.2 | 2026-11-12 | Audit round 2: 18 more bugs fixed |
 | v1.3.3 | 2026-11-12 | UI moved to `/nspanel_core/ui` (fixes refresh bounce/blank panel), dynamic version, 40px logo |
+| v1.3.4 | 2026-11-12 | Cache-busted panel module + all UI assets (fixes blank panel caused by a 31-day cached panel.js), fixed 4 status components importing hybrids from `/static/...` |
 
 ---
 

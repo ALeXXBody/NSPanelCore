@@ -912,7 +912,12 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
                 webcomponent_name="nspanel-core-panel",
                 sidebar_title="NSPanel Core",
                 sidebar_icon="mdi:tablet-dashboard",
-                module_url=f"{URL_BASE}/static/panel.js",
+                # Cache-buster: /static/* is served with max-age=31 days, so the
+                # module URL must change with every release. Without it a browser
+                # that cached an older panel.js keeps running it forever (the
+                # v1.3.2 file pointed the iframe at /nspanel_core and rendered a
+                # blank panel even after the server was fixed).
+                module_url=f"{URL_BASE}/static/panel.js?v={_DASHBOARD_VERSION}",
                 embed_iframe=True,
                 config={"url": UI_PATH},
                 require_admin=True,

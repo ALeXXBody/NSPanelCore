@@ -2,9 +2,9 @@
 
 {% block head %}
 
-<script src="/nspanel_core/static/index_htmx.js?refresh=1"></script>
-<link rel="stylesheet" type="text/css" href="/nspanel_core/static/index.css?refresh=1">
-{% if manager_address == "" %}<script src="/nspanel_core/static/initial_setup.js?refresh=1"></script>{% endif %}
+<script src="/nspanel_core/static/index_htmx.js?version={{ version }}"></script>
+<link rel="stylesheet" type="text/css" href="/nspanel_core/static/index.css?version={{ version }}">
+{% if manager_address == "" %}<script src="/nspanel_core/static/initial_setup.js?version={{ version }}"></script>{% endif %}
 {% endblock %}
 
 {% block content %}

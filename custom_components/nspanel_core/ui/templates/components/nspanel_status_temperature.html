@@ -1,5 +1,5 @@
 <script type="module">
-  import { define, html } from '/nspanel_core/static/node_modules/hybrids/src/index.js';
+  import { define, html } from '/nspanel_core/static/node_modules/hybrids/src/index.js?version={{ version }}';
 
   stomp_subscribe("nspanel/{{ nspanel.data.mac_address }}/status", (message) => {
     var element = document.getElementById(`nspanel-temperature-status-{{ nspanel.data.id }}`);
