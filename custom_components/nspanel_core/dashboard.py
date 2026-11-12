@@ -51,12 +51,9 @@ class _RoomView:
 
 URL_BASE = "/nspanel_core"
 
-import json as _json_mod2
-import pathlib as _pathlib_mod2
-try:
-    _DASHBOARD_VERSION = "v" + _json_mod2.loads((_pathlib_mod2.Path(__file__).parent / "manifest.json").read_text()).get("version", "1.3.1")
-except Exception:
-    _DASHBOARD_VERSION = "v1.3.1"
+_TEMPLATE_CACHE = {}
+
+_DASHBOARD_VERSION = "v1.3.1"
 
 UI_DIR = pathlib.Path(__file__).parent / "ui"
 TEMPLATES_DIR = UI_DIR / "templates"
@@ -103,7 +100,10 @@ def _render(template_name: str, **context) -> str:
     env.globals["RC"] = _RC
     env.filters["jsonify"] = _jsonify
     env.filters["base64_encode"] = _base64_encode
-    template = env.get_template(template_name)
+    # Cache templates to avoid blocking I/O in the event loop
+    if template_name not in _TEMPLATE_CACHE:
+        _TEMPLATE_CACHE[template_name] = env.get_template(template_name)
+    template = _TEMPLATE_CACHE[template_name]
     context.setdefault("notifications", [])
     context.setdefault("version", _DASHBOARD_VERSION)
     context.setdefault("has_unread_messages", False)

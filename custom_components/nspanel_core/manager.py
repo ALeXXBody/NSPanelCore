@@ -52,12 +52,7 @@ from .panel_pb import messages as pbw
 
 _LOGGER = logging.getLogger(__name__)
 
-import json as _json_mod
-import pathlib as _pathlib_mod
-try:
-    _MANAGER_VERSION = "v" + _json_mod.loads((_pathlib_mod.Path(__file__).parent / "manifest.json").read_text()).get("version", "1.3.1")
-except Exception:
-    _MANAGER_VERSION = "v1.3.1"
+_MANAGER_VERSION = "v1.3.1"
 
 
 def mac_from_topic(topic: str, suffix: str) -> str:
