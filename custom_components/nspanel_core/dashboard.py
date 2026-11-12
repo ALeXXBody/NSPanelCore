@@ -650,6 +650,137 @@ class ComingSoonView(HomeAssistantView):
         return web.Response(text=html, content_type="text/html")
 
 
+def _panel_json_config(manager, panel) -> dict:
+    """Build the JSON the firmware downloads (exact key/shape contract).
+
+    Booleans that ArduinoJson compares with .equals("True") are emitted
+    capitalized; light/scene capability flags compared with .equals("true")
+    are lowercase; room light "ceiling" is a real JSON boolean.
+    """
+    s = manager.config.settings
+    rooms = manager.config.rooms
+    room_ids = panel.rooms or [r.id for r in rooms]
+    global_scene_pages = [
+        p.id for p in manager.config.pages if p.room_id is None and p.is_scenes_page
+    ]
+    scenes = {}
+    for sc in manager.config.scenes:
+        page = next((p for p in manager.config.pages if p.id == sc.page_id), None)
+        if page is None:
+            continue
+        if page.room_id is None and page.id in global_scene_pages:
+            scenes[str(sc.id)] = {"name": sc.name, "can_save": "false" if sc.ha_entity else "true"}
+    cfg = {
+        "home": panel.room_id,
+        "default_page": panel.default_page,
+        "color_temp_min": s.color_temp_min,
+        "color_temp_max": s.color_temp_max,
+        "reverse_color_temp": "True" if s.reverse_color_temp else "False",
+        "raise_to_100_light_level": panel.raise_to_100_light_level,
+        "min_button_push_time": panel.min_button_push_time,
+        "button_long_press_time": panel.button_long_press_time,
+        "special_mode_trigger_time": panel.special_mode_trigger_time,
+        "special_mode_release_time": panel.special_mode_release_time,
+        "mqtt_ignore_time": 5000,
+        "screen_dim_level": panel.screen_dim_level,
+        "screensaver_dim_level": panel.screensaver_dim_level,
+        "screensaver_activation_timeout": panel.screensaver_activation_timeout,
+        "screensaver_mode": str(panel.screensaver_mode),
+        "clock_us_style": "True" if panel.clock_us_style else "False",
+        "lock_to_default_room": "False",
+        "is_us_panel": "True" if panel.is_us_panel else "False",
+        "button1_mode": panel.button1_mode,
+        "button2_mode": panel.button2_mode,
+        "use_fahrenheit": "True" if panel.use_fahrenheit else "False",
+        "temperature_calibration": panel.temperature_calibration,
+        "reverse_relays": "True" if panel.reverse_relays else "False",
+        "button1_mqtt_topic": "",
+        "button1_mqtt_payload": "",
+        "button2_mqtt_topic": "",
+        "button2_mqtt_payload": "",
+        "relay1_default_mode": "True" if panel.relay1_default_mode else "False",
+        "relay2_default_mode": "True" if panel.relay2_default_mode else "False",
+        "name": panel.name,
+        "rooms": room_ids,
+        "scenes": scenes,
+        "button1_detached_light": 0,
+        "button2_detached_light": 0,
+    }
+    return cfg
+
+
+def _room_json_config(manager, room_id: int) -> dict | None:
+    """Build the per-room JSON the firmware downloads."""
+    room = manager._room_by_id(room_id)
+    if room is None:
+        return None
+    lights = {}
+    for light in manager.config.lights:
+        if light.room_id != room_id:
+            continue
+        lights[str(light.id)] = {
+            "name": light.name,
+            "can_dim": "true" if light.can_dim else "false",
+            "can_temperature": "true" if light.can_color_temperature else "false",
+            "can_rgb": "true" if light.can_rgb else "false",
+            "view_position": str(light.page_slot),
+            "ceiling": light.light_type == "ceiling",
+        }
+    scenes = {}
+    for sc in manager.config.scenes:
+        page = next((p for p in manager.config.pages if p.id == sc.page_id), None)
+        if page is not None and page.room_id == room_id:
+            scenes[str(sc.id)] = {"name": sc.name, "can_save": "false" if sc.ha_entity else "true"}
+    return {"name": room.name, "lights": lights, "scenes": scenes}
+
+
+class PanelConfigByMacView(HomeAssistantView):
+    """Panel firmware config download: GET /api/get_nspanel_config?mac=<mac>.
+
+    Panels cannot send bearer tokens, so this is gated on the MAC belonging
+    to a registered panel. The payload contains no secrets (rooms, lights,
+    scenes, display settings only).
+    """
+
+    url = "/api/get_nspanel_config"
+    name = "nspanel_core:api:panel_config"
+    requires_auth = False
+
+    async def get(self, request, **kwargs):
+        from .const import topic_safe
+
+        manager = _manager(request)
+        mac = topic_safe(request.query.get("mac", ""))
+        panel = next(
+            (p for p in manager.config.panels if topic_safe(p.mac) == mac), None
+        ) if mac else None
+        if panel is None:
+            return web.Response(status=404, text="Unknown panel")
+        return web.json_response(_panel_json_config(manager, panel))
+
+
+class RoomConfigView(HomeAssistantView):
+    """Per-room firmware config download: GET /api/get_nspanel_config/room/<id>.
+
+    Same device-only gating as the panel config (no secrets in payload).
+    """
+
+    url = "/api/get_nspanel_config/room/{room_id}"
+    name = "nspanel_core:api:room_config"
+    requires_auth = False
+
+    async def get(self, request, **kwargs):
+        manager = _manager(request)
+        try:
+            room_id = int(request.match_info["room_id"])
+        except (KeyError, ValueError, TypeError):
+            return web.Response(status=400, text="Bad room id")
+        cfg = _room_json_config(manager, room_id)
+        if cfg is None:
+            return web.Response(status=404, text="Unknown room")
+        return web.json_response(cfg)
+
+
 class RoomsPageView(HomeAssistantView):
     url = f"{URL_BASE}/rooms"
     name = "nspanel_core:rooms"
@@ -869,6 +1000,8 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         WebappStompView,
         WebappIndexView,
         WebappAssetView,
+        PanelConfigByMacView,
+        RoomConfigView,
         ComingSoonView,
     ]
     for view_cls in views:

@@ -81,7 +81,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P5 | Verify in a real browser (Playwright + Chromium), not by inspection | ✅ Done (direct load + reload, 1184×900) |
 | P6 | A new release must never be masked by a stale browser cache: panel module + UI assets must be cache-busted per version | ✅ Done (v1.3.4, stale-cache simulation verified) |
 | P7 | Full audit — every linkage, every file, every piece of code; app is currently a mess | 🔄 In progress (audit pass 6) |
-| P8 | Fix audit findings in order 1–6: (1) auth + WS token + XSS; (2) entities load; (3) STOMP KeyError + topic_safe + accept-to-MAC; (4) wire contract; (5) OTA views, typos, literal URLs, close_modals; (6) persistence, dead forms, storage debounce, OTA hash cache | ✅ Fixes 1–2 done and verified (Fix 1: 401s enforced, panel renders, WS token gate; Fix 2: register→accept→status_report creates 4 sensors + 2 switches with live values, relay switch publishes relay1_cmd 1/0). 🔄 Fix 3 in progress |
+| P8 | Fix audit findings in order 1–6: (1) auth + WS token + XSS; (2) entities load; (3) STOMP KeyError + topic_safe + accept-to-MAC; (4) wire contract; (5) OTA views, typos, literal URLs, close_modals; (6) persistence, dead forms, storage debounce, OTA hash cache | ✅ Fixes 1–3 done, committed (fb5b94e), browser/MQTT-verified. 🔄 Fix 4 in progress |
 
 > **P6 evidence (2026-11-12, on the user's real HA 192.168.50.20, HA 2026.11.1 /
 > frontend 20261028.5):** the panel rendered fine in a clean browser profile,

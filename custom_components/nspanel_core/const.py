@@ -45,6 +45,26 @@ def manager_prefix(manager_address: str) -> str:
     return f"nspanel/mqttmanager_{manager_address}"
 
 
+def panel_mqtt_base(name: str | None) -> str:
+    """MQTT topic base for a panel: its wifi hostname, verbatim.
+
+    The firmware builds every per-panel topic from ``wifi_hostname`` with no
+    sanitization, so the manager must address panels the same way or nothing
+    arrives (hostname ``My Panel`` subscribes to ``nspanel/My Panel/command``
+    — not to a lowercased or MAC-based variant). Only characters that would
+    break the topic structure (MQTT wildcards, level separators, controls)
+    are replaced; case and spaces are kept verbatim to match the panel.
+    """
+    s = (name or "").strip()
+    s = re.sub(r'[+#/\x00-\x1f\x7f]', '_', s)
+    return s or "panel"
+
+
+def panel_mqtt_topic(name: str | None, suffix: str) -> str:
+    """Per-panel MQTT topic, e.g. nspanel/My Panel/r1_cmd."""
+    return f"nspanel/{panel_mqtt_base(name)}/{suffix}"
+
+
 def room_state_topic(manager_address: str, room_id: int) -> str:
     return f"{manager_prefix(manager_address)}/room/{room_id}/state"
 

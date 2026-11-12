@@ -34,22 +34,14 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
     TOPIC_PANEL_STATUS,
-    TOPIC_PANEL_COMMAND,
     TOPIC_PANEL_STATUS_REPORT,
     TOPIC_MANAGER_COMMAND,
     panel_topic,
-    room_state_topic,
-    light_state_topic,
-    entity_page_state_topic,
-    time_topic,
-    weather_topic,
-    date_topic,
-    ampm_topic,
+    panel_mqtt_topic,
+    topic_safe,
     status_topic,
-    config_reload_topic,
 )
 from .models import IntegrationConfig, LightConfig, PanelConfig, SceneConfig, ThermostatConfig, RelayGroupConfig
-from .panel_pb import messages as pbw
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,8 +58,6 @@ def _read_manifest_version() -> str:
 
 
 def mac_from_topic(topic: str, suffix: str) -> str:
-    from .const import topic_safe
-
     parts = topic.split("/")
     if len(parts) >= 3 and parts[2] == suffix:
         return topic_safe(parts[1])
@@ -87,6 +77,7 @@ class NSPanelManager:
         self._report_listeners: list = []
         self._relay_listeners: dict[str, list] = {}
         self._relay_state: dict[str, bool] = {}
+        self._log_backlog: dict[str, list] = {}
         self.stomp = None
 
     # ------------------------------------------------------------------
@@ -112,17 +103,22 @@ class NSPanelManager:
         self.stomp = StompServer(self.hass)
         async_register_ui(self.hass, self.entry.entry_id)
 
-        # Protobuf topics: binary payloads (encoding=None → bytes)
-        await mqtt.async_subscribe(
-            self.hass, TOPIC_PANEL_COMMAND, self._on_panel_command, encoding=None
-        )
+        # Panel-facing topics. The firmware speaks JSON on hostname-based
+        # topics (wifi_hostname, NOT the MAC): status reports, relay states,
+        # logs and light/scene commands. There is no protobuf on the wire.
+        await mqtt.async_subscribe(self.hass, TOPIC_PANEL_STATUS, self._on_panel_status)
         await mqtt.async_subscribe(
             self.hass, TOPIC_PANEL_STATUS_REPORT, self._on_panel_status_report, encoding=None
         )
-        await mqtt.async_subscribe(self.hass, TOPIC_PANEL_STATUS, self._on_panel_status)
         await mqtt.async_subscribe(self.hass, TOPIC_MANAGER_COMMAND, self._on_manager_command)
-        await mqtt.async_subscribe(self.hass, "nspanel/+/relay1_state", self._on_relay_state)
-        await mqtt.async_subscribe(self.hass, "nspanel/+/relay2_state", self._on_relay_state)
+        await mqtt.async_subscribe(self.hass, "nspanel/+/r1_state", self._on_relay_state)
+        await mqtt.async_subscribe(self.hass, "nspanel/+/r2_state", self._on_relay_state)
+        await mqtt.async_subscribe(self.hass, "nspanel/+/log", self._on_panel_log)
+
+        # Bridge UI actions (STOMP SEND from the browser, e.g. reboot and OTA
+        # buttons) to MQTT. The UI cannot publish MQTT itself.
+        if self.stomp is not None:
+            self.stomp.attach_global_callback(self._on_stomp_send)
 
         # Track HA state for every mapped light entity.
         entity_ids = [l.ha_entity for l in self.config.lights if l.ha_entity]
@@ -175,9 +171,6 @@ class NSPanelManager:
         if self.stomp is not None:
             self.stomp.mirror_mqtt(topic, payload, retain)
 
-    async def _publish_protobuf(self, topic: str, message: bytes, retain: bool = False) -> None:
-        await self._publish(topic, message, retain)
-
     async def _publish_manager_status(self) -> None:
         await self._publish(
             status_topic(self.config.settings.manager_address),
@@ -185,41 +178,63 @@ class NSPanelManager:
             True,
         )
 
-    async def _publish_panel_status(self, panel: PanelConfig, state: str, progress: int = 0) -> None:
+    async def _publish_panel_status(
+        self, panel: PanelConfig, state: str, progress: int = 0, warnings: list | None = None
+    ) -> None:
         if self.stomp is None:
             return
         self.stomp.set_retained(panel_topic(panel.mac, "status"), True)
-        self.stomp.update_topic(panel_topic(panel.mac, "status"), json.dumps({"state": state, "progress": progress}))
+        self.stomp.update_topic(
+            panel_topic(panel.mac, "status"),
+            json.dumps({"state": state, "progress": progress, "warnings": warnings or []}),
+        )
 
     # ------------------------------------------------------------------
     # Panel registration (JSON flow, same as the add-on)
     # ------------------------------------------------------------------
 
     async def _on_panel_status(self, msg) -> None:
-        mac = mac_from_topic(msg.topic, "status")
-        if not mac:
+        """Availability topic: nspanel/<wifi_hostname>/status (retained JSON).
+
+        The panel's MQTT last-will publishes {"state": "offline"} here and
+        {"state": "online"} on connect. The topic segment is the panel's
+        wifi hostname, not its MAC.
+        """
+        from .const import topic_safe
+
+        segment = mac_from_topic(msg.topic, "status")
+        if not segment:
             return
         try:
             data = json.loads(msg.payload)
         except (ValueError, TypeError):
-            _LOGGER.debug("Ignoring non-JSON status from %s", mac)
+            _LOGGER.debug("Ignoring non-JSON status from %s", segment)
+            return
+        if not isinstance(data, dict):
             return
 
         state = data.get("state", "")
-        panel = self._panel_by_mac(mac)
-
         if state == "register_request":
-            await self._handle_register_request(mac, data)
-        elif state == "online":
-            if panel:
+            # Legacy register path (original bridge); current firmware uses
+            # nspanel/mqttmanager/command instead. Handled for completeness —
+            # works for unknown panels (this is how they first appear).
+            await self._handle_register_request(data.get("mac_origin") or "", data)
+            return
+        panel = self._panel_by_topic(segment)
+        if panel is None:
+            return
+        if state == "online":
+            if not panel.online:
                 panel.online = True
                 await self.async_save()
-                await self._send_panel_config(panel)
                 await self._publish_panel_status(panel, "online")
+        elif state == "offline":
+            if panel.online:
+                panel.online = False
+                await self.async_save()
+                await self._publish_panel_status(panel, "offline")
 
     async def _handle_register_request(self, mac: str, data: dict) -> None:
-        from .const import topic_safe
-
         mac = topic_safe(mac)
         if not mac:
             _LOGGER.warning("Ignoring register request with empty MAC")
@@ -257,13 +272,21 @@ class NSPanelManager:
 
         reply = self._register_accept_reply(panel)
         if panel.accepted and not panel.denied:
-            # Accepted panels get the accept reply on the panel's own command
-            # topic only. (Never publish to a friendly-name topic: free-form
-            # names contain spaces/case and would fork the topic namespace —
-            # panels subscribe to nspanel/<mac>/command exclusively.)
-            await self._publish(panel_topic(mac, "command"), reply)
-            await self._send_panel_config(panel)
+            # Accepted panels get the accept reply + a config reload nudge on
+            # their own hostname-based command topic (the only topic the
+            # panel subscribes to).
+            await self._publish(
+                panel_mqtt_topic(panel.name, "command"), reply, True
+            )
+            await self._publish(
+                panel_mqtt_topic(panel.name, "command"),
+                json.dumps({"command": "reload"}),
+            )
             await self._publish_panel_status(panel, "online")
+
+        # Registration carries the panel's current checksums — evaluate OTA
+        # here (status reports don't include them).
+        await self._maybe_trigger_firmware_ota(panel, data)
 
         if created and not panel.accepted:
             # New registration: notify the UI (original event chain)
@@ -275,76 +298,77 @@ class NSPanelManager:
         await self.async_save()
 
     async def _send_panel_config(self, panel: PanelConfig) -> None:
-        """Build and send the NSPanelConfig protobuf for a panel."""
-        rooms = self.config.rooms
-        room_ids = panel.rooms or [r.id for r in rooms]
-        global_scene_page_ids = [
-            p.id for p in self.config.pages if p.room_id is None and p.is_scenes_page
-        ]
+        """Deliver config to an accepted panel.
 
-        config_payload: dict[str, Any] = {
-            "name": panel.name,
-            "default_room": panel.room_id,
-            "default_page": panel.default_page,
-            "screensaver_activation_timeout": panel.screensaver_activation_timeout,
-            "min_button_push_time": panel.min_button_push_time,
-            "button_long_press_time": panel.button_long_press_time,
-            "special_mode_trigger_time": panel.special_mode_trigger_time,
-            "special_mode_release_time": panel.special_mode_release_time,
-            "screen_dim_level": panel.screen_dim_level,
-            "screensaver_dim_level": panel.screensaver_dim_level,
-            "screensaver_mode": panel.screensaver_mode,
-            "show_screensaver_inside_temperature": True,
-            "show_screensaver_outside_temperature": bool(
-                self.config.settings.outside_temp_sensor_entity
-            ),
-            "clock_us_style": panel.clock_us_style,
-            "use_fahrenheit": panel.use_fahrenheit,
-            "is_us_panel": panel.is_us_panel,
-            "reverse_relays": panel.reverse_relays,
-            "relay1_default_mode": panel.relay1_default_mode,
-            "relay2_default_mode": panel.relay2_default_mode,
-            "temperature_calibration": panel.temperature_calibration,
-            "button1_mode": panel.button1_mode,
-            "button2_mode": panel.button2_mode,
-            "optimistic_mode": panel.optimistic_mode,
-            "raise_light_level_to_100_above": panel.raise_to_100_light_level,
-            "nspanel_id": panel.id,
-            "default_light_brightess": panel.default_light_brightness,
-            "locked_to_default_room": False,
-            "inside_temperature_sensor_mqtt_topic": panel.inside_temperature_sensor_topic,
-            "room_infos": [],
-            "global_scene_entity_page_ids": global_scene_page_ids,
-        }
-        for rid in room_ids:
-            info = {"room_id": rid, "entity_page_ids": [], "scene_page_ids": []}
-            for p in self.config.pages:
-                if p.room_id == rid:
-                    if p.is_scenes_page:
-                        info["scene_page_ids"].append(p.id)
-                    else:
-                        info["entity_page_ids"].append(p.id)
-            config_payload["room_infos"].append(info)
-
-        cfg = pbw.build_nspanel_config(config_payload)
-        await self._publish_protobuf(panel_topic(panel.mac, "config"), cfg, True)
-        _LOGGER.info("Sent NSPanelConfig to panel %s (%s)", panel.name, panel.mac)
+        Panels fetch their full config over HTTP
+        (GET /api/get_nspanel_config); the manager only sends the
+        register_accept reply plus a reload nudge on the panel's own
+        hostname-based command topic — the only topic it subscribes to.
+        There is no protobuf on the wire.
+        """
+        await self._publish(
+            panel_mqtt_topic(panel.name, "command"),
+            json.dumps(self._register_accept_reply(panel)),
+            True,
+        )
+        await self._publish(
+            panel_mqtt_topic(panel.name, "command"),
+            json.dumps({"command": "reload"}),
+        )
+        _LOGGER.info("Sent register accept + reload to panel %s", panel.name)
         await self._publish_panel_status(panel, "online")
 
     async def _on_panel_status_report(self, msg) -> None:
-        mac = mac_from_topic(msg.topic, "status_report")
-        panel = self._panel_by_mac(mac)
+        """Status report: nspanel/<wifi_hostname>/status_report (retained JSON).
+
+        Firmware shape: {"state"?, "progress"?, "rssi", "heap_used_pct",
+        "mac", "temperature" (string "22.5"), "ip", "warnings" (string)}.
+        ``state`` is only present while updating (updating_tft/fw/fs);
+        otherwise the panel is online.
+        """
+        segment = mac_from_topic(msg.topic, "status_report")
+        if not segment:
+            return
+        panel = self._panel_by_topic(segment)
         if not panel:
             return
         try:
-            report = pbw.parse_nspanel_status_report(msg.payload)
-        except Exception:  # noqa: BLE001
+            data = json.loads(msg.payload)
+        except (ValueError, TypeError):
+            _LOGGER.debug("Ignoring non-JSON status report from %s", segment)
             return
+        if not isinstance(data, dict):
+            return
+        state = str(data.get("state") or "")
         was_online = panel.online
-        panel.online = report.get("nspanel_state", 0) == 0
-        panel.firmware_md5 = report.get("md5_firmware", "")
-        panel.tft_md5 = report.get("md5_tft_gui", "")
-        panel.littlefs_md5 = report.get("md5_littlefs", "")
+        panel.online = state not in ("updating_tft", "updating_fw", "updating_fs")
+        try:
+            temperature = float(str(data.get("temperature", "")))
+        except (ValueError, TypeError):
+            temperature = None
+        try:
+            rssi = int(data.get("rssi")) if data.get("rssi") is not None else None
+        except (ValueError, TypeError):
+            rssi = None
+        raw_warnings = data.get("warnings", "")
+        warnings: list = []
+        if isinstance(raw_warnings, list):
+            warnings = raw_warnings
+        elif isinstance(raw_warnings, str) and raw_warnings.strip():
+            warnings = [
+                {"level": "warning", "text": line}
+                for line in raw_warnings.splitlines()
+                if line.strip()
+            ]
+        report = {
+            "temperature": temperature,
+            "rssi": rssi,
+            "has_humidity": False,
+            "has_pressure": False,
+            "warnings": warnings,
+            "state": state,
+            "progress": data.get("progress", 0),
+        }
         await self.async_save()
         if panel.online != was_online:
             for listener in list(self._new_panel_listeners):
@@ -354,19 +378,31 @@ class NSPanelManager:
                     _LOGGER.exception("New-panel listener failed")
         for listener in list(self._report_listeners):
             try:
-                listener(mac, report)
+                listener(panel.mac, report)
             except Exception:  # noqa: BLE001
                 _LOGGER.exception("Report listener failed")
         if self.stomp is not None and panel.accepted:
-            state_map = {0: "online", 1: "offline", 2: "updating_tft", 3: "updating_fw", 4: "updating_fs"}
+            state_map = {
+                "": "online",
+                "updating_tft": "updating_tft",
+                "updating_fw": "updating_fw",
+                "updating_fs": "updating_fs",
+            }
+            try:
+                progress = int(data.get("progress", 0))
+            except (ValueError, TypeError):
+                progress = 0
             await self._publish_panel_status(
-                panel,
-                state_map.get(report.get("nspanel_state", 1), "offline"),
-                report.get("update_progress", 0),
+                panel, state_map.get(state, "online"), progress, warnings
             )
-            # Firmware/data OTA: trigger an update when the panel's reported
-            # checksums differ from the manager's (mirrors the C++ has_*_update).
-            await self._maybe_trigger_firmware_ota(panel, report)
+
+    def _panel_by_topic(self, segment: str) -> PanelConfig | None:
+        """Find a panel by a topic segment: hostname (wifi_hostname) or MAC."""
+        want = topic_safe(segment)
+        for panel in self.config.panels:
+            if topic_safe(panel.name) == want or topic_safe(panel.mac) == want:
+                return panel
+        return None
 
     def _panel_by_mac(self, mac: str) -> PanelConfig | None:
         from .const import topic_safe
@@ -403,7 +439,7 @@ class NSPanelManager:
         import hashlib, os
 
         firmware_dir = os.path.join(os.path.dirname(__file__), "firmware")
-        model = "sonoff"  # default; could be extended to panel.model
+        model = panel.model if panel.model in ("sonoff", "custom") else "sonoff"
 
         def md5_file(path: str) -> str:
             h = hashlib.md5()
@@ -420,11 +456,11 @@ class NSPanelManager:
 
         if fw_md5 and report.get("md5_firmware") and report["md5_firmware"] != fw_md5:
             _LOGGER.info("Firmware update available for panel %s — triggering OTA", panel.name)
-            await self._publish(panel_topic(panel.mac, "command"), json.dumps({"command": "firmware_update"}))
+            await self._publish(panel_mqtt_topic(panel.name, "command"), json.dumps({"command": "firmware_update"}))
 
         if data_md5 and report.get("md5_littlefs") and report["md5_littlefs"] != data_md5:
             _LOGGER.info("Data file update available for panel %s — triggering OTA", panel.name)
-            await self._publish(panel_topic(panel.mac, "command"), json.dumps({"command": "data_file_update"}))
+            await self._publish(panel_mqtt_topic(panel.name, "command"), json.dumps({"command": "data_file_update"}))
 
         import hashlib, os
         tft_dir = os.path.join(os.path.dirname(__file__), "tft")
@@ -442,13 +478,15 @@ class NSPanelManager:
         tft_md5 = md5_file(tft_path)
         if tft_md5 and report.get("md5_tft_gui") and report["md5_tft_gui"] != tft_md5:
             _LOGGER.info("TFT update available for panel %s — triggering OTA", panel.name)
-            await self._publish(panel_topic(panel.mac, "command"), json.dumps({"command": "tft_update"}))
+            await self._publish(panel_mqtt_topic(panel.name, "command"), json.dumps({"command": "tft_update"}))
 
     def relay_state(self, topic: str) -> bool:
         return self._relay_state.get(topic, False)
 
-    async def set_relay(self, mac: str, relay: int, state: bool) -> None:
-        await self._publish(panel_topic(mac, f"relay{relay}_cmd"), "1" if state else "0")
+    async def set_relay(self, panel: PanelConfig, relay: int, state: bool) -> None:
+        await self._publish(
+            panel_mqtt_topic(panel.name, f"r{relay}_cmd"), "1" if state else "0"
+        )
 
     async def set_relay_group(self, group_id: int, state: bool) -> None:
         group = next((g for g in self.config.relay_groups if g.id == group_id), None)
@@ -457,8 +495,9 @@ class NSPanelManager:
         for binding in group.bindings:
             mac = binding.get("panel_mac", "")
             relay = binding.get("relay_num", 1)
-            if mac:
-                await self.set_relay(mac, relay, state)
+            panel = self._panel_by_mac(mac) if mac else None
+            if panel is not None:
+                await self.set_relay(panel, relay, state)
 
     def add_new_panel_listener(self, listener):
         """Register a listener; returns an unsubscribe closure for async_on_unload."""
@@ -484,8 +523,8 @@ class NSPanelManager:
 
         return _unsubscribe
 
-    def add_relay_listener(self, mac: str, relay: int, listener):
-        topic = f"nspanel/{mac}/relay{relay}_state"
+    def add_relay_listener(self, panel: PanelConfig, relay: int, listener):
+        topic = panel_mqtt_topic(panel.name, f"r{relay}_state")
         self._relay_listeners.setdefault(topic, []).append(listener)
 
         def _unsubscribe() -> None:
@@ -562,16 +601,13 @@ class NSPanelManager:
         state = self.hass.states.get(ha_entity)
         if state is not None:
             await self._ingest_light_state(light, state)
-        await self._publish_entity_page(page_id)
-        await self._publish_room_state(room_id)
+        pass  # panels load rooms/pages via HTTP config; no MQTT publish needed
 
     async def remove_light(self, light_id: int) -> None:
         light = self._light_by_id(light_id)
         self.config.lights = [l for l in self.config.lights if l.id != light_id]
         await self.async_save()
-        if light:
-            await self._publish_entity_page(light.page_id)
-            await self._publish_room_state(light.room_id)
+        pass
 
     async def update_panel(self, panel_id: int, body: dict) -> None:
         panel = next((p for p in self.config.panels if p.id == panel_id), None)
@@ -586,7 +622,7 @@ class NSPanelManager:
         await self.async_save()
         if panel.accepted and not panel.denied:
             reply = self._register_accept_reply(panel)
-            await self._publish(panel_topic(panel.mac, "command"), reply)
+            await self._publish(panel_mqtt_topic(panel.name, "command"), reply, True)
             await self._send_panel_config(panel)
             await self._publish_panel_status(panel, "online")
 
@@ -627,24 +663,8 @@ class NSPanelManager:
                     th.set_temperature = float(new_state.attributes.get("temperature", th.set_temperature))
                 except (ValueError, TypeError):
                     pass
-                # Publish thermostat state to panels
-                await self._publish_thermostat_state(th)
+                pass  # firmware has no thermostat MQTT consumer; state stays in HA
 
-    async def _publish_thermostat_state(self, th: ThermostatConfig) -> None:
-        settings = self.config.settings
-        from .const import thermostat_state_topic
-        payload = pbw.build_nspanel_entity_state_thermostat({
-            "thermostat": {
-                "thermostat_id": th.id,
-                "name": th.name,
-                "has_current_temperature": True,
-                "current_temperature": th.current_temperature,
-                "set_temperature": th.set_temperature,
-                "step_size": th.step_size,
-                "options": th.options,
-            }
-        })
-        await self._publish_protobuf(thermostat_state_topic(settings.manager_address, th.id), payload, True)
 
     async def _ingest_light_state(self, light: LightConfig, new_state: State) -> None:
         changed = False
@@ -690,129 +710,100 @@ class NSPanelManager:
         await self.async_save()
         if changed:
             await self._publish_light_state(light)
-            await self._publish_room_state(light.room_id)
 
     async def _publish_light_state(self, light: LightConfig) -> None:
+        """Publish plain-text light state the firmware subscribes to.
+
+        nspanel/entities/light/<id>/{state_brightness_pct,state_kelvin,
+        state_hue,state_sat} — atoi-parsed by the panel. Kelvin is absolute
+        (the panel clamps to color_temp_min/max and applies reverse itself).
+        """
         settings = self.config.settings
-        denom = settings.color_temp_max - settings.color_temp_min
-        if denom == 0:
-            kelvin_pct = 50.0
-        else:
-            kelvin_pct = (
-                (light.color_temp - settings.color_temp_min)
-                / denom
-                * 100
-            )
-        if settings.reverse_color_temp:
-            kelvin_pct = 100 - kelvin_pct
-        payload = pbw.build_nspanel_entity_state_light({
-            "light": {
-                "light_id": light.id,
-                "name": light.name,
-                "state": light.state,
-                "can_color_temp": light.can_color_temperature,
-                "can_color": light.can_rgb,
-                "brightness": light.brightness,
-                "color_temp": int(kelvin_pct),
-                "hue": light.hue,
-                "saturation": light.saturation,
-                "current_light_mode": 1 if light.mode == "rgb" else 0,
-            }
-        })
-        await self._publish_protobuf(
-            light_state_topic(settings.manager_address, light.id), payload, True
-        )
+        base = f"nspanel/entities/light/{light.id}"
+        kelvin = light.color_temp or settings.color_temp_min
+        kelvin = min(max(int(kelvin), settings.color_temp_min), settings.color_temp_max)
+        await self._publish(f"{base}/state_brightness_pct", str(light.brightness if light.state else 0), True)
+        await self._publish(f"{base}/state_kelvin", str(kelvin), True)
+        await self._publish(f"{base}/state_hue", str(int(light.hue)), True)
+        await self._publish(f"{base}/state_sat", str(int(light.saturation)), True)
 
-    async def _publish_room_state(self, room_id: int) -> None:
-        room = self._room_by_id(room_id)
-        if room is None:
-            return
-        settings = self.config.settings
-        lights = [l for l in self.config.lights if l.room_id == room_id]
 
-        def avg(values: list[int]) -> int:
-            return int(sum(values) / len(values)) if values else 0
-
-        ceiling = [l for l in lights if l.light_type == "ceiling"]
-        table = [l for l in lights if l.light_type == "table"]
-        on_lights = [l for l in lights if l.state]
-        page_ids = [p.id for p in self.config.pages if p.room_id == room_id and not p.is_scenes_page]
-
-        status = pbw.build_nspanel_room_status({
-            "id": room_id,
-            "name": room.name,
-            "average_dim_level": avg([l.brightness for l in on_lights]),
-            "ceiling_lights_dim_level": avg([l.brightness for l in ceiling if l.state]),
-            "table_lights_dim_level": avg([l.brightness for l in table if l.state]),
-            "average_color_temperature": avg([l.color_temp for l in on_lights]),
-            "ceiling_lights_color_temperature_value": avg([l.color_temp for l in ceiling if l.state]),
-            "table_lights_color_temperature_value": avg([l.color_temp for l in table if l.state]),
-            "num_ceiling_lights": len(ceiling),
-            "num_table_lights": len(table),
-            "num_ceiling_lights_on": sum(1 for l in ceiling if l.state),
-            "num_table_lights_on": sum(1 for l in table if l.state),
-            "entity_page_ids": page_ids,
-        })
-        await self._publish_protobuf(room_state_topic(settings.manager_address, room_id), status, True)
-
-    async def _publish_entity_page(self, page_id: int) -> None:
-        page = next((p for p in self.config.pages if p.id == page_id), None)
-        if page is None:
-            return
-        settings = self.config.settings
-        members = (
-            [sc for sc in self.config.scenes if sc.page_id == page.id]
-            if page.is_scenes_page
-            else [l for l in self.config.lights if l.page_id == page.id]
-        )
-        members.sort(key=lambda m: m.page_slot)
-        entities = []
-        for member in members:
-            entities.append({
-                "room_view_position": member.page_slot,
-                "name": member.name,
-                "pco": 11 if page.is_scenes_page else 3,
-                "pco2": 0 if page.is_scenes_page else 7,
-                "can_save_scene": not page.is_scenes_page,
-                "mqtt_state_topic": ""
-                if page.is_scenes_page
-                else light_state_topic(settings.manager_address, member.id),
-            })
-        payload = pbw.build_nspanel_room_entities_page({
-            "id": page.id,
-            "page_type": page.page_type,
-            "header_text": "Scenes" if page.is_scenes_page else "",
-            "entities": entities,
-        })
-        await self._publish_protobuf(
-            entity_page_state_topic(settings.manager_address, page.id), payload, True
-        )
 
     # ------------------------------------------------------------------
     # Commands
     # ------------------------------------------------------------------
 
-    async def _on_panel_command(self, msg) -> None:
-        mac = mac_from_topic(msg.topic, "command")
-        panel = self._panel_by_mac(mac)
-        if panel is None or not panel.accepted:
-            return
-        try:
-            command = pbw.parse_nspanel_mqttmanager_command(msg.payload)
-        except Exception:  # noqa: BLE001
-            return
-        await self._dispatch_command(panel, command)
-
     async def _on_manager_command(self, msg) -> None:
-        """Panels (and the web preview) register via JSON on this topic."""
+        """Panel JSON commands on nspanel/mqttmanager/command.
+
+        Firmware shapes (all JSON):
+        - {"command": "register_request", "mac_origin", "friendly_name", ...}
+        - {"method": "set", "attribute": "brightness"|"kelvin"|"saturation"|"hue",
+           <attribute>: <int>, "entity_ids": [<panel light ids>]}
+        - {"command": "activate_scene"|"save_scene", "scene_id": <id>}
+        """
         try:
             data = json.loads(msg.payload)
         except (ValueError, TypeError):
+            return
+        if not isinstance(data, dict):
             return
         if data.get("command") == "register_request":
             mac = data.get("mac_origin") or data.get("mac_address") or data.get("mac") or ""
             if mac:
                 await self._handle_register_request(mac, data)
+            return
+        if data.get("command") == "activate_scene":
+            scene = next(
+                (s for s in self.config.scenes if s.id == data.get("scene_id")), None
+            )
+            if scene is not None:
+                await self._activate_scene(scene, None)
+            else:
+                _LOGGER.warning("activate_scene for unknown scene %r", data.get("scene_id"))
+            return
+        if data.get("command") == "save_scene":
+            scene = next(
+                (s for s in self.config.scenes if s.id == data.get("scene_id")), None
+            )
+            if scene is not None and not scene.ha_entity:
+                await self._save_scene(scene)
+            else:
+                _LOGGER.warning("save_scene for unknown/managed scene %r", data.get("scene_id"))
+            return
+        if data.get("method") == "set":
+            attribute = data.get("attribute", "")
+            entity_ids = data.get("entity_ids") or []
+            value_key = {"brightness": "brightness", "kelvin": "kelvin",
+                         "saturation": "saturation", "hue": "hue"}.get(attribute)
+            if value_key is None:
+                _LOGGER.warning("Unknown panel light attribute %r", attribute)
+                return
+            try:
+                value = int(data.get(value_key, 0))
+            except (ValueError, TypeError):
+                _LOGGER.warning("Bad panel light value %r", data.get(value_key))
+                return
+            for light_id in entity_ids:
+                try:
+                    lid = int(light_id)
+                except (ValueError, TypeError):
+                    continue
+                light = self._light_by_id(lid)
+                if light is None:
+                    _LOGGER.warning("Panel set for unknown light id %r", light_id)
+                    continue
+                if attribute == "brightness":
+                    lc = {"has_brightness": True, "brightness": value}
+                elif attribute == "kelvin":
+                    lc = {"has_color_temperature": True, "color_temperature": value}
+                elif attribute == "hue":
+                    lc = {"has_hue": True, "hue": value}
+                else:  # saturation
+                    lc = {"has_saturation": True, "saturation": value}
+                await self._apply_light_command(light, lc)
+            return
+        _LOGGER.debug("Ignoring unknown manager command %r", data.get("command") or data.get("method"))
 
     async def _on_relay_state(self, msg) -> None:
         state = str(msg.payload).strip().lower() in ("1", "true", "on")
@@ -823,6 +814,64 @@ class NSPanelManager:
             except Exception:  # noqa: BLE001
                 _LOGGER.exception("Relay listener failed")
 
+    def _on_stomp_send(self, frame: dict) -> None:
+        """Bridge UI actions (STOMP SEND from the browser) to MQTT.
+
+        The browser cannot publish MQTT itself. Only nspanel/<panel>/command
+        destinations from a known panel are forwarded, and the payload is
+        normalized to the JSON the firmware parses (bare words like
+        'reboot' become {"command": "reboot"}; gui_update maps to tft_update).
+        """
+        dest = str(frame.get("destination", ""))
+        parts = dest.split("/")
+        if len(parts) != 3 or parts[0] != "nspanel" or parts[2] != "command":
+            return
+        panel = self._panel_by_topic(parts[1])
+        if panel is None or not panel.accepted:
+            _LOGGER.warning("STOMP SEND to unknown/unaccepted panel %r ignored", parts[1])
+            return
+        body = str(frame.get("body", "") or "").strip()
+        try:
+            payload = json.loads(body)
+            if not isinstance(payload, dict) or "command" not in payload:
+                raise ValueError("no command key")
+        except (ValueError, TypeError):
+            command = {"gui_update": "tft_update", "firmware_update_force": "firmware_update"}.get(body, body)
+            payload = {"command": command}
+        self.hass.async_create_task(
+            self._publish(panel_mqtt_topic(panel.name, "command"), json.dumps(payload))
+        )
+
+    async def _on_panel_log(self, msg) -> None:
+        """Forward panel log lines to the UI over STOMP.
+
+        The firmware publishes JSON lines to nspanel/<hostname>/log; the edit
+        page subscribes to nspanel/<mac>/log (live) and .../log_backlog.
+        """
+        segment = mac_from_topic(msg.topic, "log")
+        if not segment:
+            return
+        panel = self._panel_by_topic(segment)
+        if panel is None or self.stomp is None:
+            return
+        if isinstance(msg.payload, (bytes, bytearray)):
+            text = msg.payload.decode("utf-8", "replace")
+        else:
+            text = str(msg.payload)
+        try:
+            entry = json.loads(text)
+            if not isinstance(entry, dict):
+                entry = {"time": "", "level": "INFO", "message": text}
+        except (ValueError, TypeError):
+            entry = {"time": "", "level": "INFO", "message": text}
+        backlog = self._log_backlog.setdefault(panel.mac, [])
+        backlog.append(entry)
+        del backlog[:-50]
+        base = panel_topic(panel.mac, "log")
+        self.stomp.update_topic(base, json.dumps(entry))
+        self.stomp.set_retained(f"{base}_backlog", True)
+        self.stomp.update_topic(f"{base}_backlog", json.dumps({"logs": backlog}))
+
     def _register_accept_reply(self, panel: PanelConfig) -> str:
         return json.dumps({
             "command": "register_accept",
@@ -830,100 +879,6 @@ class NSPanelManager:
             "port": self.config.settings.manager_port,
             "config_topic": f"nspanel/{panel.mac}/config",
         })
-
-    async def _dispatch_command(self, panel: PanelConfig, command: dict) -> None:
-        kind = command.get("kind")
-
-        if kind == "light_command":
-            for light_id in command.get("light_ids", []):
-                light = self._light_by_id(light_id)
-                if light is None:
-                    continue
-                await self._apply_light_command(
-                    light,
-                    {
-                        "has_brightness": bool(command.get("has_brightness")),
-                        "brightness": command.get("brightness", 0),
-                        "has_color_temperature": bool(command.get("has_color_temperature")),
-                        "color_temperature": command.get("color_temperature", 0),
-                        "has_hue": bool(command.get("has_hue")),
-                        "hue": command.get("hue", 0),
-                        "has_saturation": bool(command.get("has_saturation")),
-                        "saturation": command.get("saturation", 0),
-                    },
-                )
-        elif kind == "toggle_entity_from_entities_page":
-            page_id = command.get("entity_page_id")
-            slot = command.get("entity_slot")
-            # Scene activation (NSPM or HA scene)
-            scene = next(
-                (sc for sc in self.config.scenes if sc.page_id == page_id and sc.page_slot == slot),
-                None,
-            )
-            if scene is not None:
-                await self._activate_scene(scene, panel.room_id)
-                return
-            # Light toggle
-            light = next(
-                (
-                    l
-                    for l in self.config.lights
-                    if l.page_id == page_id
-                    and l.page_slot == slot
-                ),
-                None,
-            )
-            if light:
-                await self._apply_light_command(light, None, toggle_on=not light.state)
-        elif kind == "first_page_turn_on":
-            await self._first_page_turn(
-                panel,
-                command.get("first_page_turn_on_affect_lights", 0),
-                command.get("brightness_slider_value", 0),
-                command.get("kelvin_slider_value", 0),
-                True,
-            )
-        elif kind == "first_page_turn_off":
-            await self._first_page_turn(
-                panel,
-                command.get("first_page_turn_off_affect_lights", 0),
-                None,
-                None,
-                False,
-            )
-        elif kind == "save_scene_command":
-            await self._save_scene(command.get("entity_page_id"), command.get("entity_slot"))
-        elif kind == "thermostat_temperature_command":
-            tid = command.get("thermostat_id")
-            temp = command.get("temperature")
-            th = next((t for t in self.config.thermostats if t.id == tid), None)
-            if th is not None and th.ha_entity:
-                await self.hass.services.async_call(
-                    "climate", "set_temperature",
-                    {"entity_id": th.ha_entity, "temperature": temp},
-                )
-                th.set_temperature = float(temp or 0)
-                await self.async_save()
-        elif kind == "thermostat_command":
-            tid = command.get("thermostat_id")
-            option = command.get("option", "")
-            new_value = command.get("new_value", "")
-            th = next((t for t in self.config.thermostats if t.id == tid), None)
-            if th is not None and th.ha_entity:
-                if option == "mode" or option == "hvac_mode":
-                    await self.hass.services.async_call(
-                        "climate", "set_hvac_mode",
-                        {"entity_id": th.ha_entity, "hvac_mode": new_value},
-                    )
-                elif option == "fan_mode":
-                    await self.hass.services.async_call(
-                        "climate", "set_fan_mode",
-                        {"entity_id": th.ha_entity, "fan_mode": new_value},
-                    )
-        elif kind == "button_pressed":
-            pass
-
-        await self._publish(config_reload_topic(), "1", False)
 
     async def _apply_light_command(self, light: LightConfig, lc: dict | None, toggle_on: bool | None = None) -> None:
         settings = self.config.settings
@@ -960,39 +915,12 @@ class NSPanelManager:
             "light", service, {"entity_id": light.ha_entity, **service_data}
         )
         await self._publish_light_state(light)
-        await self._publish_room_state(light.room_id)
 
-    async def _first_page_turn(
-        self, panel: PanelConfig, affect: int, brightness: int, kelvin: int, turn_on: bool
-    ) -> None:
-        # affect: 0=ALL 1=TABLE 2=CEILING (protobuf AffectLightsOptions)
-        lights = [l for l in self.config.lights if l.room_id == panel.room_id]
-        if affect == 1:
-            lights = [l for l in lights if l.light_type == "table"]
-        elif affect == 2:
-            lights = [l for l in lights if l.light_type == "ceiling"]
-        for light in lights:
-            if turn_on:
-                await self._apply_light_command(light, None, toggle_on=True)
-                if brightness:
-                    light.brightness = brightness
-                    await self.hass.services.async_call(
-                        "light",
-                        "turn_on",
-                        {"entity_id": light.ha_entity, "brightness_pct": brightness},
-                    )
-            else:
-                await self._apply_light_command(light, None, toggle_on=False)
-
-    async def _save_scene(self, page_id: int, slot: int) -> None:
-        scene = next(
-            (s for s in self.config.scenes if s.page_id == page_id and s.page_slot == slot), None
-        )
-        if scene is None or scene.ha_entity:
-            return
-        light_states = []
-        page = next((p for p in self.config.pages if p.id == page_id), None)
+    async def _save_scene(self, scene: SceneConfig) -> None:
+        """Save current light states into an NSPM-managed scene."""
+        page = next((p for p in self.config.pages if p.id == scene.page_id), None)
         room_id = page.room_id if page and page.room_id else None
+        light_states = []
         for light in self.config.lights:
             if room_id is None or light.room_id != room_id:
                 continue
@@ -1008,14 +936,26 @@ class NSPanelManager:
             )
         scene.light_states = light_states
         await self.async_save()
+        _LOGGER.info("Saved scene %s (%s)", scene.id, scene.name)
 
     async def _poll_weather(self, now) -> None:
+        """Poll open-meteo and publish the JSON the firmware renders.
+
+        nspanel/status/weather (retained JSON): icon/temp/wind/sunrise/
+        sunset/maxmin/prepro + forecast[] of {day,icon,maxmin,prepro,wind}.
+        """
+        from homeassistant.helpers import aiohttp_client
+        from homeassistant.util import dt as dt_util
+
         s = self.config.settings
-        if not s.location_latitude or not s.location_longitude:
+        try:
+            lat = float(s.location_latitude)
+            lon = float(s.location_longitude)
+        except (ValueError, TypeError):
+            return
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
             return
         try:
-            lat = s.location_latitude
-            lon = s.location_longitude
             temp_unit = "fahrenheit" if s.use_fahrenheit else "celsius"
             precip_unit = "inch" if s.precipitation_format == "inch" else "mm"
             wind_unit = {"kmh": "kmh", "ms": "ms", "mph": "mph", "kn": "kn"}.get(s.wind_speed_format, "kmh")
@@ -1025,24 +965,34 @@ class NSPanelManager:
                 f"&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max"
                 f"&timeformat=unixtime&temperature_unit={temp_unit}&precipitation_unit={precip_unit}&wind_speed_unit={wind_unit}&timezone=auto"
             )
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    if resp.status != 200:
-                        _LOGGER.warning("Weather fetch failed: HTTP %s", resp.status)
-                        return
-                    data = await resp.json()
+            session = aiohttp_client.async_get_clientsession(self.hass)
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    _LOGGER.warning("Weather fetch failed: HTTP %s", resp.status)
+                    return
+                data = await resp.json()
             ICONS = {0: "sunny", 1: "partlytuner weather_day", 2: "cloudy_weather_day", 3: "overcast",
                      45: "fog", 48: "fog", 51: "rainy", 53: "rainy", 55: "rainy", 56: "sleet", 57: "sleet",
                      61: "rainy", 63: "rainy", 65: "rainy", 66: "sleet", 67: "sleet", 71: "snowy", 73: "snowy",
                      75: "snowy", 77: "snowy", 80: "rainy", 81: "rainy", 82: "rainy", 85: "snowy", 86: "snowy",
                      95: "thunderstorm", 96: "thunderstorm", 99: "thunderstorm"}
             def icon(code):
-                return ICONS.get(int(code), "cloudy_weather_day")
+                try:
+                    return ICONS.get(int(code), "cloudy_weather_day")
+                except (ValueError, TypeError):
+                    return "cloudy_weather_day"
+            def num(v, default=0):
+                try:
+                    return v if isinstance(v, (int, float)) else float(v)
+                except (ValueError, TypeError):
+                    return default
             def fmt_temp(v):
+                v = num(v)
                 if s.use_fahrenheit:
                     return f"{int(round(v))}°F"
                 return f"{int(round(v))}°C"
             def fmt_wind(v):
+                v = num(v)
                 if s.wind_speed_format == "ms":
                     return f"{v:.1f} m/s"
                 if s.wind_speed_format == "mph":
@@ -1050,35 +1000,48 @@ class NSPanelManager:
                 if s.wind_speed_format == "kn":
                     return f"{int(round(v))} kn"
                 return f"{int(round(v))} km/h"
-            cur = data.get("current", {})
-            daily = data.get("daily", {})
-            from datetime import datetime, timezone
-            def fmt_time(ts):
+            def fmt_time_local(ts):
                 try:
-                    return datetime.fromtimestamp(int(ts), tz=timezone.utc).strftime("%H:%M")
-                except Exception:
+                    return dt_util.as_local(
+                        dt_util.utc_from_timestamp(int(ts))
+                    ).strftime("%H:%M")
+                except Exception:  # noqa: BLE001
                     return ""
-            forecast_items = []
-            for i in range(min(4, len(daily.get("weather_code", [])))):
-                forecast_items.append({
-                    "weather_icon": icon(daily["weather_code"][i]),
-                    "precipitation_string": f"{precip_unit} {int(daily.get('precipitation_probability_max', [0])[i] if i < len(daily.get('precipitation_probability_max', [])) else 0)}%",
-                    "temperature_maxmin_string": f"{fmt_temp(daily['temperature_2m_max'][i])}/{fmt_temp(daily['temperature_2m_min'][i])}",
-                    "wind_string": fmt_wind(daily.get("wind_speed_10m_max", [0])[i] if i < len(daily.get("wind_speed_10m_max", [])) else 0),
-                    "display_string": "",
+            def day_name(ts):
+                try:
+                    return dt_util.as_local(
+                        dt_util.utc_from_timestamp(int(ts))
+                    ).strftime("%a")
+                except Exception:  # noqa: BLE001
+                    return ""
+            cur = data.get("current", {}) or {}
+            daily = data.get("daily", {}) or {}
+
+            def dl(key, i, default=0):
+                vals = daily.get(key) or []
+                return vals[i] if i < len(vals) else default
+
+            n_days = min(5, len(daily.get("weather_code", []) or []))
+            forecast = []
+            for i in range(n_days):
+                forecast.append({
+                    "day": day_name(dl("time", i, 0)),
+                    "icon": icon(dl("weather_code", i, 0)),
+                    "maxmin": f"{fmt_temp(dl('temperature_2m_max', i))}/{fmt_temp(dl('temperature_2m_min', i))}",
+                    "prepro": f"{precip_unit} {int(num(dl('precipitation_probability_max', i)))}%",
+                    "wind": fmt_wind(dl("wind_speed_10m_max", i)),
                 })
             payload = {
-                "forecast_items": forecast_items,
-                "current_weather_icon": icon(cur.get("weather_code", 0)),
-                "current_temperature_string": fmt_temp(cur.get("temperature_2m", 0)),
-                "current_maxmin_temperature": f"{fmt_temp((daily.get('temperature_2m_max') or [0])[0])}/{fmt_temp((daily.get('temperature_2m_min') or [0])[0])}",
-                "current_wind_string": fmt_wind(cur.get("wind_speed_10m", 0)),
-                "sunrise_string": fmt_time((daily.get("sunrise") or [0])[0]),
-                "sunset_string": fmt_time((daily.get("sunset") or [0])[0]),
-                "current_precipitation_string": f"{cur.get('precipitation', 0)} {precip_unit}",
+                "icon": icon(cur.get("weather_code", 0)),
+                "temp": fmt_temp(cur.get("temperature_2m", 0)),
+                "wind": fmt_wind(cur.get("wind_speed_10m", 0)),
+                "sunrise": fmt_time_local(dl("sunrise", 0, 0)),
+                "sunset": fmt_time_local(dl("sunset", 0, 0)),
+                "maxmin": f"{fmt_temp(dl('temperature_2m_max', 0))}/{fmt_temp(dl('temperature_2m_min', 0))}",
+                "prepro": f"{num(cur.get('precipitation', 0))} {precip_unit}",
+                "forecast": forecast,
             }
-            encoded = pbw.build_nspanel_weather_update(payload)
-            await self._publish(weather_topic(s.manager_address), encoded, True)
+            await self._publish("nspanel/status/weather", json.dumps(payload), True)
             _LOGGER.debug("Weather update published")
         except Exception as exc:  # noqa: BLE001
             _LOGGER.warning("Weather poll failed: %s", exc)
@@ -1123,20 +1086,11 @@ class NSPanelManager:
                     svc_data["hs_color"] = (light.hue, light.saturation)
                 await self.hass.services.async_call("light", "turn_on", svc_data)
             await self._publish_light_state(light)
-        page = next((p for p in self.config.pages if p.id == scene.page_id), None)
-        if page and page.room_id:
-            await self._publish_room_state(page.room_id)
 
     async def _republish_all_state(self) -> None:
-        """Republish room states, entity pages, light states for all rooms."""
-        for room in self.config.rooms:
-            await self._publish_room_state(room.id)
-        for page in self.config.pages:
-            await self._publish_entity_page(page.id)
+        """Republish light states for all mapped lights (plain-text topics)."""
         for light in self.config.lights:
             await self._publish_light_state(light)
-        for th in self.config.thermostats:
-            await self._publish_thermostat_state(th)
         await self._publish_time(None)
 
     # ------------------------------------------------------------------
@@ -1145,15 +1099,29 @@ class NSPanelManager:
 
 
     async def _publish_time(self, now) -> None:
-        settings = self.config.settings
-        from datetime import datetime
+        from homeassistant.util import dt as dt_util
 
-        current = now or datetime.now()
+        settings = self.config.settings
+        current = dt_util.as_local(now) if now else dt_util.now()
         time_str = (
-            current.strftime("%I:%M") if settings.clock_us_style else current.strftime("%H:%M")
+            current.strftime("%I:%M")
+            if settings.clock_us_style
+            else current.strftime("%H:%M")
         )
         ampm = current.strftime("%p") if settings.clock_us_style else ""
-        date_str = current.strftime(settings.date_format or "%d/%m")
-        await self._publish(time_topic(settings.manager_address), time_str, True)
-        await self._publish(ampm_topic(settings.manager_address), ampm, True)
-        await self._publish(date_topic(settings.manager_address), date_str, True)
+        try:
+            date_str = current.strftime(settings.date_format or "%d/%m")
+        except (ValueError, TypeError):
+            date_str = current.strftime("%d/%m")
+        # Legacy fixed topics the firmware subscribes to (ScreensaverPage).
+        await self._publish("nspanel/status/time", time_str, True)
+        await self._publish("nspanel/status/date", date_str, True)
+        await self._publish("nspanel/status/ampm", ampm, True)
+        # Per-panel screensaver mode (ScreensaverPage subscribes to it).
+        for panel in self.config.panels:
+            if panel.accepted:
+                await self._publish(
+                    panel_mqtt_topic(panel.name, "screensaver_mode"),
+                    str(panel.screensaver_mode),
+                    True,
+                )

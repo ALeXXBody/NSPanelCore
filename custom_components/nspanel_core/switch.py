@@ -47,14 +47,16 @@ class RelaySwitch(SwitchEntity):
         self._attr_name = f"Relay {relay}"
         self._attr_unique_id = f"{DOMAIN}_{topic_safe(panel.mac)}_relay{relay}"
         self._state = False
-        entry.async_on_unload(manager.add_relay_listener(panel.mac, relay, self._on_state))
+        entry.async_on_unload(manager.add_relay_listener(panel, relay, self._on_state))
 
     def _on_state(self, state: bool) -> None:
         self._state = state
         self.schedule_update_ha_state()
 
     def _subscribe_topic(self) -> str:
-        return f"nspanel/{self._panel.mac}/relay{self._relay}_state"
+        from .const import panel_mqtt_topic
+
+        return panel_mqtt_topic(self._panel.name, f"r{self._relay}_state")
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -74,7 +76,7 @@ class RelaySwitch(SwitchEntity):
         return self._state
 
     async def async_turn_on(self, **kwargs) -> None:
-        await self._manager.set_relay(self._panel.mac, self._relay, True)
+        await self._manager.set_relay(self._panel, self._relay, True)
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._manager.set_relay(self._panel.mac, self._relay, False)
+        await self._manager.set_relay(self._panel, self._relay, False)
