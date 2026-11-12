@@ -268,6 +268,7 @@ iframe at the new UI path.
 | v1.3.13 | 2026-11-12 | Live-token postMessage path + banner-hide fix |
 | v1.3.14 | 2026-11-12 | Fresh 0.1.152 firmware build shipped; auto data-file OTA disabled (wipes remote WiFi) |
 | v1.3.15 | 2026-11-12 | Panel setup page + About dialog rebranded to NSPanel Core; rebuilt data fs + merged images |
+| v1.3.16 | 2026-11-12 | Fix OTA progress display (manager published "progress", UI read "update_progress" — always blank); verified live render |
 
 ---
 
