@@ -2,10 +2,11 @@ var _last_dropdown_id_activated = "";
 var _last_collapse_id_activated = "";
 
 // HA access token for authenticated API calls. The UI runs in HA's sidebar
-// iframe (same origin), so HA's own tokens are readable. HA stores them in
-// localStorage ("Remember me" checked) or sessionStorage (unchecked —
-// same-tab only, which is exactly our iframe's case). Check both, in every
-// reachable same-origin scope, mirroring what the HA frontend itself does.
+// iframe (same origin). Primary source: the live token HA pushes to our
+// panel element (panel.js forwards hass.auth via postMessage) — works even
+// with empty/partitioned browser storage. Fallback: HA's stored tokens in
+// localStorage ("Remember me") or sessionStorage (unchecked), in every
+// reachable same-origin scope, mirroring the frontend.
 // Sent as Authorization: Bearer on every htmx/fetch call and as the STOMP
 // CONNECT access_token header. Document loads (iframe src) can't carry it,
 // which is why only XHR/mutations require auth server-side.
@@ -27,11 +28,37 @@ function nspanelTokenStore() {
   }
   return null;
 }
+// Live token pushed by the panel frame (panel.js forwards HA's own live
+// hass.auth token via postMessage). Same-origin only; in-memory only, never
+// persisted. Takes precedence over stored tokens because it tracks the live
+// HA session even when browser storage is empty, partitioned, or wiped by
+// privacy tools. Storage-based lookup below remains as fallback.
+var nspanelLiveToken = "";
+try {
+  window.addEventListener("message", function (ev) {
+    try {
+      if (!ev || ev.origin !== window.location.origin) return;
+      var d = ev.data;
+      if (d && d.type === "nspanel-hass-token" && typeof d.access_token === "string" && d.access_token) {
+        nspanelLiveToken = d.access_token;
+        // Hide the login banner directly (nspanelRecheckLogin lives in the
+        // ready-scope below and isn't visible from here).
+        try {
+          var bar = document.getElementById("nspanel-login-banner");
+          if (bar) bar.remove();
+        } catch (e2) {}
+      }
+    } catch (e) {}
+  });
+} catch (e) {}
 function nspanelGetToken() {
+  try {
+    if (typeof nspanelLiveToken === "string" && nspanelLiveToken) return nspanelLiveToken;
+  } catch (e) {}
   try {
     var found = nspanelTokenStore();
     return found ? found.tokens.access_token : "";
-  } catch (e) {
+  } catch (e2) {
     return "";
   }
 }
