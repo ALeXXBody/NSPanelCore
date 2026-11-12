@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import pathlib
 from dataclasses import asdict
 from datetime import timedelta
 from typing import Any
@@ -52,7 +53,16 @@ from .panel_pb import messages as pbw
 
 _LOGGER = logging.getLogger(__name__)
 
-_MANAGER_VERSION = "v1.3.1"
+_MANIFEST_PATH = pathlib.Path(__file__).parent / "manifest.json"
+_MANAGER_VERSION = "v0.0.0"
+
+
+def _read_manifest_version() -> str:
+    """Read the integration version from manifest.json (executor only)."""
+    try:
+        return "v" + json.loads(_MANIFEST_PATH.read_text(encoding="utf-8"))["version"]
+    except Exception:  # noqa: BLE001
+        return "v0.0.0"
 
 
 def mac_from_topic(topic: str, suffix: str) -> str:
@@ -85,9 +95,17 @@ class NSPanelManager:
         data = await self._store.async_load()
         self.config = IntegrationConfig.from_dict(data or {})
 
+        # Read manifest.json in the executor: it is blocking I/O and this
+        # runs on the event loop.
+        global _MANAGER_VERSION
+        _MANAGER_VERSION = await self.hass.async_add_executor_job(_read_manifest_version)
+
         # Original manager UI: STOMP server (live updates) + converted pages.
         from .stomp_server import StompServer
+        from . import dashboard
         from .dashboard import async_register_ui
+
+        dashboard._DASHBOARD_VERSION = _MANAGER_VERSION
 
         self.stomp = StompServer()
         async_register_ui(self.hass, self.entry.entry_id)

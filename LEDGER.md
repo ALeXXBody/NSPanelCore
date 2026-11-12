@@ -19,7 +19,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 - **Zero external dependencies**: hand-rolled protobuf codec (byte-identical to generated code)
 
 **Repository:** `ALeXXBody/NSPanelCore` (GitHub)
-**Current version:** v1.3.2
+**Current version:** v1.3.3
 **License:** GPL-3.0
 **Credits:** Original NSPanel Manager team (upstream)
 
@@ -70,7 +70,29 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | F7 | Command handling (light, scene, thermostat, etc.) | ✅ Done | Protobuf on nspanel/<mac>/command |
 | F8 | Config reception (NSPanelConfig protobuf) | ✅ Done | On nspanel/<mac>/config (retained) |
 
-### 2.3 Cross-cutting
+### 2.3 Request — sidebar panel blank page / refresh (2026-11-12)
+
+| # | Request | Status |
+|---|---------|--------|
+| P1 | Sidebar panel must never render blank | ✅ Done (v1.3.3, browser-verified) |
+| P2 | Refreshing `/nspanel_core` must stay inside HA's content area (no bounce to `/`, no full takeover) | ✅ Done (v1.3.3, browser-verified) |
+| P3 | No HA `hass-subpage` title bar above the UI; navbar stays | ✅ Done (v1.3.0) |
+| P4 | Logo slightly bigger; version read from `manifest.json` with `v` prefix; responsive | ✅ Done (v1.3.3: 40px logo, v1.3.3, 820px viewport OK) |
+| P5 | Verify in a real browser (Playwright + Chromium), not by inspection | ✅ Done (direct load + reload, 1184×900) |
+
+**Root cause found (evidence):** `MainPageView` was registered at the exact
+path `/nspanel_core`, the same path `panel_custom` reserves for HA's SPA.
+A direct load/refresh of `/nspanel_core` therefore returned the integration's
+own Jinja page instead of HA's SPA; that page contained
+`if (window.self === window.top) location.href = "/"`, which bounced the
+browser out of the panel. Inside the iframe the page was fine, which is why
+the panel sometimes looked blank/missing after a refresh on newer HA.
+
+**Fix under test:** serve the UI at `/nspanel_core/ui`, leave `/nspanel_core`
+to HA's SPA (panel route), delete the redirect script, and point the panel
+iframe at the new UI path.
+
+### 2.4 Cross-cutting
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
@@ -112,6 +134,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | 1 | 2026-11-11 | Missing _on_relay_state, merged classes, 14 template errors | v1.3.1 |
 | 2 | 2026-11-12 | sensor.py attribute access, _send_panel_config pages filtering, division by zero, date format, apply_settings await, _manager null guard, model to_dict/from_dict, blocking I/O | v1.3.1 |
 | 3 | 2026-11-12 | Blocking I/O, sensor attribute access, _send_panel_config, _manager guard, apply_settings await, kelvin_pct guard, date_format, model to_dict/from_dict, EditRoomView, hs_color bounds | v1.3.2 |
+| 4 | 2026-11-12 | Route collision (`/nspanel_core` UI shadowed HA SPA → refresh bounce), redirect script, hardcoded version, blocking manifest read | v1.3.3 |
 
 ---
 
@@ -158,6 +181,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | v1.3.0 | 2026-11-12 | Panel header removal, responsive, brand icons |
 | v1.3.1 | 2026-11-12 | Full audit fixes (25+ bugs) |
 | v1.3.2 | 2026-11-12 | Audit round 2: 18 more bugs fixed |
+| v1.3.3 | 2026-11-12 | UI moved to `/nspanel_core/ui` (fixes refresh bounce/blank panel), dynamic version, 40px logo |
 
 ---
 

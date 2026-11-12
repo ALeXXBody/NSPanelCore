@@ -11,7 +11,7 @@ class NSPanelCorePanel extends HTMLElement {
     this.style.cssText = "display:block;width:100%;height:100%;min-height:100vh;";
 
     const iframe = document.createElement("iframe");
-    iframe.src = "/nspanel_core";
+    iframe.src = "/nspanel_core/ui";
     iframe.title = "NSPanel Core";
     iframe.style.cssText = "border:0;width:100%;height:100%;min-height:100vh;display:block;";
     iframe.setAttribute("allowfullscreen", "");

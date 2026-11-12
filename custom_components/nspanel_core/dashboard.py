@@ -50,10 +50,16 @@ class _RoomView:
 
 
 URL_BASE = "/nspanel_core"
+# The UI lives on its own path so /nspanel_core stays reserved for HA's SPA
+# (panel_custom owns that route). Serving the UI at /nspanel_core shadowed the
+# SPA, so a browser refresh loaded the UI top-level and the old redirect
+# script bounced it to "/" — the panel then appeared missing/blank.
+UI_PATH = f"{URL_BASE}/ui"
 
 _TEMPLATE_CACHE = {}
 
-_DASHBOARD_VERSION = "v1.3.1"
+# Set by the manager from manifest.json (read in the executor) at startup.
+_DASHBOARD_VERSION = "v0.0.0"
 
 UI_DIR = pathlib.Path(__file__).parent / "ui"
 TEMPLATES_DIR = UI_DIR / "templates"
@@ -151,7 +157,7 @@ def _panels_context(manager) -> list[dict]:
 class MainPageView(HomeAssistantView):
     """The NSPanels page — original templates, live via STOMP."""
 
-    url = URL_BASE
+    url = UI_PATH
     name = "nspanel_core:page"
     requires_auth = False
 
@@ -357,7 +363,7 @@ class SavePanelSettingsView(HomeAssistantView):
                 pass
         await manager.async_save()
         await manager._send_panel_config(panel)
-        raise web.HTTPFound(f"{URL_BASE}")
+        raise web.HTTPFound(UI_PATH)
 
 
 class GlobalScenesView(HomeAssistantView):
@@ -908,7 +914,7 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
                 sidebar_icon="mdi:tablet-dashboard",
                 module_url=f"{URL_BASE}/static/panel.js",
                 embed_iframe=True,
-                config={"url": URL_BASE},
+                config={"url": UI_PATH},
                 require_admin=True,
             )
             _LOGGER.info("NSPanel Core sidebar panel registered at %s", URL_BASE)
