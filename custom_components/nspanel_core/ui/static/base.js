@@ -7,16 +7,6 @@ var _last_collapse_id_activated = "";
 // CONNECT access_token header. Document loads (iframe src) can't carry it,
 // which is why only XHR/mutations require auth server-side.
 function nspanelGetToken() {
-  // Manual override first: if the HA session tokens are missing or stale
-  // (long-open tabs, remote URLs with a dead session), the user can paste a
-  // long-lived token once via the browser console:
-  //   localStorage.setItem('nspanelCoreToken', '<token from Profile > Security>')
-  // This stays in the browser only — it is never sent to the server except
-  // as the Authorization bearer header, and never stored server-side.
-  try {
-    var manual = window.localStorage.getItem("nspanelCoreToken");
-    if (manual && manual.trim()) return manual.trim();
-  } catch (e) {}
   var scopes = [];
   try { scopes.push(window.localStorage); } catch (e) {}
   try { if (window.parent && window.parent !== window) scopes.push(window.parent.localStorage); } catch (e) {}
@@ -158,7 +148,32 @@ $(document).ready(function () {
     }
   });
 
-  // Proactively refresh the HA access token when it is about to expire.
+  // Login state: NSPanel Core pages are public documents (an iframe cannot
+// send Authorization headers on navigation), so a logged-out visitor sees
+// the UI but every action 401s. Detect that up front and say so plainly,
+// with a link into HA's own login flow — never ask the user to handle
+// tokens by hand.
+function nspanelShowLoginBanner() {
+  try {
+    if (document.getElementById("nspanel-login-banner")) return;
+    var bar = document.createElement("div");
+    bar.id = "nspanel-login-banner";
+    bar.setAttribute("style", "background:#7a2e2e;color:#fff;padding:10px 16px;font-size:14px;text-align:center;position:sticky;top:0;z-index:9999;");
+    bar.innerHTML = 'You are not logged in to Home Assistant in this browser tab, so NSPanel Core actions will fail. <a href="/" style="color:#fff;font-weight:bold;text-decoration:underline;">Log in to Home Assistant</a>, then reload this page.';
+    if (document.body) document.body.prepend(bar);
+    else document.addEventListener("DOMContentLoaded", function () { document.body.prepend(bar); }, { once: true });
+  } catch (e) {}
+}
+
+function nspanelHasToken() {
+  return !!nspanelGetToken();
+}
+
+try {
+  if (!nspanelHasToken()) nspanelShowLoginBanner();
+} catch (e) {}
+
+// Proactively refresh the HA access token when it is about to expire.
   // HA access tokens live ~30 min; a stale one makes every authed call
   // 401. The refresh uses the stored refresh_token and updates the same
   // localStorage entry the frontend uses. client_id must match the one
