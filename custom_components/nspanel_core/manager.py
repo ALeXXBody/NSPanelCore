@@ -52,6 +52,13 @@ from .panel_pb import messages as pbw
 
 _LOGGER = logging.getLogger(__name__)
 
+import json as _json_mod
+import pathlib as _pathlib_mod
+try:
+    _MANAGER_VERSION = "v" + _json_mod.loads((_pathlib_mod.Path(__file__).parent / "manifest.json").read_text()).get("version", "1.3.1")
+except Exception:
+    _MANAGER_VERSION = "v1.3.1"
+
 
 def mac_from_topic(topic: str, suffix: str) -> str:
     parts = topic.split("/")
@@ -157,15 +164,9 @@ class NSPanelManager:
         await self._publish(topic, message, retain)
 
     async def _publish_manager_status(self) -> None:
-        import json as _j
-        import pathlib as _p
-        try:
-            _version = "v" + _j.loads((_p.Path(__file__).parent / "manifest.json").read_text()).get("version", "1.3.1")
-        except Exception:
-            _version = "v1.3.1"
         await self._publish(
             status_topic(self.config.settings.manager_address),
-            json.dumps({"state": "online", "version": _version}),
+            json.dumps({"state": "online", "version": _MANAGER_VERSION}),
             True,
         )
 

@@ -51,6 +51,13 @@ class _RoomView:
 
 URL_BASE = "/nspanel_core"
 
+import json as _json_mod2
+import pathlib as _pathlib_mod2
+try:
+    _DASHBOARD_VERSION = "v" + _json_mod2.loads((_pathlib_mod2.Path(__file__).parent / "manifest.json").read_text()).get("version", "1.3.1")
+except Exception:
+    _DASHBOARD_VERSION = "v1.3.1"
+
 UI_DIR = pathlib.Path(__file__).parent / "ui"
 TEMPLATES_DIR = UI_DIR / "templates"
 STATIC_DIR = UI_DIR / "static"
@@ -98,14 +105,7 @@ def _render(template_name: str, **context) -> str:
     env.filters["base64_encode"] = _base64_encode
     template = env.get_template(template_name)
     context.setdefault("notifications", [])
-    import json as _json
-    import pathlib as _pathlib
-    _manifest_path = _pathlib.Path(__file__).parent / "manifest.json"
-    try:
-        _ver = _json.loads(_manifest_path.read_text()).get("version", "1.2.0")
-    except Exception:
-        _ver = "1.2.0"
-    context.setdefault("version", f"v{_ver}")
+    context.setdefault("version", _DASHBOARD_VERSION)
     context.setdefault("has_unread_messages", False)
     context.setdefault("mqtt_password", "")
     context.setdefault("home_assistant_token", "")
