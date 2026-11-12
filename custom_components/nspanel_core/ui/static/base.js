@@ -149,19 +149,41 @@ $(document).ready(function () {
   });
 
   // Login state: NSPanel Core pages are public documents (an iframe cannot
-// send Authorization headers on navigation), so a logged-out visitor sees
-// the UI but every action 401s. Detect that up front and say so plainly,
-// with a link into HA's own login flow — never ask the user to handle
-// tokens by hand.
+// send Authorization headers on navigation), so without a session the UI
+// renders but every action fails with 401. That usually means this tab was
+// opened directly (bookmark/typed URL) instead of from inside Home
+// Assistant, or the session here expired — the login lives per address, so
+// working HA elsewhere doesn't carry over. Say so plainly with a way back
+// into HA's own login flow — never ask the user to handle tokens by hand.
 function nspanelShowLoginBanner() {
   try {
     if (document.getElementById("nspanel-login-banner")) return;
     var bar = document.createElement("div");
     bar.id = "nspanel-login-banner";
     bar.setAttribute("style", "background:#7a2e2e;color:#fff;padding:10px 16px;font-size:14px;text-align:center;position:sticky;top:0;z-index:9999;");
-    bar.innerHTML = 'You are not logged in to Home Assistant in this browser tab, so NSPanel Core actions will fail. <a href="/" style="color:#fff;font-weight:bold;text-decoration:underline;">Log in to Home Assistant</a>, then reload this page.';
-    if (document.body) document.body.prepend(bar);
-    else document.addEventListener("DOMContentLoaded", function () { document.body.prepend(bar); }, { once: true });
+    bar.innerHTML = 'NSPanel Core actions need a Home Assistant login in this browser tab (open the panel from inside Home Assistant, not via a direct link). <a href="/" style="color:#fff;font-weight:bold;text-decoration:underline;">Open Home Assistant login</a> &middot; <a href="#" id="nspanel-login-recheck" style="color:#fff;font-weight:bold;text-decoration:underline;">Check again</a>';
+    var mount = function () {
+      try {
+        if (document.body && !document.getElementById("nspanel-login-banner")) document.body.prepend(bar);
+        var again = document.getElementById("nspanel-login-recheck");
+        if (again) again.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          try {
+            if (nspanelHasToken()) { document.getElementById("nspanel-login-banner").remove(); window.location.reload(); }
+            else { alert("Still no login found in this tab. Log in to Home Assistant first (same address as this page), then come back."); }
+          } catch (e) {}
+        });
+      } catch (e) {}
+    };
+    if (document.body) mount();
+    else document.addEventListener("DOMContentLoaded", mount, { once: true });
+  } catch (e) {}
+}
+
+function nspanelHideLoginBanner() {
+  try {
+    var bar = document.getElementById("nspanel-login-banner");
+    if (bar) bar.remove();
   } catch (e) {}
 }
 
@@ -169,8 +191,26 @@ function nspanelHasToken() {
   return !!nspanelGetToken();
 }
 
+function nspanelRecheckLogin() {
+  try {
+    if (nspanelHasToken()) nspanelHideLoginBanner();
+    else nspanelShowLoginBanner();
+  } catch (e) {}
+}
+
 try {
-  if (!nspanelHasToken()) nspanelShowLoginBanner();
+  // Check now, once more shortly after load (the parent SPA may still be
+  // writing its tokens when we first run), and whenever storage changes
+  // (e.g. login completed in another tab).
+  nspanelRecheckLogin();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { setTimeout(nspanelRecheckLogin, 3000); }, { once: true });
+  } else {
+    setTimeout(nspanelRecheckLogin, 3000);
+  }
+  window.addEventListener("storage", function (e) {
+    if (!e || !e.key || e.key === "hassTokens") nspanelRecheckLogin();
+  });
 } catch (e) {}
 
 // Proactively refresh the HA access token when it is about to expire.
