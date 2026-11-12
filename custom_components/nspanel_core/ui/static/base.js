@@ -7,6 +7,16 @@ var _last_collapse_id_activated = "";
 // CONNECT access_token header. Document loads (iframe src) can't carry it,
 // which is why only XHR/mutations require auth server-side.
 function nspanelGetToken() {
+  // Manual override first: if the HA session tokens are missing or stale
+  // (long-open tabs, remote URLs with a dead session), the user can paste a
+  // long-lived token once via the browser console:
+  //   localStorage.setItem('nspanelCoreToken', '<token from Profile > Security>')
+  // This stays in the browser only — it is never sent to the server except
+  // as the Authorization bearer header, and never stored server-side.
+  try {
+    var manual = window.localStorage.getItem("nspanelCoreToken");
+    if (manual && manual.trim()) return manual.trim();
+  } catch (e) {}
   var scopes = [];
   try { scopes.push(window.localStorage); } catch (e) {}
   try { if (window.parent && window.parent !== window) scopes.push(window.parent.localStorage); } catch (e) {}
