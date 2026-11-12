@@ -79,6 +79,7 @@ class NSPanelManager:
         self._relay_listeners: dict[str, list] = {}
         self._relay_state: dict[str, bool] = {}
         self._log_backlog: dict[str, list] = {}
+        self._last_ota_trigger: dict[str, float] = {}
         self._save_timer = None
         self._weather_unsubs: list = []
         self._ota_md5: dict[str, str] | None = None
@@ -535,10 +536,14 @@ class NSPanelManager:
         await self._publish_panel_status(panel, "online")
 
     async def _on_panel_status_report(self, msg) -> None:
-        """Status report: nspanel/<wifi_hostname>/status_report (retained JSON).
+        """Status report: nspanel/<panel>/status_report (retained).
 
-        Firmware shape: {"state"?, "progress"?, "rssi", "heap_used_pct",
-        "mac", "temperature" (string "22.5"), "ip", "warnings" (string)}.
+        Two wire formats, both accepted:
+        - JSON (current firmware): state/progress/rssi/heap_used_pct/mac/
+          temperature (string)/ip/warnings (string).
+        - Protobuf (legacy firmware <=0.3.x, MAC topics): parsed with the
+          panel_pb codec; carries rssi/temperature/mac/ip plus the md5
+          checksums used for OTA decisions.
         ``state`` is only present while updating (updating_tft/fw/fs);
         otherwise the panel is online.
         """
@@ -548,43 +553,69 @@ class NSPanelManager:
         panel = self._panel_by_topic(segment)
         if not panel:
             return
+        md5s: dict = {}
         try:
             data = json.loads(msg.payload)
+            if not isinstance(data, dict):
+                raise ValueError("not an object")
+            state = str(data.get("state") or "")
+            try:
+                temperature = float(str(data.get("temperature", "")))
+            except (ValueError, TypeError):
+                temperature = None
+            try:
+                rssi = int(data.get("rssi")) if data.get("rssi") is not None else None
+            except (ValueError, TypeError):
+                rssi = None
+            raw_warnings = data.get("warnings", "")
+            warnings: list = []
+            if isinstance(raw_warnings, list):
+                warnings = raw_warnings
+            elif isinstance(raw_warnings, str) and raw_warnings.strip():
+                warnings = [
+                    {"level": "warning", "text": line}
+                    for line in raw_warnings.splitlines()
+                    if line.strip()
+                ]
+            report = {
+                "temperature": temperature,
+                "rssi": rssi,
+                "has_humidity": False,
+                "has_pressure": False,
+                "warnings": warnings,
+                "state": state,
+                "progress": data.get("progress", 0),
+            }
         except (ValueError, TypeError):
-            _LOGGER.debug("Ignoring non-JSON status report from %s", segment)
-            return
-        if not isinstance(data, dict):
-            return
-        state = str(data.get("state") or "")
+            # Legacy protobuf report — parse with the panel_pb codec.
+            try:
+                from .panel_pb import messages as pbw
+
+                payload = msg.payload
+                if isinstance(payload, str):
+                    payload = payload.encode("utf-8", "replace")
+                preport = pbw.parse_nspanel_status_report(bytes(payload))
+            except Exception:  # noqa: BLE001
+                _LOGGER.debug("Ignoring unparsable status report from %s", segment)
+                return
+            updaters = {"updating_tft", "updating_fw", "updating_fs"}
+            state = preport.get("updater_state", "")
+            report = {
+                "temperature": preport.get("temperature"),
+                "rssi": preport.get("rssi"),
+                "has_humidity": bool(preport.get("has_humidity")),
+                "has_pressure": bool(preport.get("has_pressure")),
+                "warnings": preport.get("warnings", []),
+                "state": state if state in updaters else "",
+                "progress": preport.get("update_progress", 0),
+            }
+            md5s = {
+                "md5_firmware": preport.get("md5_firmware", ""),
+                "md5_littlefs": preport.get("md5_littlefs", ""),
+                "md5_tft_file": preport.get("md5_tft_gui", "") or preport.get("md5_tft_file", ""),
+            }
         was_online = panel.online
-        panel.online = state not in ("updating_tft", "updating_fw", "updating_fs")
-        try:
-            temperature = float(str(data.get("temperature", "")))
-        except (ValueError, TypeError):
-            temperature = None
-        try:
-            rssi = int(data.get("rssi")) if data.get("rssi") is not None else None
-        except (ValueError, TypeError):
-            rssi = None
-        raw_warnings = data.get("warnings", "")
-        warnings: list = []
-        if isinstance(raw_warnings, list):
-            warnings = raw_warnings
-        elif isinstance(raw_warnings, str) and raw_warnings.strip():
-            warnings = [
-                {"level": "warning", "text": line}
-                for line in raw_warnings.splitlines()
-                if line.strip()
-            ]
-        report = {
-            "temperature": temperature,
-            "rssi": rssi,
-            "has_humidity": False,
-            "has_pressure": False,
-            "warnings": warnings,
-            "state": state,
-            "progress": data.get("progress", 0),
-        }
+        panel.online = report.get("state", "") not in ("updating_tft", "updating_fw", "updating_fs")
         self._schedule_save()
         if panel.online != was_online:
             for listener in list(self._new_panel_listeners):
@@ -605,12 +636,31 @@ class NSPanelManager:
                 "updating_fs": "updating_fs",
             }
             try:
-                progress = int(data.get("progress", 0))
+                progress = int(report.get("progress", 0))
             except (ValueError, TypeError):
                 progress = 0
             await self._publish_panel_status(
-                panel, state_map.get(state, "online"), progress, warnings
+                panel, state_map.get(report.get("state", ""), "online"), progress, report.get("warnings", [])
             )
+        # Legacy reports carry checksums: evaluate OTA here too (accepted
+        # panels only, cooldown-guarded). JSON reports don't include md5s.
+        if md5s and any(md5s.values()):
+            await self._maybe_trigger_firmware_ota_cooled(panel, md5s)
+
+    async def _maybe_trigger_firmware_ota_cooled(self, panel: PanelConfig, report: dict) -> None:
+        """OTA evaluation with a per-panel cooldown.
+
+        Status reports arrive every ~30s; without this, a panel mid-download
+        would be re-triggered on every report and never finish flashing.
+        """
+        import time as _time
+
+        now = _time.monotonic()
+        last = self._last_ota_trigger.get(panel.mac, 0)
+        if now - last < 1800:
+            return
+        self._last_ota_trigger[panel.mac] = now
+        await self._maybe_trigger_firmware_ota(panel, report)
 
     def _panel_by_topic(self, segment: str) -> PanelConfig | None:
         """Find a panel by a topic segment: hostname (wifi_hostname) or MAC."""
