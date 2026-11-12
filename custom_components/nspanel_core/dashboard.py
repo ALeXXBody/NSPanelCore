@@ -82,6 +82,12 @@ def _render(template_name: str, **context) -> str:
         _ver = "1.2.0"
     context.setdefault("version", f"v{_ver}")
     context.setdefault("has_unread_messages", False)
+    context.setdefault("mqtt_password", "")
+    context.setdefault("home_assistant_token", "")
+    context.setdefault("mqtt_server", "")
+    context.setdefault("mqtt_port", 1883)
+    context.setdefault("mqtt_username", "")
+    context.setdefault("room", None)
     context.setdefault("enabled_themes", {"nspmwip": "NSPanel Core (dark)"} )
     context.setdefault("theme", "nspmwip")
     context.setdefault("current_theme", "nspmwip")
@@ -632,6 +638,37 @@ class RoomsPageView(HomeAssistantView):
         return web.Response(text=html, content_type="text/html")
 
 
+class EditRoomView(HomeAssistantView):
+    url = f"{URL_BASE}/rooms/{{room_id}}"
+    name = "nspanel_core:edit_room"
+    requires_auth = False
+
+    async def get(self, request):
+        manager = _manager(request)
+        room_id = int(request.match_info["room_id"])
+        room = next((r for r in manager.config.rooms if r.id == room_id), None)
+        if room is None:
+            raise web.HTTPFound(f"{URL_BASE}/rooms")
+        room_obj = type("Room", (), {
+            "id": room.id,
+            "friendly_name": room.name,
+            "name": room.name,
+            "nspanel_set": type("QS", (), {"all": [type("P", (), {"friendly_name": p.name, "id": p.id}) for p in manager.config.panels if p.room_id == room_id]})(),
+            "entity_set": type("QS", (), {"all": [type("E", (), {"friendly_name": e.name, "id": e.id}) for e in manager.config.lights if e.room_id == room_id]})(),
+        })()
+        html = _render(
+            "edit_room.html",
+            room=room_obj,
+            rooms=[type("R", (), {"id": r.id, "friendly_name": r.name}) for r in manager.config.rooms],
+            nspanels=[],
+            total_num_rooms=len(manager.config.rooms),
+            entity_pages=[],
+            page_title=f"Room: {room.name}",
+            nspanels_list=_panels_context(manager),
+        )
+        return web.Response(text=html, content_type="text/html")
+
+
 class SaveNewRoomView(HomeAssistantView):
     url = f"{URL_BASE}/save_new_room"
     name = "nspanel_core:save_new_room"
@@ -752,7 +789,7 @@ class WebappAssetView(HomeAssistantView):
         return web.FileResponse(file_path)
 
 
-
+class WebappStompView(HomeAssistantView):
     """STOMP WebSocket at the original /websocket/stomp path (for the web app)."""
 
     url = "/websocket/stomp"
@@ -792,6 +829,7 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         (EditPanelView, ["GET"]),
         (SavePanelSettingsView, ["POST"]),
         (RoomsPageView, ["GET"]),
+        (EditRoomView, ["GET"]),
         (SaveNewRoomView, ["POST"]),
         (DeleteRoomView, ["POST"]),
         (GlobalScenesView, ["GET"]),

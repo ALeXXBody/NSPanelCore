@@ -20,7 +20,7 @@
         <span class="block mb-2 text-xl w-full text-center">Home Assistant <span class="font-thin italic">(optional)</span></span>
 
         <form hx-post="/nspanel_core/htmx_initial_setup_home_assistant_settings">
-            {% csrf_token %}
+            
             {% if is_home_assistant_addon %}
             {% include 'components/alert.html' %}
             {% endif %}

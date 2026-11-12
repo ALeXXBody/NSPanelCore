@@ -13,7 +13,7 @@
         </span>
 
         <form hx-post="/nspanel_core/htmx_save_relay_group">
-            {% csrf_token %}
+            
             {% if relay_group %}
                 <input type="hidden" name="relay_group_id" value="{{ relay_group.id }}">
             {% endif %}
