@@ -160,9 +160,9 @@ class NSPanelManager:
         import json as _j
         import pathlib as _p
         try:
-            _version = "v" + _j.loads((_p.Path(__file__).parent / "manifest.json").read_text()).get("version", "1.2.0")
+            _version = "v" + _j.loads((_p.Path(__file__).parent / "manifest.json").read_text()).get("version", "1.3.1")
         except Exception:
-            _version = "v1.2.0"
+            _version = "v1.3.1"
         await self._publish(
             status_topic(self.config.settings.manager_address),
             json.dumps({"state": "online", "version": _version}),
@@ -1065,7 +1065,9 @@ class NSPanelManager:
                     svc_data["hs_color"] = (light.hue, light.saturation)
                 await self.hass.services.async_call("light", "turn_on", svc_data)
             await self._publish_light_state(light)
-        await self._publish_room_state(scene.page_id and (next((p for p in self.config.pages if p.id == scene.page_id), None).room_id if next((p for p in self.config.pages if p.id == scene.page_id), None) else None) or 0)
+        page = next((p for p in self.config.pages if p.id == scene.page_id), None)
+        if page and page.room_id:
+            await self._publish_room_state(page.room_id)
 
     async def _republish_all_state(self) -> None:
         """Republish room states, entity pages, light states for all rooms."""
@@ -1093,7 +1095,7 @@ class NSPanelManager:
             current.strftime("%I:%M") if settings.clock_us_style else current.strftime("%H:%M")
         )
         ampm = current.strftime("%p") if settings.clock_us_style else ""
-        date_str = current.strftime("%d/%m")
+        date_str = current.strftime(settings.date_format or "%d/%m")
         await self._publish(time_topic(settings.manager_address), time_str, True)
         await self._publish(ampm_topic(settings.manager_address), ampm, True)
         await self._publish(date_topic(settings.manager_address), date_str, True)
