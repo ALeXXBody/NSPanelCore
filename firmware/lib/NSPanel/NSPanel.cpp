@@ -34,7 +34,17 @@ void NSPanel::setSleep(bool sleep) {
 void NSPanel::setComponentText(const char *componentId, const char *text) {
   std::string cmd = componentId;
   cmd.append(".txt=\"");
-  cmd.append(text);
+  // Nextion text commands break on embedded quotes/backslashes; sanitize.
+  for (const char *p = text; *p; ++p) {
+    if (*p == '"' || *p == '\\') {
+      cmd.push_back(' ');
+    } else if ((unsigned char)*p >= 0x20) {
+      cmd.push_back(*p);
+    }
+    if (cmd.size() > 200) {
+      break; // cap insanely long strings (weather/cloud data)
+    }
+  }
   cmd.append("\"");
   this->_sendCommandWithoutResponse(cmd.c_str());
 }
@@ -389,20 +399,24 @@ void NSPanel::_taskProcessPanelOutput(void *param) {
         if (!itemPayload.empty()) {
           switch (itemPayload[0]) {
           case NEX_OUT_TOUCH_EVENT:
-            if (itemPayload.size() >= 3) {
-              NSPanel::_touchEventCallback(itemPayload[1], itemPayload[2], itemPayload[3] == 0x01);
+            if (itemPayload.size() >= 4) {
+              if (NSPanel::_touchEventCallback != nullptr) {
+                NSPanel::_touchEventCallback(itemPayload[1], itemPayload[2], itemPayload[3] == 0x01);
+              }
             } else {
               LOG_ERROR("Read nextion touch event but there wasn't enough data to process.");
             }
             break;
 
           case NEX_OUT_SLEEP:
+          case NEX_OUT_ENTERED_AUTO_SLEEP:
             if (NSPanel::_sleepCallback != nullptr) {
               NSPanel::_sleepCallback();
             }
             break;
 
           case NEX_OUT_WAKE:
+          case NEX_OUT_LEFT_AUTO_SLEEP:
             if (NSPanel::_wakeCallback != nullptr) {
               NSPanel::_wakeCallback();
             }

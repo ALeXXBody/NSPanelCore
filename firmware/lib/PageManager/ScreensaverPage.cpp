@@ -68,6 +68,11 @@ void ScreensaverPage::stop() {
 }
 
 void ScreensaverPage::show() {
+  if (InterfaceConfig::screensaver_mode.compare("no_screensaver") == 0) {
+    // dim=0 blanks the backlight — indistinguishable from a dead screen.
+    // Stay on the current page instead of switching to a black screensaver.
+    return;
+  }
   NSPanel::instance->setDimLevel(this->_screensaver_brightness);
   NSPanel::instance->goToPage(this->_screensaver_page_name.c_str());
 
@@ -98,6 +103,9 @@ void ScreensaverPage::updateRoomTemp(std::string roomtemp_string) {
 }
 
 void ScreensaverPage::processTouchEvent(uint8_t page, uint8_t component, bool pressed) {
+  if (pressed) {
+    return; // act on release only — press+release both firing double-shows home
+  }
   PageManager::GetHomePage()->show();
 }
 

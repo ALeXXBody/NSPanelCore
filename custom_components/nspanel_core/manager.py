@@ -467,9 +467,24 @@ class NSPanelCoreManager:
 
         await self._publish_panel_status(panel, "awaiting_accept")
 
-        # Store registration metadata (same fields the C++ bridge kept)
-        panel.name = data.get("friendly_name") or panel.name
-        panel.model = data.get("model", "sonoff")
+        # Store registration metadata (same fields the C++ bridge kept).
+        # The manager is the authority on the panel name for accepted panels:
+        # after a config wipe the firmware reports the compiled default
+        # ("NSPanelCore") as friendly_name — adopting it would clobber the
+        # user's curated name and move all command topics. Only adopt the
+        # device name for panels that haven't been accepted yet.
+        if not panel.accepted:
+            panel.name = data.get("friendly_name") or panel.name
+        elif data.get("friendly_name") and data.get("friendly_name") != panel.name:
+            _LOGGER.warning(
+                "Panel %s reports hostname %r — keeping manager name (fix it on the panel or rename here)",
+                panel.name,
+                data.get("friendly_name"),
+            )
+        if data.get("model"):
+            panel.model = data["model"]
+        if data.get("version"):
+            panel.version = data["version"]
         if data.get("md5_firmware"):
             panel.firmware_md5 = data["md5_firmware"]
         if data.get("md5_tft_file"):
@@ -494,8 +509,10 @@ class NSPanelCoreManager:
         # Registration carries the panel's current checksums — evaluate OTA
         # here, but ONLY for accepted panels. Flashing an unaccepted (merely
         # seen) panel would replace its firmware without any consent.
+        # Cooldown-guarded: a panel mid-download re-registers on reconnect and
+        # must not be re-triggered into an update loop.
         if panel.accepted and not panel.denied:
-            await self._maybe_trigger_firmware_ota(panel, data)
+            await self._maybe_trigger_firmware_ota_cooled(panel, self._normalize_ota_report(data))
 
         if created and not panel.accepted:
             # New registration: notify the UI (original event chain)
@@ -526,8 +543,9 @@ class NSPanelCoreManager:
         )
         # The stored checksums (from registration) decide OTA here: accept is
         # the consent gate, so a newly accepted panel updates on the spot
-        # instead of waiting for its next register.
-        await self._maybe_trigger_firmware_ota(panel, {
+        # instead of waiting for its next register. Cooldown-guarded (see
+        # register path) to avoid update loops on accept retries.
+        await self._maybe_trigger_firmware_ota_cooled(panel, {
             "md5_firmware": panel.firmware_md5,
             "md5_littlefs": panel.littlefs_md5,
             "md5_tft_file": panel.tft_md5,
@@ -652,9 +670,12 @@ class NSPanelCoreManager:
 
         Status reports arrive every ~30s; without this, a panel mid-download
         would be re-triggered on every report and never finish flashing.
+        Also skips panels already reporting an updating state.
         """
         import time as _time
 
+        if getattr(panel, "online", True) is False:
+            pass  # offline panels still get evaluated on register; cooldown below applies
         now = _time.monotonic()
         last = self._last_ota_trigger.get(panel.mac, 0)
         if now - last < 1800:
@@ -662,11 +683,44 @@ class NSPanelCoreManager:
         self._last_ota_trigger[panel.mac] = now
         await self._maybe_trigger_firmware_ota(panel, report)
 
+    @staticmethod
+    def _normalize_ota_report(data: dict) -> dict:
+        """Normalize register-payload md5 keys to the OTA evaluator's names.
+
+        Firmware sends md5_data_file / md5_tft_gui variants; the evaluator
+        expects md5_littlefs / md5_tft_file. Single place so the data-file
+        branch can't silently go dead on one path and live on another.
+        """
+        if not isinstance(data, dict):
+            return {}
+        out = dict(data)
+        if "md5_data_file" in out and "md5_littlefs" not in out:
+            out["md5_littlefs"] = out["md5_data_file"]
+        if "md5_tft_gui" in out and "md5_tft_file" not in out:
+            out["md5_tft_file"] = out["md5_tft_gui"]
+        return out
+
     def _panel_by_topic(self, segment: str) -> PanelConfig | None:
-        """Find a panel by a topic segment: hostname (wifi_hostname) or MAC."""
+        """Find a panel by a topic segment: hostname (wifi_hostname) or MAC.
+
+        Verbatim match first (MQTT topics are case-sensitive); normalized
+        match second with a drift warning so a case/charset mismatch that
+        would black-hole commands is visible instead of silent.
+        """
+        if not segment:
+            return None
+        for panel in self.config.panels:
+            if panel.name == segment or panel.mac == segment:
+                return panel
         want = topic_safe(segment)
         for panel in self.config.panels:
             if topic_safe(panel.name) == want or topic_safe(panel.mac) == want:
+                _LOGGER.warning(
+                    "Topic segment %r matched panel %r only after normalization — "
+                    "check hostname case/characters (MQTT is case-sensitive)",
+                    segment,
+                    panel.name,
+                )
                 return panel
         return None
 

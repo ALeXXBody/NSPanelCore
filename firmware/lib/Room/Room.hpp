@@ -11,7 +11,7 @@ class Scene;
 
 class Room {
 public:
-  uint8_t id = 0;
+  uint16_t id = 0;
   std::string name;
   std::unordered_map<uint16_t, Light *> ceilingLights;
   std::unordered_map<uint16_t, Light *> tableLights;

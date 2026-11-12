@@ -76,14 +76,35 @@ String WebManager::processIndexTemplate(const String &templateVar) {
 void WebManager::saveConfigFromWeb(AsyncWebServerRequest *request) {
   JsonDocument config_json;
 
-  NSPMConfig::instance->wifi_hostname = request->arg("wifi_hostname").c_str();
+  std::string hostname = request->arg("wifi_hostname").c_str();
+  // Sanitize: non-empty, <=32 chars, hostname-safe charset. Reject MQTT
+  // wildcard chars that would corrupt topics (nspanel/<hostname>/#).
+  if (hostname.empty() || hostname.size() > 32) {
+    request->send(400, "text/plain", "Invalid hostname (1-32 chars)");
+    return;
+  }
+  for (char c : hostname) {
+    if (!isalnum((unsigned char)c) && c != '-' && c != '_') {
+      request->send(400, "text/plain", "Invalid hostname (A-Z a-z 0-9 - _ only)");
+      return;
+    }
+  }
+  NSPMConfig::instance->wifi_hostname = hostname;
   NSPMConfig::instance->wifi_ssid = request->arg("wifi_ssid").c_str();
   NSPMConfig::instance->wifi_psk = request->arg("wifi_psk").c_str();
 
-  NSPMConfig::instance->logging_level = request->arg("log_level").toInt();
+  int loglvl = request->arg("log_level").toInt();
+  if (loglvl < 0) loglvl = 0;
+  if (loglvl > 4) loglvl = 4;
+  NSPMConfig::instance->logging_level = (uint8_t)loglvl;
 
   NSPMConfig::instance->mqtt_server = request->arg("mqtt_server").c_str();
-  NSPMConfig::instance->mqtt_port = request->arg("mqtt_port").toInt();
+  int mport = request->arg("mqtt_port").toInt();
+  if (mport < 1 || mport > 65535) {
+    request->send(400, "text/plain", "Invalid MQTT port (1-65535)");
+    return;
+  }
+  NSPMConfig::instance->mqtt_port = (uint16_t)mport;
   NSPMConfig::instance->mqtt_username = request->arg("mqtt_username").c_str();
   NSPMConfig::instance->mqtt_password = request->arg("mqtt_psk").c_str();
 
@@ -92,6 +113,8 @@ void WebManager::saveConfigFromWeb(AsyncWebServerRequest *request) {
 
   if (!NSPMConfig::instance->saveToLittleFS(false)) {
     LOG_ERROR("Failed to save new configuration!");
+    request->send(500, "text/plain", "Failed to save configuration");
+    return;
   }
 
   request->redirect("/");
@@ -103,13 +126,17 @@ void WebManager::saveConfigFromWeb(AsyncWebServerRequest *request) {
 
 void WebManager::factoryReset(AsyncWebServerRequest *request) {
   LOG_INFO("Performing factory reset!");
-  NSPMConfig::instance->factoryReset();
-  ESP.restart();
   request->redirect("/");
+  // Restart after the response is flushed so the client isn't left hanging.
+  vTaskDelay(500 / portTICK_PERIOD_MS);
+  NSPMConfig::instance->factoryReset();
+  vTaskDelay(500 / portTICK_PERIOD_MS);
+  ESP.restart();
 }
 
 void WebManager::doRebootNow(AsyncWebServerRequest *request) {
   request->send(200);
+  vTaskDelay(500 / portTICK_PERIOD_MS);
   ESP.restart();
 }
 
@@ -342,17 +369,18 @@ bool WebManager::_update(uint8_t type, const char *url) {
 }
 
 void WebManager::_onProgress(size_t progress, size_t total) {
-  WebManager::_update_progress = (progress / (total / 100));
-  if (WebManager::_state == WebManagerState::UPDATING_FIRMWARE && WebManager::_last_displayed_update_progress != WebManager::_update_progress) {
+  uint8_t pct = (total > 0) ? (uint8_t)((100ULL * progress) / total) : 0;
+  WebManager::_update_progress = pct;
+  if (WebManager::_state == WebManagerState::UPDATING_FIRMWARE && WebManager::_last_displayed_update_progress != pct) {
     std::string update_string = "Updating FW ";
     update_string.append(std::to_string(WebManager::_update_progress));
     update_string.append("%");
     PageManager::GetNSPanelManagerPage()->setText(update_string);
-  } else if (WebManager::_state == WebManagerState::UPDATING_LITTLEFS && WebManager::_last_displayed_update_progress != WebManager::_update_progress) {
+  } else if (WebManager::_state == WebManagerState::UPDATING_LITTLEFS && WebManager::_last_displayed_update_progress != pct) {
     std::string update_string = "Updating FS ";
     update_string.append(std::to_string(WebManager::_update_progress));
     update_string.append("%");
     PageManager::GetNSPanelManagerPage()->setText(update_string);
   }
-  WebManager::_last_displayed_update_progress = progress;
+  WebManager::_last_displayed_update_progress = pct;
 }

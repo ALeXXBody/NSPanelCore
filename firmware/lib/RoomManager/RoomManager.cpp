@@ -76,7 +76,7 @@ void RoomManager::loadAllRooms(bool is_update) {
   InterfaceConfig::default_page = static_cast<DEFAULT_PAGE>((*roomData)["default_page"].as<uint8_t>());
   InterfaceConfig::colorTempMin = (*roomData)["color_temp_min"].as<uint16_t>();
   InterfaceConfig::colorTempMax = (*roomData)["color_temp_max"].as<uint16_t>();
-  InterfaceConfig::reverseColorTempSlider = (*roomData)["reverse_color_temp"].as<String>().equals("True");
+  InterfaceConfig::reverseColorTempSlider = (*roomData)["reverse_color_temp"].as<String>().equalsIgnoreCase("true");
   InterfaceConfig::raiseToMaxLightLevelAbove = (*roomData)["raise_to_100_light_level"].as<uint8_t>();
   InterfaceConfig::button_min_press_time = (*roomData)["min_button_push_time"].as<uint16_t>();
   InterfaceConfig::button_long_press_time = (*roomData)["button_long_press_time"].as<uint16_t>();
@@ -87,21 +87,21 @@ void RoomManager::loadAllRooms(bool is_update) {
   InterfaceConfig::screensaver_dim_level = (*roomData)["screensaver_dim_level"].as<uint8_t>();
   InterfaceConfig::screensaver_activation_timeout = (*roomData)["screensaver_activation_timeout"].as<uint16_t>();
   InterfaceConfig::screensaver_mode = (*roomData)["screensaver_mode"].as<String>().c_str();
-  InterfaceConfig::clock_us_style = (*roomData)["clock_us_style"].as<String>().equals("True");
-  InterfaceConfig::lock_to_default_room = (*roomData)["lock_to_default_room"].as<String>().equals("True");
-  NSPMConfig::instance->is_us_panel = (*roomData)["is_us_panel"].as<String>().equals("True");
+  InterfaceConfig::clock_us_style = (*roomData)["clock_us_style"].as<String>().equalsIgnoreCase("true");
+  InterfaceConfig::lock_to_default_room = (*roomData)["lock_to_default_room"].as<String>().equalsIgnoreCase("true");
+  NSPMConfig::instance->is_us_panel = (*roomData)["is_us_panel"].as<String>().equalsIgnoreCase("true");
   NSPMConfig::instance->button1_mode = static_cast<BUTTON_MODE>((*roomData)["button1_mode"].as<uint8_t>());
   NSPMConfig::instance->button2_mode = static_cast<BUTTON_MODE>((*roomData)["button2_mode"].as<uint8_t>());
-  NSPMConfig::instance->use_fahrenheit = (*roomData)["use_fahrenheit"].as<String>().equals("True");
+  NSPMConfig::instance->use_fahrenheit = (*roomData)["use_fahrenheit"].as<String>().equalsIgnoreCase("true");
   NSPMConfig::instance->temperature_calibration = (*roomData)["temperature_calibration"].as<float>();
-  NSPMConfig::instance->reverse_relays = (*roomData)["reverse_relays"].as<String>().equals("True");
+  NSPMConfig::instance->reverse_relays = (*roomData)["reverse_relays"].as<String>().equalsIgnoreCase("true");
   NSPMConfig::instance->button1_mqtt_topic = (*roomData)["button1_mqtt_topic"].as<String>().c_str();
   NSPMConfig::instance->button1_mqtt_payload = (*roomData)["button1_mqtt_payload"].as<String>().c_str();
   NSPMConfig::instance->button2_mqtt_topic = (*roomData)["button2_mqtt_topic"].as<String>().c_str();
   NSPMConfig::instance->button2_mqtt_payload = (*roomData)["button2_mqtt_payload"].as<String>().c_str();
 
-  bool relay1_default_mode = (*roomData)["relay1_default_mode"].as<String>().equals("True");
-  bool relay2_default_mode = (*roomData)["relay2_default_mode"].as<String>().equals("True");
+  bool relay1_default_mode = (*roomData)["relay1_default_mode"].as<String>().equalsIgnoreCase("true");
+  bool relay2_default_mode = (*roomData)["relay2_default_mode"].as<String>().equalsIgnoreCase("true");
 
   if (NSPMConfig::instance->relay1_default_mode != relay1_default_mode) {
     LOG_INFO("Saving new relay 1 default mode: ", relay1_default_mode ? "ON" : "OFF");
@@ -148,7 +148,7 @@ void RoomManager::loadAllRooms(bool is_update) {
     newScene->room = nullptr;
     newScene->id = atoi(scenePair.key().c_str());
     newScene->name = scenePair.value()["name"] | "ERR-S";
-    newScene->canSave = scenePair.value()["can_save"].as<String>().equals("true");
+    newScene->canSave = scenePair.value()["can_save"].as<String>().equalsIgnoreCase("true");
     newScene->callUpdateCallbacks();
     if (!existing_scene) {
       InterfaceConfig::global_scenes.push_back(newScene);
@@ -343,16 +343,17 @@ Room *RoomManager::loadRoom(uint16_t roomId, bool is_update) {
     }
 
     for (auto it = newRoom->scenes.cbegin(); it != newRoom->scenes.cend();) {
-      // Check if this light ID exist in JSON config
-      bool light_id_found = false;
-      for (JsonPair jsonLightPair : json_lights.as<JsonObject>()) {
-        if (atoi(jsonLightPair.key().c_str()) == (*it)->getId()) {
-          light_id_found = true;
+      // Check if this scene ID still exists in JSON config (was json_lights — wrong map)
+      bool scene_id_found = false;
+      JsonVariant _scenesVar = (*roomData)["scenes"];
+      for (JsonPair jsonScenePair : _scenesVar.as<JsonObject>()) {
+        if (atoi(jsonScenePair.key().c_str()) == (*it)->getId()) {
+          scene_id_found = true;
           break;
         }
       }
 
-      if (!light_id_found) {
+      if (!scene_id_found) {
         Scene *scene_to_remove = (*it);
         LOG_DEBUG("Removing scene: ", scene_to_remove->getName().c_str(), ". ID: ", scene_to_remove->getId());
         it = newRoom->scenes.erase(it);
@@ -378,7 +379,7 @@ Room *RoomManager::loadRoom(uint16_t roomId, bool is_update) {
     newScene->room = newRoom;
     newScene->id = atoi(scenePair.key().c_str());
     newScene->name = scenePair.value()["name"] | "ERR-S";
-    newScene->canSave = scenePair.value()["can_save"].as<String>().equals("true");
+    newScene->canSave = scenePair.value()["can_save"].as<String>().equalsIgnoreCase("true");
     newScene->callUpdateCallbacks();
     if (!existing_scene) {
       newRoom->scenes.push_back(newScene);

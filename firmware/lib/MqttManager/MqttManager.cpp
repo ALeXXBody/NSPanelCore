@@ -9,7 +9,11 @@
 void MqttManager::init() {
   // Only create the send queue here. The PubSubClient/WiFiClient pair is
   // created exactly once under start() to avoid duplicate allocations.
-  if (MqttLog::instance->getLogLevel() == MqttLogLevel::Debug) {
+  MqttLogLevel lvl = MqttLogLevel::Info;
+  if (MqttLog::instance != nullptr) {
+    lvl = MqttLog::instance->getLogLevel();
+  }
+  if (lvl == MqttLogLevel::Debug) {
     MqttManager::setBufferSize(32);
   } else {
     MqttManager::setBufferSize(16);
@@ -18,6 +22,7 @@ void MqttManager::init() {
 
 void MqttManager::start() {
   if (!MqttManager::_hasStarted) {
+    MqttManager::_hasStarted = true;
     MqttManager::_wifiClient = new WiFiClient();                            // Create WifiClient for MQTT Client
     MqttManager::_mqttClient = new PubSubClient(*MqttManager::_wifiClient); // Create MQTT Client used to communicate with MQTT
     MqttManager::_mqttClient->setBufferSize(5000);
@@ -25,7 +30,9 @@ void MqttManager::start() {
     // The MQTT task only runs PubSubClient.loop() + ArduinoJson parsing which
     // allocates on the heap, not on the stack. 10 KB is well above measured
     // high-water usage and frees ~40 KB of previously pinned RAM.
-    xTaskCreatePinnedToCore(MqttManager::_taskMqttRunTask, "taskRunMQTT", 10000, NULL, 1, NULL, CONFIG_ARDUINO_RUNNING_CORE);
+    if (xTaskCreatePinnedToCore(MqttManager::_taskMqttRunTask, "taskRunMQTT", 10000, NULL, 1, NULL, CONFIG_ARDUINO_RUNNING_CORE) != pdPASS) {
+      MqttManager::_hasStarted = false;
+    }
   }
 }
 
@@ -241,7 +248,7 @@ bool MqttManager::_connect() {
   MqttManager::_mqttClient->setSocketTimeout(5); // Set tighter timeout. Default: 15 seconds.
   Serial.println(NSPMConfig::instance->mqtt_server.c_str());
   MqttManager::_mqttClient->setServer(NSPMConfig::instance->mqtt_server.c_str(), NSPMConfig::instance->mqtt_port);
-  LOG_DEBUG("Will try to connect to MQTT Server '", NSPMConfig::instance->mqtt_server.c_str(), "' as user '", NSPMConfig::instance->mqtt_username.c_str(), "' with password '", NSPMConfig::instance->mqtt_password.c_str(), "'.");
+  LOG_DEBUG("Will try to connect to MQTT Server '", NSPMConfig::instance->mqtt_server.c_str(), "' as user '", NSPMConfig::instance->mqtt_username.c_str(), "'.");
   MqttManager::_mqttClient->connect(mqtt_device_name.c_str(), NSPMConfig::instance->mqtt_username.c_str(), NSPMConfig::instance->mqtt_password.c_str(), NSPMConfig::instance->mqtt_availability_topic.c_str(), 1, true, offline_message_buffer);
   vTaskDelay(1000 / portTICK_PERIOD_MS);
   if (MqttManager::connected()) {

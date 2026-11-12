@@ -14,9 +14,9 @@ void PageManager::GoBack() {
   if (PageManager::_page_history.size() > 0) {
     // PageManager::UnshowCurrentPage(); Unshow will be done when the new page calls setCurrentPage
     PageBase *show_page = PageManager::_page_history.front();
-    PageManager::_page_history.front()->show();
-    PageManager::_page_history.front()->update();
-    PageManager::_page_history.pop_front(); // Do not add page to history again
+    show_page->show();
+    show_page->update();
+    // Don't pop: show() re-pushes via SetCurrentPage, history stays intact.
   }
 }
 
@@ -47,6 +47,9 @@ void PageManager::ProcessTouchEventOnCurrentPage(uint8_t page, uint8_t component
 }
 
 void PageManager::SetCurrentPage(PageBase *page) {
+  if (PageManager::_current_page == page) {
+    return; // already current — don't duplicate history
+  }
   PageManager::UnshowCurrentPage();
   PageManager::_current_page = page;
   PageManager::_page_history.push_front(page);

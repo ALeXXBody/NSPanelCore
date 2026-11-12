@@ -28,7 +28,7 @@ private:
   static void button2_state_change();
 
   // Which button was changed. 1 or 2
-  static inline uint8_t _button_state_change;
+  static inline volatile uint8_t _button_state_change;
   static inline bool _lastButton1State;
   static inline bool _newButton1State;
   static inline unsigned long _lastButton1StateChange;

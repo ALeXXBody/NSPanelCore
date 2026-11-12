@@ -45,6 +45,9 @@ void IRAM_ATTR ButtonManager::button2_state_change() {
 
 void ButtonManager::mqttCallback(char *topic, byte *payload, unsigned int length) {
   uint8_t relay = 0;
+  if (length == 0 || payload == nullptr) {
+    return;
+  }
   if (std::string(topic).compare(NSPMConfig::instance->mqtt_relay1_cmd_topic) == 0) {
     relay = 1;
   } else if (std::string(topic).compare(NSPMConfig::instance->mqtt_relay2_cmd_topic) == 0) {

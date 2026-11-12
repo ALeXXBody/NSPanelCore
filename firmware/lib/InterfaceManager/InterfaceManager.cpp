@@ -219,10 +219,23 @@ void InterfaceManager::handleNSPanelCommand(char *topic, byte *payload, unsigned
     WebManager::startOTAUpdate();
   } else if (command.compare("tft_update") == 0) {
     InterfaceManager::stop();
+    LightManager::stop();
     NSPanel::instance->startOTAUpdate();
   } else if (command.compare("register_accept") == 0) {
-    NSPMConfig::instance->manager_address = json["address"].as<String>().c_str();
-    NSPMConfig::instance->manager_port = json["port"].as<uint16_t>();
+    std::string addr = json["address"].as<String>().c_str();
+    // Port may arrive as number or string; accept both.
+    uint16_t port = 0;
+    if (json["port"].is<uint16_t>() || json["port"].is<int>()) {
+      port = json["port"].as<uint16_t>();
+    } else if (json["port"].is<const char *>() || json["port"].is<String>()) {
+      port = (uint16_t)atoi(json["port"].as<String>().c_str());
+    }
+    if (addr.empty() || port == 0) {
+      LOG_ERROR("Ignoring register_accept with invalid address/port.");
+      return;
+    }
+    NSPMConfig::instance->manager_address = addr;
+    NSPMConfig::instance->manager_port = port;
 
     Serial.print("Received register accept from manager: ");
     Serial.print(NSPMConfig::instance->manager_address.c_str());
@@ -243,11 +256,11 @@ void InterfaceManager::handleNSPanelCommand(char *topic, byte *payload, unsigned
 
 void InterfaceManager::handleNSPanelScreenBrightnessCommand(char *topic, byte *payload, unsigned int length) {
   std::string payload_str = std::string((char *)payload, length);
-  int new_brightness = std::stoi(payload_str);
-  if (new_brightness < 1) {
-    new_brightness = 1;
-  } else if (new_brightness > 100) {
-    new_brightness = 100;
+  char *endp = nullptr;
+  long new_brightness = strtol(payload_str.c_str(), &endp, 10);
+  if (endp == payload_str.c_str() || new_brightness < 1 || new_brightness > 100) {
+    LOG_WARNING("Ignoring invalid screen brightness value.");
+    return;
   }
   InterfaceConfig::screen_dim_level = new_brightness;
   if (PageManager::GetCurrentPage() != PageManager::GetScreensaverPage()) {
@@ -257,11 +270,11 @@ void InterfaceManager::handleNSPanelScreenBrightnessCommand(char *topic, byte *p
 
 void InterfaceManager::handleNSPanelScreensaverBrightnessCommand(char *topic, byte *payload, unsigned int length) {
   std::string payload_str = std::string((char *)payload, length);
-  int new_brightness = std::stoi(payload_str);
-  if (new_brightness < 0) {
-    new_brightness = 0;
-  } else if (new_brightness > 100) {
-    new_brightness = 100;
+  char *endp = nullptr;
+  long new_brightness = strtol(payload_str.c_str(), &endp, 10);
+  if (endp == payload_str.c_str() || new_brightness < 0 || new_brightness > 100) {
+    LOG_WARNING("Ignoring invalid screensaver brightness value.");
+    return;
   }
   InterfaceConfig::screensaver_dim_level = new_brightness;
   if (PageManager::GetCurrentPage() == PageManager::GetScreensaverPage()) {

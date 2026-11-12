@@ -187,14 +187,22 @@ bool NSPMConfig::saveToLittleFS(bool remountLittleFs) {
 
 bool NSPMConfig::factoryReset() {
   Serial.println("Performing a factory reset.");
-  this->wifi_hostname = "NSPanelCore";
+  // Unique default hostname from chip ID so two reset panels never collide
+  // on MQTT topics (nspanel/<hostname>/#) or DHCP.
+  char uniq[24];
+  uint64_t chip = ESP.getEfuseMac();
+  snprintf(uniq, sizeof(uniq), "NSPanelCore-%04X", (unsigned)(chip & 0xFFFF));
+  this->wifi_hostname = uniq;
   this->wifi_ssid = "";
   this->wifi_psk = "";
-  this->logging_level = 0;
+  this->logging_level = 3;
 
   this->mqtt_server = "";
   this->mqtt_port = 1883;
   this->mqtt_username = "";
   this->mqtt_password = "";
+  this->md5_firmware = "";
+  this->md5_data_file = "";
+  this->md5_tft_file = "";
   return this->saveToLittleFS(false);
 }
