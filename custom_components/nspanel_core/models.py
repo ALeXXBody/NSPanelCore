@@ -212,6 +212,11 @@ class GlobalSettings:
     manager_address: str = "core"
     manager_port: int = 8000
     theme: str = "nspmwip"
+    firmware_manifest_url: str = "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/manifest.json"
+    firmware_auto_check_hours: int = 24
+    firmware_active_version: str = ""
+    firmware_latest_version: str = ""
+    firmware_last_check: str = ""
     mqtt_wait_time: int = 0
     clock_us_style: bool = False
     date_format: str = "%d/%m"

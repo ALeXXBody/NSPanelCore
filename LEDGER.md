@@ -94,6 +94,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P17 | Branding leftovers: panel setup page title + About dialog still referenced old project | ✅ Done v1.3.15 (rebuilt littlefs + merged images, content bytes verified) |
 | P18 | REDO ALL FIRMWARES: clean full rebuild from current source (fresh ESP fw 0.1.152 + rebranded web UI data fs + merged images), class rename, verified byte-for-byte; TFT display files cannot be rebuilt here (need Windows Nextion Editor + rebranded HMI) — documented honestly | ✅ Done, needs release |
 | P19 | Full firmware audit + boot-animation rebrand: audit fixes (0.1.153); boot frames rebranded CORE (EU+US, staged); editor path blocked by env (Xvfb crash/hung MSI) — animation killed in fw via tm_animation.en=0 (0.1.154) as immediate mitigation | ✅ Done, needs release + OTA |
+| P20 | Decouple firmware from app releases: manifest-driven check/download/activate + overlay serving, TFT download OOB fixes, fw 0.1.155, settings UI | ✅ Done, needs release |
 
 > **P13 recon (read-only, 2026-11-12):**
 > - Panel `.23:80` serves its own config UI: `wifi_hostname=KitchenPanel`,

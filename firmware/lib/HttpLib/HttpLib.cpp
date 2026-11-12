@@ -30,11 +30,12 @@ size_t HttpLib::GetFileSize(const char *url) {
 size_t HttpLib::DownloadChunk(uint8_t *buffer, const char *address, size_t offset, size_t size) {
   HTTPClient httpClient;
   httpClient.begin(address);
+  httpClient.setTimeout(15000);
 
   std::string rangeHeader = "bytes=";
   rangeHeader.append(std::to_string(offset));
   rangeHeader.append("-");
-  rangeHeader.append(std::to_string(offset + size));
+  rangeHeader.append(std::to_string(offset + size - 1));
   httpClient.addHeader("Range", rangeHeader.c_str());
   rangeHeader.clear();
 
@@ -46,9 +47,28 @@ size_t HttpLib::DownloadChunk(uint8_t *buffer, const char *address, size_t offse
     return 0;
   }
 
+  // Read until the full chunk arrived or the stream stalls: a single
+  // readBytes() may return a short count on a slow link, and the old code
+  // treated that as the final size (corrupt flash at 100% progress).
   size_t sizeReceived = 0;
-  uint8_t num_retries = 0;
-  sizeReceived += httpClient.getStream().readBytes(&buffer[sizeReceived], httpClient.getStreamPtr()->available() >= size - sizeReceived ? size - sizeReceived : httpClient.getStreamPtr()->available());
+  unsigned long deadline = millis() + 15000;
+  while (sizeReceived < size && (long)(deadline - millis()) > 0) {
+    int avail = httpClient.getStreamPtr()->available();
+    if (avail <= 0) {
+      vTaskDelay(20 / portTICK_PERIOD_MS);
+      continue;
+    }
+    size_t want = size - sizeReceived;
+    if ((size_t)avail < want) {
+      want = avail;
+    }
+    int got = httpClient.getStream().readBytes(&buffer[sizeReceived], want);
+    if (got <= 0) {
+      vTaskDelay(20 / portTICK_PERIOD_MS);
+      continue;
+    }
+    sizeReceived += got;
+  }
   httpClient.end();
 
   return sizeReceived;

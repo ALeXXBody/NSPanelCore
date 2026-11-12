@@ -830,11 +830,11 @@ bool NSPanel::_updateTFTOTA() {
       NSPanel::instance->_update_progress = 100;
       LOG_INFO("TFT Upload complete, processed ", lastReadByte, " bytes.");
       break;
-    } else if (return_string[0] == 0x05) {
+    } else if (!return_string.empty() && return_string[0] == 0x05) {
       // Old protocol, just upload next chunk.
       LOG_TRACE("Got 0x05, uploading next chunk.");
-    } else if (return_string[0] == 0x08) {
-      while (return_string.length() < 4) {
+    } else if (!return_string.empty() && return_string[0] == 0x08) {
+      while (return_string.length() < 5) {
         LOG_TRACE("Waiting for offset data byte ", return_string.length() - 1);
         while (Serial2.available() <= 0) {
           vTaskDelay(20 / portTICK_PERIOD_MS);

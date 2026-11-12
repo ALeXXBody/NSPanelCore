@@ -572,6 +572,11 @@ class SettingsView(HomeAssistantView):
             max_log_buffer_size=1000,
             is_home_assistant_addon=True,
             default_nspanel_type="sonoff",
+            firmware_manifest_url=s.firmware_manifest_url,
+            firmware_auto_check_hours=s.firmware_auto_check_hours,
+            firmware_active_version=s.firmware_active_version,
+            firmware_latest_version=s.firmware_latest_version,
+            firmware_last_check=s.firmware_last_check,
             themes=themes,
             theme=s.theme,
             page_title="Settings",
@@ -707,14 +712,17 @@ class OtaFileView(HomeAssistantView):
     _filename = ""
 
     async def get(self, request, **kwargs):
+        manager = _manager(request)
         model = request.query.get("model", "sonoff")
         if self._filename in ("eu", "us"):
             kind, name = "tft", ("gui_us.tft" if self._filename == "us" else "gui.tft")
-            path = _tft_file(self._filename)
+            path = manager.servable_path(kind, name) or _tft_file(self._filename)
         else:
             kind, name, path = "firmware", f"{model}/{self._filename}", None
             if model in ("sonoff", "custom"):
-                path = _firmware_file(model, self._filename)
+                path = manager.servable_path(kind, f"{model}/{self._filename}") or _firmware_file(
+                    model, self._filename
+                )
         if path is None:
             if model not in ("sonoff", "custom") and self._filename not in ("eu", "us"):
                 return web.Response(status=400, text="Unknown model")
@@ -946,6 +954,64 @@ class SaveTftFileView(OtaUploadView):
             manager.invalidate_ota_cache, "tft", filename, dest
         )
         return _redirect(request, f"{URL_BASE}/settings")
+
+
+class FirmwareStatusView(HomeAssistantView):
+    """JSON: served firmware version vs latest manifest version."""
+
+    url = f"{URL_BASE}/firmware_status"
+    name = "nspanel_core:firmware_status"
+    requires_auth = True
+
+    async def get(self, request, **kwargs):
+        from . import firmware_store as _fs
+
+        manager = _manager(request)
+        s = manager.config.settings
+        current = manager._ota_active_version or _fs.bundled_version(
+            _os.path.dirname(__file__)
+        )
+        status = dict(manager._firmware_status)
+        status.update(
+            {
+                "current": current,
+                "latest": s.firmware_latest_version or "",
+                "last_check": s.firmware_last_check or "",
+                "manifest_url": s.firmware_manifest_url,
+                "auto_check_hours": s.firmware_auto_check_hours,
+            }
+        )
+        return web.json_response(status)
+
+
+class FirmwareCheckView(HomeAssistantView):
+    """POST: fetch the manifest now, report latest (no download)."""
+
+    url = f"{URL_BASE}/firmware_check"
+    name = "nspanel_core:firmware_check"
+    requires_auth = True
+
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        status = await manager.check_firmware_updates()
+        return web.json_response(status)
+
+
+class FirmwareInstallView(HomeAssistantView):
+    """POST: download + activate the latest manifest firmware.
+
+    Panels pick it up automatically via the normal md5-triggered OTA on
+    their next register/status cycle — no app update needed.
+    """
+
+    url = f"{URL_BASE}/firmware_install"
+    name = "nspanel_core:firmware_install"
+    requires_auth = True
+
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        ok, message = await manager.activate_firmware_version()
+        return web.json_response({"ok": ok, "message": message})
 
 
 class ComingSoonView(HomeAssistantView):
@@ -1515,6 +1581,9 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         ChecksumTftUsView,
         DownloadTftView,
         ChecksumTftView,
+        FirmwareStatusView,
+        FirmwareCheckView,
+        FirmwareInstallView,
         ComingSoonView,
     ]
     for view_cls in views:

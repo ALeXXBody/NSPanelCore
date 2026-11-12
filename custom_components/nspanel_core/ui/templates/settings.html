@@ -550,6 +550,45 @@
           <!-- New section-->
         </div>
       </div>
+      <div class="md:flex md:justify-between md:items-start mt-2">
+        <div class="p-4 rounded-box shadow-lg w-full bg-base-100">
+          <span class="block mb-2 text-xl">Panel firmware updates</span>
+          <p class="text-sm opacity-70 mb-2">The integration checks the firmware manifest and can download + serve new panel firmware on its own — no app update needed. Panels pick up new firmware automatically on their next check-in (firmware + display); the data file is never flashed automatically.</p>
+
+          <div class="mb-2 w-full">
+              <label for="firmware_manifest_url" class="block mb-1 text-sm font-medium">Firmware manifest URL</label>
+              <div class="flex flex-row-reverse w-full">
+                  <input class="outline-none rounded-e-field bg-base-300 border border-neutral border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/name"
+                  type="text" class="input" id="firmware_manifest_url" name="firmware_manifest_url" value="{{ firmware_manifest_url }}">
+                  <span class="inline-flex items-center px-3 text-sm border border-neutral rounded-e-0 rounded-s-field peer-focus/name:border-accent">
+                      <span class="mdi mdi-update"></span>
+                  </span>
+              </div>
+          </div>
+
+          <div class="mb-2 w-full">
+              <label for="firmware_auto_check_hours" class="block mb-1 text-sm font-medium">Check for firmware every (hours, 0 = manual only)</label>
+              <div class="flex flex-row-reverse w-full">
+                  <input class="outline-none rounded-e-field bg-base-300 border border-neutral border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/name"
+                  type="number" class="input" id="firmware_auto_check_hours" name="firmware_auto_check_hours" value="{{ firmware_auto_check_hours }}">
+                  <span class="inline-flex items-center px-3 text-sm border border-neutral rounded-e-0 rounded-s-field peer-focus/name:border-accent">
+                      <span class="mdi mdi-clock"></span>
+                  </span>
+              </div>
+          </div>
+
+          <div class="text-sm mb-2">
+            <div>Served version: <strong>{{ firmware_active_version if firmware_active_version else "bundled" }}</strong></div>
+            <div>Latest known: <strong>{{ firmware_latest_version if firmware_latest_version else "unknown" }}</strong>{% if firmware_last_check %} (checked {{ firmware_last_check }}){% endif %}</div>
+          </div>
+          <div class="flex gap-2">
+              <button type="button" class="btn btn-info" onclick="fetch('/nspanel_core/firmware_check',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.latest?('Latest: '+j.latest):('Check failed: '+(j.error||'unknown')))).catch(e=>alert('Check failed'));">Check now</button>
+              <button type="button" class="btn btn-warning" onclick="if(confirm('Download and activate the latest firmware? Panels will update automatically on next check-in.'))fetch('/nspanel_core/firmware_install',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.message)).catch(e=>alert('Install failed'));">Download + activate latest</button>
+          </div>
+
+          <!-- New section-->
+        </div>
+      </div>
 
     <div class="text-right mt-4 mb-4">
       <button type="submit" class="btn btn-success">Save</button>

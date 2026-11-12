@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import pathlib
 from dataclasses import asdict
 from datetime import timedelta
@@ -83,6 +84,10 @@ class NSPanelCoreManager:
         self._save_timer = None
         self._weather_unsubs: list = []
         self._ota_md5: dict[str, str] | None = None
+        self._ota_overlay: dict[str, str] = {}
+        self._ota_active_version: str = ""
+        self._firmware_unsubs: list = []
+        self._firmware_status: dict = {"checking": False, "error": ""}
         self.stomp = None
 
     # ------------------------------------------------------------------
@@ -150,6 +155,8 @@ class NSPanelCoreManager:
         self._reschedule_weather()
         self.hass.async_create_task(self._poll_weather(None))
         self._ota_md5 = await self.hass.async_add_executor_job(self._hash_ota_files)
+        self._restore_firmware_overlay()
+        self._reschedule_firmware_check()
         _LOGGER.info("NSPanel Core manager started")
 
     async def async_stop(self) -> None:
@@ -281,6 +288,16 @@ class NSPanelCoreManager:
                     errors[key] = "unknown theme"
             elif key in ("outside_temp_sensor_entity", "outside_temp_provider"):
                 clean[key] = str(value or "").strip()
+            elif key == "firmware_manifest_url":
+                v = str(value or "").strip()
+                if v and not v.startswith(("http://", "https://")):
+                    errors[key] = "must be an http(s) URL"
+                else:
+                    clean[key] = v or "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/manifest.json"
+            elif key == "firmware_auto_check_hours":
+                n = _int(value, 0, 168)
+                if n is not None:
+                    clean[key] = n
             # else: legacy/unknown form field — ignored deliberately
         cmin = clean.get("color_temp_min", current.get("color_temp_min", 2700))
         cmax = clean.get("color_temp_max", current.get("color_temp_max", 6500))
@@ -303,7 +320,145 @@ class NSPanelCoreManager:
         await self._publish_manager_status()
         if clean.get("weather_update_interval", old_interval) != old_interval:
             self._reschedule_weather()
+        if "firmware_auto_check_hours" in clean or "firmware_manifest_url" in clean:
+            self._reschedule_firmware_check()
         return {}
+
+    def _reschedule_firmware_check(self) -> None:
+        for unsub in list(self._firmware_unsubs):
+            try:
+                unsub()
+            except Exception:  # noqa: BLE001
+                pass
+        self._firmware_unsubs = []
+        try:
+            hours = int(self.config.settings.firmware_auto_check_hours or 0)
+        except (ValueError, TypeError):
+            hours = 0
+        if hours > 0:
+            self._firmware_unsubs.append(
+                async_track_time_interval(
+                    self.hass, self._poll_firmware_manifest, timedelta(hours=hours)
+                )
+            )
+
+    async def _poll_firmware_manifest(self, _now) -> None:
+        await self.check_firmware_updates(auto=True)
+
+    def servable_path(self, kind: str, name: str) -> str | None:
+        """Resolve an OTA file to disk: active overlay first, bundled fallback."""
+        key = f"{kind}/{name}"
+        overlay = self._ota_overlay.get(key)
+        if overlay and os.path.isfile(overlay):
+            return overlay
+        base = os.path.join(os.path.dirname(__file__), kind)
+        path = os.path.join(base, name)
+        return path if os.path.isfile(path) else None
+
+    def set_firmware_overlay(self, version: str, paths: dict[str, str]) -> None:
+        self._ota_overlay = dict(paths)
+        self._ota_active_version = version
+        try:
+            self.config.settings.firmware_active_version = version
+        except Exception:  # noqa: BLE001
+            pass
+        self.hass.async_create_task(self.async_save())
+
+    async def refresh_ota_cache(self) -> None:
+        """Re-hash served OTA files (bundled + overlay) in the executor."""
+        def _rehash() -> dict[str, str]:
+            import hashlib
+
+            out: dict[str, str] = {}
+            for key in (
+                "firmware/sonoff/firmware.bin",
+                "firmware/sonoff/data_file.bin",
+                "firmware/custom/firmware.bin",
+                "firmware/custom/data_file.bin",
+                "tft/gui.tft",
+                "tft/gui_us.tft",
+            ):
+                kind, name = key.split("/", 1)
+                path = self.servable_path(kind, name)
+                h = hashlib.md5()
+                try:
+                    with open(path, "rb") as f:
+                        for chunk in iter(lambda: f.read(65536), b""):
+                            h.update(chunk)
+                    out[key] = h.hexdigest()
+                except OSError:
+                    out[key] = ""
+            return out
+
+        self._ota_md5 = await self.hass.async_add_executor_job(_rehash)
+
+    def _restore_firmware_overlay(self) -> None:
+        """Re-activate a previously downloaded firmware set (no I/O on loop)."""
+        from . import firmware_store as _fs
+
+        version = (self.config.settings.firmware_active_version or "").strip()
+        if not version:
+            return
+        target = _fs.overlay_dir(self.hass.config.path(), version)
+        paths = {
+            key: os.path.join(target, key.replace("/", "__")) for key in _fs.SERVABLE_FILES
+        }
+        if _fs.validate_manifest_against(paths):
+            self._ota_overlay = paths
+            self._ota_active_version = version
+            _LOGGER.info("Restored firmware overlay %s", version)
+
+    async def check_firmware_updates(self, auto: bool = False) -> dict:
+        """Fetch the manifest, compare with the served version. No download."""
+        from . import firmware_store as _fs
+        from datetime import datetime, timezone
+
+        if self._firmware_status.get("checking"):
+            return dict(self._firmware_status)
+        self._firmware_status = {"checking": True, "error": ""}
+        try:
+            manifest = await _fs.fetch_manifest(
+                self.hass, self.config.settings.firmware_manifest_url
+            )
+            from datetime import datetime, timezone
+
+            self.config.settings.firmware_last_check = datetime.now(timezone.utc).isoformat(
+                timespec="seconds"
+            )
+            if not manifest:
+                self._firmware_status = {"checking": False, "error": "fetch failed"}
+                return dict(self._firmware_status)
+            latest = str(manifest.get("version", ""))
+            self.config.settings.firmware_latest_version = latest
+            current = self._ota_active_version or _fs.bundled_version(
+                os.path.dirname(__file__)
+            )
+            update_available = _fs.is_newer(latest, current) if latest else False
+            self._firmware_status = {
+                "checking": False,
+                "error": "",
+                "latest": latest,
+                "current": current,
+                "update_available": update_available,
+                "notes": manifest.get("notes", ""),
+            }
+            await self.async_save()
+        finally:
+            if self._firmware_status.get("checking"):
+                self._firmware_status = {"checking": False, "error": "aborted"}
+        return dict(self._firmware_status)
+
+    async def activate_firmware_version(self) -> tuple[bool, str]:
+        """Download + activate the latest manifest firmware. Panels pick it
+        up via the normal md5-triggered OTA on their next register."""
+        from . import firmware_store as _fs
+
+        manifest = await _fs.fetch_manifest(
+            self.hass, self.config.settings.firmware_manifest_url
+        )
+        if not manifest:
+            return False, "manifest fetch failed"
+        return await _fs.download_and_activate(self.hass, self, manifest)
 
     def _reschedule_weather(self) -> None:
         for unsub in list(self._weather_unsubs):
