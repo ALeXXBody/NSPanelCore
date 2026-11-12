@@ -224,7 +224,7 @@ bool NSPanel::init() {
   reply_data.clear();
 
   if (NSPMConfig::instance->md5_tft_file.empty()) {
-    LOG_WARNING("No stored MD5 for TFT. Is the panel flashed with NSPanel Manager TFT?");
+    LOG_WARNING("No stored MD5 for TFT. Is the panel flashed with NSPanel Core TFT?");
     // LOG_ERROR("TFT file not flashed! Will not init NSPanel communication further.");
     // return false;
   }
@@ -604,7 +604,7 @@ uint8_t NSPanel::getUpdateProgress() {
 std::string NSPanel::getWarnings() {
   std::string return_string = "";
   if (!NSPanel::instance->_has_received_nspm) {
-    return_string.append("Did not receive NSPM-flag from screen. Is the screen running the NSPanel Manager TFT file?\n");
+    return_string.append("Did not receive NSPM-flag from screen. Is the screen running the NSPanel Core TFT file?\n");
   }
   return return_string;
 }

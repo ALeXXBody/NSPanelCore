@@ -78,29 +78,9 @@
 
         <div class="flex items-center justify-between">
           <span class="block mb-2 text-xl">Logging options</span>
-          <a href="/nspanel_core/download_mqttmanager_log" title="Download MQTTManager log" class="btn btn-outline btn-info">
-            <span class="mdi mdi-download"></span>
-            Download
-          </a>
         </div>
 
-        <!-- MQTTManager log level -->
-        <div class="mb-2">
-          <label for="mqttmanager_log_level" class="block mb-1 text-sm font-medium">MQTTManager log level</label>
-          <div class="flex flex-row-reverse">
-            <select name="mqttmanager_log_level" id="mqttmanager_log_level" class="rounded-none bg-base-300 border-neutral rounded-e-field border border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/room_id" required>
-                <option value="error" {% if mqttmanager_log_level == "error" %}selected{% endif %}>Error</option>
-                <option value="warning" {% if mqttmanager_log_level == "warning" %}selected{% endif %}>Warning</option>
-                <option value="info" {% if mqttmanager_log_level == "info" %}selected{% endif %}>Info</option>
-                <option value="debug" {% if mqttmanager_log_level == "debug" %}selected{% endif %}>Debug</option>
-                <option value="trace" {% if mqttmanager_log_level == "trace" %}selected{% endif %}>Trace</option>
-            </select>
-            <span class="inline-flex items-center px-3 text-sm border border-neutral rounded-e-0 rounded-s-field peer-focus/room_id:border-accent">
-              <span class="mdi mdi-message-alert"></span>
-            </span>
-          </div>
-        </div>
-
+        <p class="text-sm opacity-70 mb-2">Live panel logs are shown on each panel's edit page. Integration logs are in the Home Assistant log (enable debug logging for <code>custom_components.nspanel_core</code>).</p>
         <!-- Number of messages to display on live log -->
         <div class="mb-2">
             <label for="max_live_log_messages" class="block mb-1 text-sm font-medium">Number of message to display on live log</label>

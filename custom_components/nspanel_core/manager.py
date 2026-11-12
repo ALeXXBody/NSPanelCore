@@ -1,12 +1,12 @@
 """NSPanel Core manager — the integration's core.
 
 Ports the external behavior of the C++ MQTT bridge onto HA's event bus:
-- Panel registration (JSON status -> register_accept -> NSPanelConfig protobuf)
+- Panel registration (JSON register -> register_accept -> HTTP config)
 - Light state machines driven by HA state events
 - HA service calls for light commands (same semantics incl. optimistic mode)
-- Room aggregation and NSPanelRoomStatus protobuf publication
-- Command routing for NSPanelMQTTManagerCommand
-- Minute-aligned time/date publishing
+- Plain-text light/entity state publication on firmware topics
+- Command routing for panel JSON commands (method/set, scenes)
+- Time/date/weather publishing to the legacy topics the firmware reads
 - STOMP mirroring so the original web UI gets live updates
 """
 

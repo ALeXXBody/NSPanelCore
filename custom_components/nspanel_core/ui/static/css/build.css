@@ -24,7 +24,7 @@
     themes: all;
 }
 
-/* Custom NSPanel manager theme */
+/* Custom NSPanel Core theme */
 @plugin "daisyui/theme" {
     name: "nspmwip";
     default: false;
