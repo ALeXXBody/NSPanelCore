@@ -62,7 +62,18 @@ def _render(template_name: str, **context) -> str:
     import json as _json
 
     def _RC(component_name, **props):
-        props_json = _json.dumps(props)
+        # Convert undefined/None values to empty strings for JSON serialization
+        clean = {}
+        for k, v in props.items():
+            if v is None or (hasattr(v, "_undefined_name") or hasattr(v, "__class__") and "Undefined" in type(v).__name__):
+                clean[k] = ""
+            else:
+                try:
+                    _json.dumps(v)
+                    clean[k] = v
+                except (TypeError, ValueError):
+                    clean[k] = str(v)
+        props_json = _json.dumps(clean)
         unique_id = f"react-{component_name}-{id(props)}"
         return f"<div id='{unique_id}' data-react-component='{component_name}' data-react-props='{props_json}'></div>"
 
@@ -70,7 +81,21 @@ def _render(template_name: str, **context) -> str:
         loader=jinja2.FileSystemLoader(str(TEMPLATES_DIR)),
         autoescape=True,
     )
+    import base64 as _b64
+    import json as _json2
+
+    def _jsonify(value):
+        try:
+            return _json2.dumps(value)
+        except Exception:
+            return str(value)
+
+    def _base64_encode(value):
+        return _b64.b64encode(str(value).encode()).decode()
+
     env.globals["RC"] = _RC
+    env.filters["jsonify"] = _jsonify
+    env.filters["base64_encode"] = _base64_encode
     template = env.get_template(template_name)
     context.setdefault("notifications", [])
     import json as _json
