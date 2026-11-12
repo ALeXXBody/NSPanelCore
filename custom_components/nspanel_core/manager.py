@@ -631,7 +631,7 @@ class NSPanelManager:
         elif color_mode == "hs" and light.can_rgb:
             light.mode = "rgb"
             hs = attrs.get("hs_color")
-            if hs and (int(hs[0]) != light.hue or int(hs[1]) != light.saturation):
+            if hs and len(hs) >= 2 and (int(hs[0]) != light.hue or int(hs[1]) != light.saturation):
                 changed = True
                 light.hue = int(hs[0])
                 light.saturation = int(hs[1])
