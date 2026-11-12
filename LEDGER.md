@@ -81,7 +81,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P5 | Verify in a real browser (Playwright + Chromium), not by inspection | ✅ Done (direct load + reload, 1184×900) |
 | P6 | A new release must never be masked by a stale browser cache: panel module + UI assets must be cache-busted per version | ✅ Done (v1.3.4, stale-cache simulation verified) |
 | P7 | Full audit — every linkage, every file, every piece of code; app is currently a mess | 🔄 In progress (audit pass 6) |
-| P8 | Fix audit findings in order 1–6: (1) auth + WS token + XSS; (2) entities load; (3) STOMP KeyError + topic_safe + accept-to-MAC; (4) wire contract; (5) OTA views, typos, literal URLs, close_modals; (6) persistence, dead forms, storage debounce, OTA hash cache | ✅ Fixes 1–5 done, committed (fb5b94e, 7464d58, c17f2e8), browser/MQTT-verified. 🔄 Fix 6 in progress |
+| P8 | Fix audit findings in order 1–6: (1) auth + WS token + XSS; (2) entities load; (3) STOMP KeyError + topic_safe + accept-to-MAC; (4) wire contract; (5) OTA views, typos, literal URLs, close_modals; (6) persistence, dead forms, storage debounce, OTA hash cache | ✅ All 6 done, committed, browser/MQTT-verified (v1.3.5) |
 
 > **P6 evidence (2026-11-12, on the user's real HA 192.168.50.20, HA 2026.11.1 /
 > frontend 20261028.5):** the panel rendered fine in a clean browser profile,
@@ -168,6 +168,7 @@ iframe at the new UI path.
 | 3 | 2026-11-12 | Blocking I/O, sensor attribute access, _send_panel_config, _manager guard, apply_settings await, kelvin_pct guard, date_format, model to_dict/from_dict, EditRoomView, hs_color bounds | v1.3.2 |
 | 4 | 2026-11-12 | Route collision (`/nspanel_core` UI shadowed HA SPA → refresh bounce), redirect script, hardcoded version, blocking manifest read | v1.3.3 |
 | 5 | 2026-11-12 | Stale 31-day browser cache masking new panel.js (blank panel), unversioned UI assets, 4 status components importing hybrids from `/static/...` (404) | v1.3.4 |
+| 6 | 2026-11-12 | Full audit, 5 lanes: unauthenticated API/WS, entities crash at setup, protobuf/JSON + MAC/hostname wire mismatch, ~25 dead UI actions, unvalidated persistence, storage write per state event, sync OTA hashing | v1.3.5 |
 
 ---
 
@@ -216,6 +217,7 @@ iframe at the new UI path.
 | v1.3.2 | 2026-11-12 | Audit round 2: 18 more bugs fixed |
 | v1.3.3 | 2026-11-12 | UI moved to `/nspanel_core/ui` (fixes refresh bounce/blank panel), dynamic version, 40px logo |
 | v1.3.4 | 2026-11-12 | Cache-busted panel module + all UI assets (fixes blank panel caused by a 31-day cached panel.js), fixed 4 status components importing hybrids from `/static/...` |
+| v1.3.5 | 2026-11-12 | Full-audit remediation: authenticated API + STOMP token + XSS fixes; entities load; topic_safe + accept-to-MAC + STOMP fanout; JSON/hostname wire contract vs field firmware; OTA routes at firmware paths + dead-link/typo cleanup; validated settings, working forms/uploads, storage debounce, OTA hash cache |
 
 ---
 
