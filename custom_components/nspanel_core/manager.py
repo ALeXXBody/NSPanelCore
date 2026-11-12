@@ -491,8 +491,10 @@ class NSPanelManager:
             await self._publish_panel_status(panel, "online")
 
         # Registration carries the panel's current checksums — evaluate OTA
-        # here (status reports don't include them).
-        await self._maybe_trigger_firmware_ota(panel, data)
+        # here, but ONLY for accepted panels. Flashing an unaccepted (merely
+        # seen) panel would replace its firmware without any consent.
+        if panel.accepted and not panel.denied:
+            await self._maybe_trigger_firmware_ota(panel, data)
 
         if created and not panel.accepted:
             # New registration: notify the UI (original event chain)
@@ -521,6 +523,14 @@ class NSPanelManager:
             panel_mqtt_topic(panel.name, "command"),
             json.dumps({"command": "reload"}),
         )
+        # The stored checksums (from registration) decide OTA here: accept is
+        # the consent gate, so a newly accepted panel updates on the spot
+        # instead of waiting for its next register.
+        await self._maybe_trigger_firmware_ota(panel, {
+            "md5_firmware": panel.firmware_md5,
+            "md5_littlefs": panel.littlefs_md5,
+            "md5_tft_file": panel.tft_md5,
+        })
         _LOGGER.info("Sent register accept + reload to panel %s", panel.name)
         await self._publish_panel_status(panel, "online")
 
