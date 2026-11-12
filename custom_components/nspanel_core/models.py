@@ -91,6 +91,14 @@ class RoomConfig:
     display_order: int = 0
     temp_sensor_entity: str = ""  # optional HA sensor for room temperature
 
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "RoomConfig":
+        known = {f for f in cls.__dataclass_fields__}
+        return cls(**{k: v for k, v in data.items() if k in known})
+
 
 @dataclass
 class EntityPageConfig:
@@ -99,6 +107,14 @@ class EntityPageConfig:
     page_type: int = 4  # 4 / 8 / 12 entities
     is_scenes_page: bool = False
     display_order: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EntityPageConfig":
+        known = {f for f in cls.__dataclass_fields__}
+        return cls(**{k: v for k, v in data.items() if k in known})
 
 
 @dataclass
@@ -110,6 +126,14 @@ class SceneConfig:
     ha_entity: str = ""  # "scene.x" or "script.x"; empty = NSPM-managed
     # NSPM-managed scenes carry saved light states
     light_states: list[dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SceneConfig":
+        known = {f for f in cls.__dataclass_fields__}
+        return cls(**{k: v for k, v in data.items() if k in known})
 
 
 @dataclass
@@ -156,6 +180,14 @@ class PanelConfig:
     tft_md5: str = ""
     littlefs_md5: str = ""
 
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "PanelConfig":
+        known = {f for f in cls.__dataclass_fields__}
+        return cls(**{k: v for k, v in data.items() if k in known})
+
 
 
 
@@ -196,6 +228,14 @@ class GlobalSettings:
     outside_temp_provider: str = ""
     precipitation_format: str = "mm"
     wind_speed_format: str = "kmh"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "GlobalSettings":
+        known = {f for f in cls.__dataclass_fields__}
+        return cls(**{k: v for k, v in data.items() if k in known})
 
 
 @dataclass
