@@ -389,7 +389,7 @@ class NSPanelManager:
         self.stomp.set_retained(panel_topic(panel.mac, "status"), True)
         self.stomp.update_topic(
             panel_topic(panel.mac, "status"),
-            json.dumps({"state": state, "progress": progress, "warnings": warnings or []}),
+            json.dumps({"state": state, "update_progress": progress, "warnings": warnings or []}),
         )
 
     # ------------------------------------------------------------------
