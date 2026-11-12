@@ -89,7 +89,8 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P13 | Remote firmware update to transfer the live panel (.23) from NSPanel Manager (.20:8000) to NSPanel Core | ⚠️ Panel went dark during OTA flash (~15:05 UTC) and hasn't returned. Awaiting user power-cycle; USB reflash prepped (fresh 0.1.152 merged image in repo) |
 | P14 | Accept fails: browser sent no valid token (server log 401s) + toast hid real errors | ✅ Done: v1.3.7 visible errors + proactive refresh; v1.3.8 override (reverted); v1.3.10+ login banner; v1.3.12 sessionStorage lookup; v1.3.13 live-token postMessage path |
 | P15 | Investigate: working HA + sidebar access yet no hassTokens in localStorage | ✅ Root cause: unchecked "Remember me" keeps tokens in sessionStorage only; fixed by reading both stores |
-| P16 | Panel dark post-OTA (no ping/ARP/web/MQTT): merged_flash.bin (fresh 0.1.152) attached to v1.3.14 release; recovery section added to transfer doc | 🔄 Likely alive in AP setup mode (data-file OTA wiped WiFi before the safeguard). Watch running for reappearance; awaiting user: on-site power-cycle/AP check when possible; create dedicated MQTT user meanwhile |
+| P16 | Panel dark post-OTA | ✅ Panel came back on its own running OUR 0.1.152 firmware (JSON reports on hostname topics, entities live: temp + rssi updating). No USB needed. Remaining: TFT display file still old (needs explicit tft_update + EU/US variant confirm), panel hostname is default "NSPanelCore". |
+| P17 | Live-transfer runbook validated end-to-end on real hardware | ✅ Done (accept → auto OTA → re-register → entities live), documented in TRANSFER_TO_NSPANEL_CORE.md "Live remote transfer" + recovery sections |
 | P17 | Branding leftovers: panel setup page title + About dialog still referenced old project | ✅ Done v1.3.15 (rebuilt littlefs + merged images, content bytes verified) |
 
 > **P13 recon (read-only, 2026-11-12):**
