@@ -651,6 +651,13 @@ bool NSPanel::ready() {
 }
 
 bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
+  static int _tft_init_depth = 0;
+  if (_tft_init_depth >= 4) {
+    LOG_ERROR("TFT init failed after 4 attempts, giving up (no stack recursion).");
+    _tft_init_depth = 0;
+    return false;
+  }
+  _tft_init_depth++;
   LOG_INFO("Trying to initialize TFT update at baud ", communication_baud_rate);
   Serial2.updateBaudRate(communication_baud_rate);
 
@@ -766,6 +773,7 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
   uint8_t returnData = Serial2.read();
   if (returnData == 0x05) {
     LOG_INFO("Starting to write to TFT.");
+    _tft_init_depth = 0;
   } else {
     LOG_ERROR("Failed to init upload to TFT. Got return code: ", String(returnData, HEX).c_str());
     while (Serial2.available() > 0) {
@@ -773,15 +781,23 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
       vTaskDelay(5 / portTICK_PERIOD_MS);
     }
     LOG_ERROR("Will retry TFT upload init.");
-    return NSPanel::_initTFTUpdate(communication_baud_rate);
+    bool retry_ok = NSPanel::_initTFTUpdate(communication_baud_rate);
+    if (!retry_ok) {
+      _tft_init_depth = 0;
+    }
+    return retry_ok;
   }
 
+  _tft_init_depth = 0;
   return true;
 }
 
 bool NSPanel::_updateTFTOTA() {
   LOG_INFO("_updateTFTOTA Started.");
-  NSPanel::_initTFTUpdate(115200);
+  if (!NSPanel::_initTFTUpdate(115200)) {
+    LOG_ERROR("TFT init failed, aborting this OTA attempt (will retry in 5s).");
+    return false;
+  }
 
   // URL to download TFT file from
   std::string downloadUrl = "http://";
@@ -795,14 +811,18 @@ bool NSPanel::_updateTFTOTA() {
   }
 
   unsigned long file_size = 0;
-  while (file_size == 0) {
+  for (int _fss = 0; _fss < 60 && file_size == 0; _fss++) {
     file_size = HttpLib::GetFileSize(downloadUrl.c_str());
     if (file_size == 0) {
       LOG_ERROR("Failed to get file size for TFT flashing. Will try again.");
-      vTaskDelay(500 / portTICK_PERIOD_MS);
+      vTaskDelay(2000 / portTICK_PERIOD_MS);
     } else {
       LOG_INFO("Will flash TFT, size: ", file_size);
     }
+  }
+  if (file_size == 0) {
+    LOG_ERROR("TFT flash aborted: could not get file size.");
+    return false;
   }
   unsigned long startWaitingForOKForNextChunk = 0;
   unsigned long nextStartWriteOffset = 0;
@@ -814,9 +834,10 @@ bool NSPanel::_updateTFTOTA() {
     ESP.restart();
   }
 
-  uint8_t dataBuffer[4096];
+  static uint8_t dataBuffer[4096];
 
   // Loop until break when all firmware has finished uploading (data available in stream == 0)
+  int _tft_ack_retries = 0;
   while (true) {
     // Calculate next chunk size
     int next_write_size;
@@ -826,11 +847,18 @@ bool NSPanel::_updateTFTOTA() {
       next_write_size = file_size - lastReadByte;
     }
     size_t bytesReceived = 0;
+    int _dl_tries = 0;
     while (bytesReceived != next_write_size) {
       bytesReceived = HttpLib::DownloadChunk(dataBuffer, downloadUrl.c_str(), nextStartWriteOffset, next_write_size);
       if (bytesReceived != next_write_size) {
         LOG_ERROR("Bytes received: ", bytesReceived, " requested ", next_write_size, ". Will retry.");
         vTaskDelay(250 / portTICK_PERIOD_MS);
+        if (++_dl_tries > 20) {
+          LOG_ERROR("TFT chunk download failed 20 times, aborting OTA attempt.");
+          return false;
+        }
+      } else {
+        _dl_tries = 0;
       }
     }
 
@@ -838,6 +866,7 @@ bool NSPanel::_updateTFTOTA() {
     // protocol) and _readDataToString below blocks until that ACK arrives
     // (5 s timeout). The old unconditional 500 ms delay added ~6 minutes of
     // pure sleep when flashing a 3 MB TFT file (~750 chunks).
+    unsigned long _chunk_start = nextStartWriteOffset;
     Serial2.write(dataBuffer, bytesReceived);
     nextStartWriteOffset += bytesReceived;
     lastReadByte = nextStartWriteOffset;
@@ -852,6 +881,7 @@ bool NSPanel::_updateTFTOTA() {
     } else if (!return_string.empty() && return_string[0] == 0x05) {
       // Old protocol, just upload next chunk.
       LOG_TRACE("Got 0x05, uploading next chunk.");
+      _tft_ack_retries = 0;
     } else if (!return_string.empty() && return_string[0] == 0x08) {
       while (return_string.length() < 5) {
         LOG_TRACE("Waiting for offset data byte ", return_string.length() - 1);
@@ -864,15 +894,34 @@ bool NSPanel::_updateTFTOTA() {
       readNextOffset |= return_string[2] << 8;
       readNextOffset |= return_string[3] << 16;
       readNextOffset |= return_string[4] << 24;
+      if (readNextOffset > file_size) {
+        LOG_ERROR("Panel requested offset beyond file size, aborting OTA attempt.");
+        return false;
+      }
       if (readNextOffset > 0) {
         nextStartWriteOffset = readNextOffset;
+        lastReadByte = readNextOffset;
         LOG_INFO("Got 0x08 with offset, jumping to: ", nextStartWriteOffset, " please wait.");
+      } else {
+        LOG_ERROR("Panel requested offset 0 (full restart not supported), aborting OTA attempt.");
+        return false;
       }
+      _tft_ack_retries = 0;
     } else {
       LOG_DEBUG("Got unexpected return data from panel. Received ", recevied_bytes, " bytes: ");
       for (int i = 0; i < recevied_bytes; i++) {
         LOG_DEBUG("0x", String(return_string[i], HEX).c_str());
       }
+      // Missing/garbled ACK: rewind and resend this chunk (bounded), else
+      // abort instead of advancing with corrupt state.
+      if (++_tft_ack_retries > 10) {
+        LOG_ERROR("TFT chunk ACK failed 10 times, aborting OTA attempt.");
+        return false;
+      }
+      LOG_ERROR("No valid ACK for TFT chunk, resending (attempt ", _tft_ack_retries, ").");
+      nextStartWriteOffset = _chunk_start;
+      lastReadByte = _chunk_start;
+      vTaskDelay(250 / portTICK_PERIOD_MS);
     }
 
     // vTaskDelay(50 / portTICK_PERIOD_MS);

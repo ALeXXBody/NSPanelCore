@@ -41,8 +41,8 @@ try {
       var d = ev.data;
       if (d && d.type === "nspanel-hass-token" && typeof d.access_token === "string" && d.access_token) {
         nspanelLiveToken = d.access_token;
-        // Hide the login banner directly (nspanelRecheckLogin lives in the
-        // ready-scope below and isn't visible from here).
+        // Hide the login banner directly (cheap DOM removal; the global
+        // nspanelRecheckLogin would also work here).
         try {
           var bar = document.getElementById("nspanel-login-banner");
           if (bar) bar.remove();
@@ -61,6 +61,81 @@ function nspanelGetToken() {
   } catch (e2) {
     return "";
   }
+}
+
+// Top-level auth helpers (must live outside $(document).ready so
+// stomp_wrapper.js and the submit handler can call them via typeof checks).
+function nspanelShowLoginBanner() {
+  try {
+    if (document.getElementById("nspanel-login-banner")) return;
+    var bar = document.createElement("div");
+    bar.id = "nspanel-login-banner";
+    bar.setAttribute("style", "background:#7a2e2e;color:#fff;padding:10px 16px;font-size:14px;text-align:center;position:sticky;top:0;z-index:9999;");
+    bar.innerHTML = 'NSPanel Core actions need a Home Assistant login in this browser tab (open the panel from inside Home Assistant, not via a direct link). <a href="/" style="color:#fff;font-weight:bold;text-decoration:underline;">Open Home Assistant login</a> &middot; <a href="#" id="nspanel-login-recheck" style="color:#fff;font-weight:bold;text-decoration:underline;">Check again</a>';
+    var mount = function () {
+      try {
+        if (document.body && !document.getElementById("nspanel-login-banner")) document.body.prepend(bar);
+        var again = document.getElementById("nspanel-login-recheck");
+        if (again) again.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          try {
+            if (nspanelHasToken()) { document.getElementById("nspanel-login-banner").remove(); window.location.reload(); }
+            else { alert("Still no login found in this tab. Log in to Home Assistant first (same address as this page), then come back."); }
+          } catch (e) {}
+        });
+      } catch (e) {}
+    };
+    if (document.body) mount();
+    else document.addEventListener("DOMContentLoaded", mount, { once: true });
+  } catch (e) {}
+}
+function nspanelHideLoginBanner() {
+  try {
+    var bar = document.getElementById("nspanel-login-banner");
+    if (bar) bar.remove();
+  } catch (e) {}
+}
+function nspanelHasToken() {
+  return !!nspanelGetToken();
+}
+function nspanelRecheckLogin() {
+  try {
+    if (nspanelHasToken()) nspanelHideLoginBanner();
+    else nspanelShowLoginBanner();
+  } catch (e) {}
+}
+function nspanelClientId() {
+  var base = "";
+  try {
+    var found = nspanelTokenStore();
+    if (found && found.tokens) base = found.tokens.hassUrl || "";
+  } catch (e) {}
+  base = base || location.origin;
+  return base.replace(/\/+$/, "") + "/";
+}
+async function nspanelRefreshTokenIfNeeded(force) {
+  var found = null;
+  try { found = nspanelTokenStore(); } catch (e) { return; }
+  if (!found || !found.tokens || !found.tokens.refresh_token) return;
+  var tok = found.tokens;
+  var expiresAt = tok.expires || 0;
+  if (!force && expiresAt - Date.now() > 120000) return; // still fresh
+  try {
+    var body = "grant_type=refresh_token&refresh_token=" + encodeURIComponent(tok.refresh_token) +
+               "&client_id=" + encodeURIComponent(nspanelClientId());
+    var resp = await fetch("/auth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body,
+    });
+    if (!resp.ok) return;
+    var fresh = await resp.json();
+    tok.access_token = fresh.access_token;
+    tok.expires_in = fresh.expires_in;
+    tok.expires = Date.now() + fresh.expires_in * 1000;
+    tok.token_type = "Bearer";
+    try { found.store.setItem("hassTokens", JSON.stringify(tok)); } catch (e) {}
+  } catch (e) { /* offline — keep the old token; calls will 401 visibly */ }
 }
 
 document.addEventListener("htmx:configRequest", function (e) {
@@ -195,48 +270,8 @@ $(document).ready(function () {
 // Assistant, or the session here expired — the login lives per address, so
 // working HA elsewhere doesn't carry over. Say so plainly with a way back
 // into HA's own login flow — never ask the user to handle tokens by hand.
-function nspanelShowLoginBanner() {
-  try {
-    if (document.getElementById("nspanel-login-banner")) return;
-    var bar = document.createElement("div");
-    bar.id = "nspanel-login-banner";
-    bar.setAttribute("style", "background:#7a2e2e;color:#fff;padding:10px 16px;font-size:14px;text-align:center;position:sticky;top:0;z-index:9999;");
-    bar.innerHTML = 'NSPanel Core actions need a Home Assistant login in this browser tab (open the panel from inside Home Assistant, not via a direct link). <a href="/" style="color:#fff;font-weight:bold;text-decoration:underline;">Open Home Assistant login</a> &middot; <a href="#" id="nspanel-login-recheck" style="color:#fff;font-weight:bold;text-decoration:underline;">Check again</a>';
-    var mount = function () {
-      try {
-        if (document.body && !document.getElementById("nspanel-login-banner")) document.body.prepend(bar);
-        var again = document.getElementById("nspanel-login-recheck");
-        if (again) again.addEventListener("click", function (ev) {
-          ev.preventDefault();
-          try {
-            if (nspanelHasToken()) { document.getElementById("nspanel-login-banner").remove(); window.location.reload(); }
-            else { alert("Still no login found in this tab. Log in to Home Assistant first (same address as this page), then come back."); }
-          } catch (e) {}
-        });
-      } catch (e) {}
-    };
-    if (document.body) mount();
-    else document.addEventListener("DOMContentLoaded", mount, { once: true });
-  } catch (e) {}
-}
-
-function nspanelHideLoginBanner() {
-  try {
-    var bar = document.getElementById("nspanel-login-banner");
-    if (bar) bar.remove();
-  } catch (e) {}
-}
-
-function nspanelHasToken() {
-  return !!nspanelGetToken();
-}
-
-function nspanelRecheckLogin() {
-  try {
-    if (nspanelHasToken()) nspanelHideLoginBanner();
-    else nspanelShowLoginBanner();
-  } catch (e) {}
-}
+// (nspanelShowLoginBanner/Hide/HasToken/Recheck live at top level so the
+// message listener and stomp_wrapper resolve the same copies.)
 
 try {
   // Check now, once more shortly after load (the parent SPA may still be
@@ -254,44 +289,7 @@ try {
 } catch (e) {}
 
 // Proactively refresh the HA access token when it is about to expire.
-  // HA access tokens live ~30 min; a stale one makes every authed call
-  // 401. The refresh uses the stored refresh_token and updates the same
-  // localStorage entry the frontend uses. client_id must match the one
-  // used at login (origin with trailing slash).
-  function nspanelClientId() {
-    var base = "";
-    try {
-      var found = nspanelTokenStore();
-      if (found && found.tokens) base = found.tokens.hassUrl || "";
-    } catch (e) {}
-    base = base || location.origin;
-    return base.replace(/\/+$/, "") + "/";
-  }
-  async function nspanelRefreshTokenIfNeeded(force) {
-    var found = null;
-    try { found = nspanelTokenStore(); } catch (e) { return; }
-    if (!found || !found.tokens || !found.tokens.refresh_token) return;
-    var tok = found.tokens;
-    var expiresAt = tok.expires || 0;
-    if (!force && expiresAt - Date.now() > 120000) return; // still fresh
-    try {
-      var body = "grant_type=refresh_token&refresh_token=" + encodeURIComponent(tok.refresh_token) +
-                 "&client_id=" + encodeURIComponent(nspanelClientId());
-      var resp = await fetch("/auth/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body,
-      });
-      if (!resp.ok) return;
-      var fresh = await resp.json();
-      tok.access_token = fresh.access_token;
-      tok.expires_in = fresh.expires_in;
-      tok.expires = Date.now() + fresh.expires_in * 1000;
-      tok.token_type = "Bearer";
-      try { found.store.setItem("hassTokens", JSON.stringify(tok)); } catch (e) {}
-    } catch (e) { /* offline — keep the old token; calls will 401 visibly */ }
-  }
-
+// (implementation lives at top level so stomp_wrapper + submit handlers work)
   // Refresh on load and periodically so authed calls rarely hit expiry.
   try { nspanelRefreshTokenIfNeeded(); } catch (e) {}
   setInterval(function () { try { nspanelRefreshTokenIfNeeded(); } catch (e) {} }, 60000);

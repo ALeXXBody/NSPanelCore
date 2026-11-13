@@ -48,8 +48,27 @@ man = {"version": version, "notes": notes, "files": {}}
 for key, name in asset.items():
     man["files"][key] = {"url": f"{base}/{name}", "md5": md5(key)}
 json.dump(man, open("firmware/manifest.json", "w"), indent=2)
-open("custom_components/nspanel_core/firmware/version", "w").write(version + "\n")
 print("manifest rewritten for", version)
+PY
+# Re-download every asset and verify it matches the manifest before committing:
+# a partial/clobbered upload must never become the published manifest.
+python3 - "$VERSION" <<'PY'
+import hashlib, json, sys, urllib.request
+version = sys.argv[1]
+man = json.load(open("firmware/manifest.json"))
+for key, entry in man["files"].items():
+    h = hashlib.md5()
+    req = urllib.request.Request(entry["url"], headers={"User-Agent": "NSPanelCore-publish/1.0"})
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        while True:
+            chunk = resp.read(65536)
+            if not chunk:
+                break
+            h.update(chunk)
+    if h.hexdigest() != entry["md5"]:
+        print(f"VERIFY FAILED: {key} served {h.hexdigest()} != manifest {entry['md5']}", file=sys.stderr)
+        sys.exit(1)
+    print(f"verified {key}")
 PY
 echo "$VERSION" > "$REPO_ROOT/custom_components/nspanel_core/firmware/version"
 git -C "$REPO_ROOT" add firmware/manifest.json custom_components/nspanel_core/firmware/version

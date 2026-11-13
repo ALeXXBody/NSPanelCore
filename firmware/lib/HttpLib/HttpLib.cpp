@@ -41,7 +41,10 @@ size_t HttpLib::DownloadChunk(uint8_t *buffer, const char *address, size_t offse
 
   int httpReturnCode = httpClient.GET();
   // LOG_TRACE("Downloading TFT ", rangeHeader.c_str(), " got return code: ", httpReturnCode);
-  if (httpReturnCode != 200 && httpReturnCode != 206) {
+  // A ranged request must answer 206. A 200 here means the server ignored
+  // Range and is sending bytes [0..size) — writing that at offset>0
+  // corrupts the flash while reporting 100%. Fail instead of flashing garbage.
+  if (httpReturnCode != 206 && !(offset == 0 && httpReturnCode == 200)) {
     httpClient.end();
     LOG_ERROR("Failed to retrive file chunk from URL '", address, "'. Got return code: ", httpReturnCode);
     return 0;

@@ -263,8 +263,11 @@ class NSPanelCoreManager:
                 else:
                     errors[key] = "must be mm or inch"
             elif key == "wind_speed_format":
-                if str(value) in ("kmh", "ms", "mph", "kn"):
-                    clean[key] = str(value)
+                wv = str(value).strip().lower()
+                if wv == "knots":
+                    wv = "kn"  # template posts "knots"; canonical value is "kn"
+                if wv in ("kmh", "ms", "mph", "kn"):
+                    clean[key] = wv
                 else:
                     errors[key] = "must be kmh, ms, mph or kn"
             elif key in ("use_fahrenheit", "reverse_color_temp", "optimistic_mode",
@@ -290,6 +293,13 @@ class NSPanelCoreManager:
                     errors[key] = "unknown theme"
             elif key in ("outside_temp_sensor_entity", "outside_temp_provider"):
                 clean[key] = str(value or "").strip()
+            elif key == "screensaver_mode":
+                if str(value) in ("with_background", "without_background",
+                                  "datetime_with_background", "datetime_without_background",
+                                  "no_screensaver"):
+                    clean[key] = str(value)
+                else:
+                    errors[key] = "must be a known screensaver mode"
             # else: legacy/unknown form field — ignored deliberately
         cmin = clean.get("color_temp_min", current.get("color_temp_min", 2700))
         cmax = clean.get("color_temp_max", current.get("color_temp_max", 6500))

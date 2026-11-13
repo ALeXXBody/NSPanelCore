@@ -63,7 +63,7 @@ async def async_setup_entry(
             if not panel.accepted:
                 continue
             for kind in _wanted_kinds(panel):
-                unique = f"{DOMAIN}_{panel.mac}_{kind}"
+                unique = f"{DOMAIN}_{topic_safe(panel.mac)}_{kind}"
                 if unique not in added:
                     added.add(unique)
                     new_entities.append(PanelSensor(entry, manager, panel, kind))
@@ -84,7 +84,7 @@ async def async_setup_entry(
             for kind, cap in REQUIRES_CAPABILITY.items():
                 if getattr(panel, cap, False):
                     continue
-                unique = f"{DOMAIN}_{panel.mac}_{kind}"
+                unique = f"{DOMAIN}_{topic_safe(panel.mac)}_{kind}"
                 entity_id = reg.async_get_entity_id("sensor", DOMAIN, unique)
                 if entity_id is not None:
                     reg.async_remove(entity_id)

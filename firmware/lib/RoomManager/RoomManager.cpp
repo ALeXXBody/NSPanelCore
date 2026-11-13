@@ -72,29 +72,96 @@ void RoomManager::loadAllRooms(bool is_update) {
   } while (!successDownloadingConfig);
   // Config downloaded, process the raw data
   // The config also contains other config values for the interface. Populate InterfaceConfig
-  InterfaceConfig::homeScreen = (*roomData)["home"].as<uint16_t>();
-  InterfaceConfig::default_page = static_cast<DEFAULT_PAGE>((*roomData)["default_page"].as<uint8_t>());
-  InterfaceConfig::colorTempMin = (*roomData)["color_temp_min"].as<uint16_t>();
-  InterfaceConfig::colorTempMax = (*roomData)["color_temp_max"].as<uint16_t>();
-  InterfaceConfig::reverseColorTempSlider = (*roomData)["reverse_color_temp"].as<String>().equalsIgnoreCase("true");
-  InterfaceConfig::raiseToMaxLightLevelAbove = (*roomData)["raise_to_100_light_level"].as<uint8_t>();
-  InterfaceConfig::button_min_press_time = (*roomData)["min_button_push_time"].as<uint16_t>();
-  InterfaceConfig::button_long_press_time = (*roomData)["button_long_press_time"].as<uint16_t>();
-  InterfaceConfig::special_mode_trigger_time = (*roomData)["special_mode_trigger_time"].as<uint16_t>();
-  InterfaceConfig::special_mode_release_time = (*roomData)["special_mode_release_time"].as<uint16_t>();
-  InterfaceConfig::mqtt_ignore_time = (*roomData)["mqtt_ignore_time"].as<uint16_t>();
-  InterfaceConfig::screen_dim_level = (*roomData)["screen_dim_level"].as<uint8_t>();
-  InterfaceConfig::screensaver_dim_level = (*roomData)["screensaver_dim_level"].as<uint8_t>();
-  InterfaceConfig::screensaver_activation_timeout = (*roomData)["screensaver_activation_timeout"].as<uint16_t>();
-  InterfaceConfig::screensaver_mode = (*roomData)["screensaver_mode"].as<String>().c_str();
-  InterfaceConfig::clock_us_style = (*roomData)["clock_us_style"].as<String>().equalsIgnoreCase("true");
-  InterfaceConfig::lock_to_default_room = (*roomData)["lock_to_default_room"].as<String>().equalsIgnoreCase("true");
-  NSPMConfig::instance->is_us_panel = (*roomData)["is_us_panel"].as<String>().equalsIgnoreCase("true");
-  NSPMConfig::instance->button1_mode = static_cast<BUTTON_MODE>((*roomData)["button1_mode"].as<uint8_t>());
-  NSPMConfig::instance->button2_mode = static_cast<BUTTON_MODE>((*roomData)["button2_mode"].as<uint8_t>());
-  NSPMConfig::instance->use_fahrenheit = (*roomData)["use_fahrenheit"].as<String>().equalsIgnoreCase("true");
-  NSPMConfig::instance->temperature_calibration = (*roomData)["temperature_calibration"].as<float>();
-  NSPMConfig::instance->reverse_relays = (*roomData)["reverse_relays"].as<String>().equalsIgnoreCase("true");
+  // Guard every key: a missing key must NOT zero out a live value (that
+  // blanked the backlight / crashed color-temp math on partial configs).
+  InterfaceConfig::homeScreen = (*roomData).containsKey("home") ? (*roomData)["home"].as<uint16_t>() : InterfaceConfig::homeScreen;
+  if ((*roomData).containsKey("default_page")) {
+    InterfaceConfig::default_page = static_cast<DEFAULT_PAGE>((*roomData)["default_page"].as<uint8_t>());
+  }
+  {
+    bool has_min = (*roomData).containsKey("color_temp_min");
+    bool has_max = (*roomData).containsKey("color_temp_max");
+    uint16_t cmin = has_min ? (*roomData)["color_temp_min"].as<uint16_t>() : InterfaceConfig::colorTempMin;
+    uint16_t cmax = has_max ? (*roomData)["color_temp_max"].as<uint16_t>() : InterfaceConfig::colorTempMax;
+    if (cmin < 1000) cmin = 1000;
+    if (cmax > 10000) cmax = 10000;
+    if (cmin < cmax && cmax > 0) {
+      InterfaceConfig::colorTempMin = cmin;
+      InterfaceConfig::colorTempMax = cmax;
+    } else {
+      LOG_ERROR("Ignoring invalid color_temp range from config.");
+    }
+  }
+  if ((*roomData).containsKey("reverse_color_temp")) {
+    InterfaceConfig::reverseColorTempSlider = (*roomData)["reverse_color_temp"].as<String>().equalsIgnoreCase("true");
+  }
+  if ((*roomData).containsKey("raise_to_100_light_level")) {
+    uint8_t _r2m = (*roomData)["raise_to_100_light_level"].as<uint8_t>();
+    if (_r2m > 0) InterfaceConfig::raiseToMaxLightLevelAbove = _r2m;
+    else LOG_ERROR("Ignoring out-of-range raise_to_100_light_level from config.");
+  }
+  if ((*roomData).containsKey("min_button_push_time")) {
+    uint16_t _mbt = (*roomData)["min_button_push_time"].as<uint16_t>();
+    if (_mbt > 0) InterfaceConfig::button_min_press_time = _mbt;
+  }
+  if ((*roomData).containsKey("button_long_press_time")) {
+    uint16_t _blp = (*roomData)["button_long_press_time"].as<uint16_t>();
+    if (_blp > 0) InterfaceConfig::button_long_press_time = _blp;
+  }
+  if ((*roomData).containsKey("special_mode_trigger_time")) {
+    uint16_t _smt = (*roomData)["special_mode_trigger_time"].as<uint16_t>();
+    if (_smt > 0) InterfaceConfig::special_mode_trigger_time = _smt;
+  }
+  if ((*roomData).containsKey("special_mode_release_time")) {
+    uint16_t _smr = (*roomData)["special_mode_release_time"].as<uint16_t>();
+    if (_smr > 0) InterfaceConfig::special_mode_release_time = _smr;
+  }
+  InterfaceConfig::mqtt_ignore_time = (*roomData).containsKey("mqtt_ignore_time") ? (*roomData)["mqtt_ignore_time"].as<uint16_t>() : InterfaceConfig::mqtt_ignore_time;
+  if ((*roomData).containsKey("screen_dim_level")) {
+    uint16_t _sdl = (*roomData)["screen_dim_level"].as<uint16_t>();
+    if (_sdl >= 1 && _sdl <= 100) InterfaceConfig::screen_dim_level = (uint8_t)_sdl;
+    else LOG_ERROR("Ignoring out-of-range screen_dim_level from config.");
+  }
+  if ((*roomData).containsKey("screensaver_dim_level")) {
+    uint16_t _ssl = (*roomData)["screensaver_dim_level"].as<uint16_t>();
+    if (_ssl <= 100) InterfaceConfig::screensaver_dim_level = (uint8_t)_ssl;
+  }
+  if ((*roomData).containsKey("screensaver_activation_timeout")) {
+    uint16_t _sat = (*roomData)["screensaver_activation_timeout"].as<uint16_t>();
+    if (_sat > 0) InterfaceConfig::screensaver_activation_timeout = _sat;
+    else LOG_ERROR("Ignoring out-of-range screensaver_activation_timeout from config.");
+  }
+  if ((*roomData).containsKey("screensaver_mode")) {
+    String _sm = (*roomData)["screensaver_mode"].as<String>();
+    if (_sm.length() > 0) InterfaceConfig::screensaver_mode = _sm.c_str();
+    else LOG_ERROR("Ignoring empty screensaver_mode from config.");
+  }
+  if ((*roomData).containsKey("clock_us_style")) {
+    InterfaceConfig::clock_us_style = (*roomData)["clock_us_style"].as<String>().equalsIgnoreCase("true");
+  }
+  if ((*roomData).containsKey("lock_to_default_room")) {
+    InterfaceConfig::lock_to_default_room = (*roomData)["lock_to_default_room"].as<String>().equalsIgnoreCase("true");
+  }
+  NSPMConfig::instance->is_us_panel = (*roomData).containsKey("is_us_panel") ? (*roomData)["is_us_panel"].as<String>().equalsIgnoreCase("true") : NSPMConfig::instance->is_us_panel;
+  if ((*roomData).containsKey("button1_mode")) {
+    uint8_t _b1 = (*roomData)["button1_mode"].as<uint8_t>();
+    if (_b1 <= 3) NSPMConfig::instance->button1_mode = static_cast<BUTTON_MODE>(_b1);
+    else LOG_ERROR("Ignoring invalid button1_mode from config.");
+  }
+  if ((*roomData).containsKey("button2_mode")) {
+    uint8_t _b2 = (*roomData)["button2_mode"].as<uint8_t>();
+    if (_b2 <= 3) NSPMConfig::instance->button2_mode = static_cast<BUTTON_MODE>(_b2);
+    else LOG_ERROR("Ignoring invalid button2_mode from config.");
+  }
+  if ((*roomData).containsKey("use_fahrenheit")) {
+    NSPMConfig::instance->use_fahrenheit = (*roomData)["use_fahrenheit"].as<String>().equalsIgnoreCase("true");
+  }
+  if ((*roomData).containsKey("temperature_calibration")) {
+    NSPMConfig::instance->temperature_calibration = (*roomData)["temperature_calibration"].as<float>();
+  }
+  if ((*roomData).containsKey("reverse_relays")) {
+    NSPMConfig::instance->reverse_relays = (*roomData)["reverse_relays"].as<String>().equalsIgnoreCase("true");
+  }
   // Home widget flags default to visible when the manager predates them.
   if ((*roomData).containsKey("show_home_scenes")) {
     InterfaceConfig::show_home_scenes = (*roomData)["show_home_scenes"].as<String>().equalsIgnoreCase("true");
@@ -108,31 +175,48 @@ void RoomManager::loadAllRooms(bool is_update) {
   if ((*roomData).containsKey("show_home_kelvin")) {
     InterfaceConfig::show_home_kelvin = (*roomData)["show_home_kelvin"].as<String>().equalsIgnoreCase("true");
   }
-  NSPMConfig::instance->button1_mqtt_topic = (*roomData)["button1_mqtt_topic"].as<String>().c_str();
-  NSPMConfig::instance->button1_mqtt_payload = (*roomData)["button1_mqtt_payload"].as<String>().c_str();
-  NSPMConfig::instance->button2_mqtt_topic = (*roomData)["button2_mqtt_topic"].as<String>().c_str();
-  NSPMConfig::instance->button2_mqtt_payload = (*roomData)["button2_mqtt_payload"].as<String>().c_str();
-
-  bool relay1_default_mode = (*roomData)["relay1_default_mode"].as<String>().equalsIgnoreCase("true");
-  bool relay2_default_mode = (*roomData)["relay2_default_mode"].as<String>().equalsIgnoreCase("true");
-
-  if (NSPMConfig::instance->relay1_default_mode != relay1_default_mode) {
-    LOG_INFO("Saving new relay 1 default mode: ", relay1_default_mode ? "ON" : "OFF");
-    NSPMConfig::instance->relay1_default_mode = relay1_default_mode;
-    save_new_config_to_littlefs_at_end = true;
+  if ((*roomData).containsKey("button1_mqtt_topic")) {
+    NSPMConfig::instance->button1_mqtt_topic = (*roomData)["button1_mqtt_topic"].as<String>().c_str();
+  }
+  if ((*roomData).containsKey("button1_mqtt_payload")) {
+    NSPMConfig::instance->button1_mqtt_payload = (*roomData)["button1_mqtt_payload"].as<String>().c_str();
+  }
+  if ((*roomData).containsKey("button2_mqtt_topic")) {
+    NSPMConfig::instance->button2_mqtt_topic = (*roomData)["button2_mqtt_topic"].as<String>().c_str();
+  }
+  if ((*roomData).containsKey("button2_mqtt_payload")) {
+    NSPMConfig::instance->button2_mqtt_payload = (*roomData)["button2_mqtt_payload"].as<String>().c_str();
   }
 
-  if (NSPMConfig::instance->relay2_default_mode != relay2_default_mode) {
-    LOG_INFO("Saving new relay 2 default mode: ", relay2_default_mode ? "ON" : "OFF");
-    NSPMConfig::instance->relay2_default_mode = relay2_default_mode;
-    save_new_config_to_littlefs_at_end = true;
+  if ((*roomData).containsKey("relay1_default_mode")) {
+    bool relay1_default_mode = (*roomData)["relay1_default_mode"].as<String>().equalsIgnoreCase("true");
+    if (NSPMConfig::instance->relay1_default_mode != relay1_default_mode) {
+      LOG_INFO("Saving new relay 1 default mode: ", relay1_default_mode ? "ON" : "OFF");
+      NSPMConfig::instance->relay1_default_mode = relay1_default_mode;
+      save_new_config_to_littlefs_at_end = true;
+    }
   }
 
-  if (NSPMConfig::instance->wifi_hostname.compare((*roomData)["name"].as<String>().c_str()) != 0) {
-    save_new_config_to_littlefs_at_end = true;
-    reboot_after_config_saved = true;
-    NSPMConfig::instance->wifi_hostname = (*roomData)["name"].as<String>().c_str();
-    LOG_DEBUG("Name has changed. Restarting.");
+  if ((*roomData).containsKey("relay2_default_mode")) {
+    bool relay2_default_mode = (*roomData)["relay2_default_mode"].as<String>().equalsIgnoreCase("true");
+    if (NSPMConfig::instance->relay2_default_mode != relay2_default_mode) {
+      LOG_INFO("Saving new relay 2 default mode: ", relay2_default_mode ? "ON" : "OFF");
+      NSPMConfig::instance->relay2_default_mode = relay2_default_mode;
+      save_new_config_to_littlefs_at_end = true;
+    }
+  }
+
+  if ((*roomData).containsKey("name") && (*roomData)["name"].as<String>().length() > 0) {
+    if (NSPMConfig::instance->wifi_hostname.compare((*roomData)["name"].as<String>().c_str()) != 0) {
+      save_new_config_to_littlefs_at_end = true;
+      reboot_after_config_saved = true;
+      NSPMConfig::instance->wifi_hostname = (*roomData)["name"].as<String>().c_str();
+      LOG_DEBUG("Name has changed. Restarting.");
+    }
+  } else if (!(*roomData).containsKey("name")) {
+    LOG_ERROR("Config has no name; keeping current hostname.");
+  } else {
+    LOG_ERROR("Ignoring empty name from config; keeping current hostname.");
   }
 
   if (save_new_config_to_littlefs_at_end) {

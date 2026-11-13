@@ -170,12 +170,19 @@ class StompServer:
 
     async def _fanout(self, topic: str, t: dict, value: str) -> None:
         for conn, sub_id in list(t["subscribers"].items()):
-            await conn.send("MESSAGE", {
-                "message-id": str(uuid.uuid4()),
-                "content-type": "text/plain",
-                "destination": topic,
-                "subscription": sub_id,
-            }, value)
+            try:
+                await conn.send("MESSAGE", {
+                    "message-id": str(uuid.uuid4()),
+                    "content-type": "text/plain",
+                    "destination": topic,
+                    "subscription": sub_id,
+                }, value)
+            except Exception:  # noqa: BLE001 — one dead conn must not starve the rest
+                _LOGGER.debug("Dropping dead STOMP subscriber for %s", topic, exc_info=True)
+                try:
+                    del t["subscribers"][conn]
+                except KeyError:
+                    pass
 
     def _snapshot_subscribers(self, t: dict) -> dict:
         return dict(t["subscribers"])
@@ -199,7 +206,7 @@ class StompServer:
                 if c is conn and (sid == sub_id or sub_id is None):
                     del t["subscribers"][c]
 
-    def _fire_last_will(self, conn: StompConnection) -> None:
+    async def _fire_last_will(self, conn: StompConnection) -> None:
         lw = conn.last_will
         if not lw or not lw.get("topic"):
             return
@@ -208,10 +215,14 @@ class StompServer:
         self.update_topic(topic, message)
         frame = {"destination": topic, "body": message}
         for cb in self.global_callbacks:
-            cb(frame)
+            res = cb(frame)
+            if asyncio.iscoroutine(res):
+                await res
         cb = self.send_callbacks.get(topic)
         if cb:
-            cb(frame)
+            res = cb(frame)
+            if asyncio.iscoroutine(res):
+                await res
 
     # -- websocket handling ----------------------------------------------
 
@@ -232,7 +243,7 @@ class StompServer:
         finally:
             self.connections.discard(conn)
             self._unsubscribe(conn, None, None)
-            self._fire_last_will(conn)
+            await self._fire_last_will(conn)
             _LOGGER.info("STOMP client disconnected: %s", request.remote)
         return ws
 
@@ -292,10 +303,14 @@ class StompServer:
                 await conn.send("ERROR", {"message": "Topic not allowed"}, destination)
                 return
             for cb in self.global_callbacks:
-                cb({"destination": destination, "body": body})
+                res = cb({"destination": destination, "body": body})
+                if asyncio.iscoroutine(res):
+                    await res
             cb = self.send_callbacks.get(destination)
             if cb:
-                cb({"destination": destination, "body": body})
+                res = cb({"destination": destination, "body": body})
+                if asyncio.iscoroutine(res):
+                    await res
             elif not destination.startswith("mqtt/"):
                 _LOGGER.warning("Received STOMP SEND for unknown topic: %s", destination)
 

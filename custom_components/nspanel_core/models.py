@@ -148,7 +148,7 @@ class PanelConfig:
     denied: bool = False
     # Panel behaviour (subset of NSPanelSettings protobuf fields)
     default_page: int = 0  # 0=MAIN, 1=SCENES, 2=ROOM
-    screensaver_mode: int = 0
+    screensaver_mode: str = "with_background"
     screensaver_activation_timeout: int = 15
     min_button_push_time: int = 50
     button_long_press_time: int = 400
@@ -157,12 +157,14 @@ class PanelConfig:
     screen_dim_level: int = 100
     screensaver_dim_level: int = 20
     clock_us_style: bool = False
+    lock_to_default_room: bool = False
     use_fahrenheit: bool = False
     is_us_panel: bool = False
+    us_panel_orientation: str = ""
     reverse_relays: bool = False
     relay1_default_mode: bool = False
     relay2_default_mode: bool = False
-    temperature_calibration: int = 0
+    temperature_calibration: float = 0.0
     has_humidity: bool = False
     has_pressure: bool = False
     button1_mode: int = 0  # 0=DIRECT 1=FOLLOW 2=NOTIFY_MANAGER 3/4 thermostat
@@ -193,6 +195,24 @@ class PanelConfig:
     firmware_md5: str = ""
     tft_md5: str = ""
     littlefs_md5: str = ""
+
+    _SCREENSAVER_MODES = (
+        "with_background", "without_background",
+        "datetime_with_background", "datetime_without_background",
+        "no_screensaver", "global",
+    )
+
+    def __post_init__(self) -> None:
+        # Migrate legacy stored values (pre-string-enum): int 0/1/2 and
+        # anything outside the enum fall back to with_background (the old
+        # int was sent as "0", which the display rejected — any valid mode
+        # is strictly better). Temperature may be stored as int/str.
+        if not isinstance(self.screensaver_mode, str) or self.screensaver_mode not in self._SCREENSAVER_MODES:
+            self.screensaver_mode = "with_background"
+        try:
+            self.temperature_calibration = float(self.temperature_calibration)
+        except (ValueError, TypeError):
+            self.temperature_calibration = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -242,6 +262,7 @@ class GlobalSettings:
     light_turn_on_brightness: int = 0
     use_fahrenheit: bool = False
     weather_update_interval: int = 30
+    screensaver_mode: str = "with_background"
     location_latitude: str = ""
     location_longitude: str = ""
     outside_temp_sensor_entity: str = ""

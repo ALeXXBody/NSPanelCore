@@ -1,4 +1,4 @@
-<div hx-trigger="register_request from:body" hx-get="/nspanel_core/htmx/nspanels" hx-swap="outerHTML">
+<div id="nspanels_section" hx-trigger="register_request from:body" hx-get="/nspanel_core/htmx/nspanels" hx-swap="outerHTML">
     {% if nspanels|length > 0 %}
     <script>
         console.debug('NSPanel Core: nspanels found');

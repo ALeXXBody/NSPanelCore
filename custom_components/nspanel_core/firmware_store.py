@@ -61,6 +61,10 @@ def _version_tuple(v: str) -> tuple:
             parts.append(int(p))
         except ValueError:
             parts.append(0)
+    # Zero-pad so different-length versions compare semantically
+    # ("1.0" == "1.0.0", not newer).
+    while len(parts) < 3:
+        parts.append(0)
     return tuple(parts)
 
 
@@ -142,5 +146,35 @@ async def download_and_activate(hass, manager, manifest: dict) -> tuple[bool, st
     return True, f"firmware {version} active"
 
 
-def validate_manifest_against(paths: dict[str, str]) -> bool:
-    return all(os.path.isfile(p) for p in paths.values())
+def validate_manifest_against(paths: dict[str, str], manifest: dict | None = None) -> bool:
+    """Verify overlay files exist AND still match the manifest md5s.
+
+    Existence alone re-activated truncated/corrupt overlays on every boot;
+    callers that have the manifest pass it for hash verification.
+    """
+    expected: dict[str, str] = {}
+    if isinstance(manifest, dict):
+        files = manifest.get("files", {})
+        if isinstance(files, dict):
+            for key, entry in files.items():
+                if isinstance(entry, dict) and entry.get("md5"):
+                    expected[key] = str(entry["md5"]).lower()
+    import hashlib as _hashlib
+
+    for key, path in paths.items():
+        if not os.path.isfile(path):
+            return False
+        want = expected.get(key, "")
+        if not want:
+            continue
+        try:
+            h = _hashlib.md5()
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(65536), b""):
+                    h.update(chunk)
+            if h.hexdigest() != want:
+                _LOGGER.warning("Firmware overlay file %s failed checksum; ignoring overlay", key)
+                return False
+        except OSError:
+            return False
+    return True

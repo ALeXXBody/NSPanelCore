@@ -272,6 +272,11 @@ class PanelActionView(HomeAssistantView):
                     panel_mqtt_topic(panel.name, "command"),
                     json.dumps({"command": command}),
                 )
+        referer = request.headers.get("Referer", "") or ""
+        if "denied" in referer and action == "accept":
+            # Denied page swaps the row itself: empty body removes it.
+            return web.Response(text="", content_type="text/html")
+        # Index page buttons target the section wrapper: full grid replaces grid.
         html = _render(
             "index_htmx_nspanels_section.html",
             nspanels=_panels_context(manager),
@@ -352,7 +357,7 @@ class EditPanelView(HomeAssistantView):
         ]
         settings_ctx = dict(panel_dict)
         settings_ctx["selected_tft"] = ""
-        settings_ctx["us_panel_orientation"] = ""
+        settings_ctx["us_panel_orientation"] = panel.us_panel_orientation or ""
         html = _render(
             "edit_nspanel.html",
             panel_info=panel_info,
@@ -404,10 +409,15 @@ class SavePanelSettingsView(HomeAssistantView):
             "special_mode_release_time": ("special_mode_release_time", int),
             "screen_dim_level": ("screen_dim_level", int),
             "screensaver_dim_level": ("screensaver_dim_level", int),
-            "temperature_calibration": ("temperature_calibration", int),
+            "temperature_calibration": ("temperature_calibration", float),
             "default_page": ("default_page", int),
             "default_light_brightness": ("default_light_brightness", int),
         }
+        _SCREENSAVER_MODES = (
+            "with_background", "without_background",
+            "datetime_with_background", "datetime_without_background",
+            "no_screensaver", "global",
+        )
         for form_key, (attr, typ) in field_map.items():
             if form_key in form:
                 try:
@@ -420,11 +430,46 @@ class SavePanelSettingsView(HomeAssistantView):
             except (ValueError, TypeError):
                 v = 0
             setattr(panel, mode_attr, min(max(v, 0), 3))
-        for flag in ("clock_us_style", "use_fahrenheit", "is_us_panel",
-                     "reverse_relays", "relay1_default_mode", "relay2_default_mode",
-                     "optimistic_mode", "show_home_scenes", "show_home_ceiling",
+        def _parse_bool_strict(raw) -> bool | None:
+            if isinstance(raw, bool):
+                return raw
+            s = str(raw).strip().lower()
+            if s in ("true", "1", "yes", "on"):
+                return True
+            if s in ("false", "0", "no", "off"):
+                return False
+            return None
+        # Radio groups post "True"/"False" strings (one option always checked):
+        # presence-check would force True. Parse the value instead.
+        for radio_bool in ("reverse_relays", "relay1_default_mode", "relay2_default_mode",
+                           "lock_to_default_room"):
+            if radio_bool in form:
+                b = _parse_bool_strict(form[radio_bool])
+                if b is not None:
+                    setattr(panel, radio_bool, b)
+        # Checkboxes: presence = checked. (clock_us_style/use_fahrenheit/
+        # optimistic_mode have no controls on this form — never touch them
+        # here, or every save would wipe a True back to False.)
+        for flag in ("show_home_scenes", "show_home_ceiling",
                      "show_home_table", "show_home_kelvin"):
             panel.__setattr__(flag, flag in form)
+        if "screensaver_mode" in form:
+            sm = str(form["screensaver_mode"]).strip()
+            if sm in _SCREENSAVER_MODES:
+                panel.screensaver_mode = sm
+            else:
+                return web.Response(text="Bad screensaver_mode", status=422)
+        # Panel type select maps to the is_us_panel model flag + orientation.
+        if "panel_type" in form:
+            pt = str(form["panel_type"]).strip().lower()
+            if pt == "eu":
+                panel.is_us_panel = False
+                panel.us_panel_orientation = ""
+            elif pt in ("us_vertical", "us_horizontal", "us_horizontal_mirrored"):
+                panel.is_us_panel = True
+                panel.us_panel_orientation = pt[3:]
+            else:
+                return web.Response(text="Bad panel_type", status=422)
         if "rooms" in form:
             try:
                 selected = [int(v) for v in form.getall("rooms")]
@@ -506,14 +551,16 @@ class WeatherTimeView(HomeAssistantView):
         s = manager.config.settings
         html = _render(
             "weather_and_time.html",
-            settings={
-                "location_latitude": s.location_latitude,
-                "location_longitude": s.location_longitude,
-                "weather_update_interval": s.weather_update_interval,
-                "clock_us_style": s.clock_us_style,
-                "date_format": s.date_format,
-                "use_fahrenheit": s.use_fahrenheit,
-            },
+            location_latitude=s.location_latitude,
+            location_longitude=s.location_longitude,
+            weather_update_interval=s.weather_update_interval,
+            clock_us_style=s.clock_us_style,
+            date_format=s.date_format,
+            use_fahrenheit=s.use_fahrenheit,
+            precipitation_format=s.precipitation_format,
+            wind_speed_format=s.wind_speed_format,
+            outside_temp_provider=s.outside_temp_provider,
+            outside_temp_sensor=s.outside_temp_sensor_entity,
             page_title="Weather & Time",
             nspanels=_panels_context(manager),
         )
@@ -599,9 +646,9 @@ class SettingsView(HomeAssistantView):
             special_mode_trigger_time=350,
             special_mode_release_time=600,
             screensaver_activation_timeout=s.screensaver_activation_timeout if hasattr(s, "screensaver_activation_timeout") else 15,
-            screen_dim_level=0,
+            screen_dim_level=100,
             screensaver_dim_level=20,
-            screensaver_mode=0,
+            screensaver_mode=getattr(s, "screensaver_mode", "with_background"),
             show_screensaver_inside_temperature=True,
             show_screensaver_outside_temperature=True,
             light_turn_on_brightness=s.light_turn_on_brightness,
@@ -647,8 +694,12 @@ class SaveSettingsView(HomeAssistantView):
         "screen_dim_level": (1, 100),
         "screensaver_dim_level": (0, 100),
         "screensaver_activation_timeout": (0, 86400),
-        "screensaver_mode": (0, 2),
     }
+    _PANEL_SCREENSAVER_MODES = (
+        "with_background", "without_background",
+        "datetime_with_background", "datetime_without_background",
+        "no_screensaver",
+    )
 
     async def post(self, request, **kwargs):
         manager = _manager(request)
@@ -675,6 +726,13 @@ class SaveSettingsView(HomeAssistantView):
                 for panel in manager.config.panels:
                     setattr(panel, key, n)
                 pushed.append(key)
+        if "screensaver_mode" in form:
+            sm = str(form["screensaver_mode"]).strip()
+            if sm not in self._PANEL_SCREENSAVER_MODES:
+                return web.Response(text="Bad screensaver_mode", status=422)
+            for panel in manager.config.panels:
+                panel.screensaver_mode = sm
+            pushed.append("screensaver_mode")
         if pushed:
             await manager.async_save()
         return _redirect(request, f"{URL_BASE}/settings")
@@ -1055,6 +1113,65 @@ class FirmwareInstallView(HomeAssistantView):
         return web.json_response({"ok": ok, "message": message})
 
 
+class ReorderRoomsView(HomeAssistantView):
+    """Persist drag-and-drop room order (rooms page sortable).
+
+    Posts htmx_form_save_rooms_order_field = JSON {"rooms": [ids...]}.
+    Unknown ids are ignored; missing rooms keep their relative order after.
+    """
+
+    url = f"{URL_BASE}/htmx_partial_reorder_rooms"
+    name = "nspanel_core:reorder_rooms"
+    requires_auth = True
+
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        form = await request.post()
+        raw = str(form.get("htmx_form_save_rooms_order_field", "") or "")
+        try:
+            payload = json.loads(raw)
+            ids = [int(v) for v in payload.get("rooms", [])]
+        except (ValueError, TypeError, AttributeError):
+            return web.Response(text="Bad rooms order payload", status=400)
+        by_id = {r.id: r for r in manager.config.rooms}
+        ordered = [by_id[v] for v in ids if v in by_id]
+        rest = [r for r in manager.config.rooms if r.id not in {r2.id for r2 in ordered}]
+        manager.config.rooms = ordered + rest
+        for i, r in enumerate(manager.config.rooms):
+            r.display_order = i
+        await manager.async_save()
+        return web.Response(text="", content_type="text/html")
+
+
+class GetIpByHostnameView(HomeAssistantView):
+    """Resolve a hostname to an IP server-side (settings "Load from URL").
+
+    The browser may be unable to resolve LAN names; the HA host can.
+    POST JSON {"hostname": ...} → {"ip": ...} or 422.
+    """
+
+    url = f"{URL_BASE}/get_ip_by_hostname"
+    name = "nspanel_core:get_ip_by_hostname"
+    requires_auth = True
+
+    async def post(self, request, **kwargs):
+        import socket as _socket
+
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            return web.Response(text="Bad JSON", status=400)
+        hostname = str((payload or {}).get("hostname", "") or "").strip()
+        if not hostname:
+            return web.Response(text="Missing hostname", status=400)
+        loop = asyncio.get_event_loop()
+        try:
+            ip = await loop.run_in_executor(None, _socket.gethostbyname, hostname)
+        except Exception as exc:  # noqa: BLE001
+            return web.Response(text=f"Cannot resolve: {exc}", status=422)
+        return web.json_response({"ip": ip})
+
+
 class ComingSoonView(HomeAssistantView):
     """Catch-all under /nspanel_core/* — never leaks the HA frontend into the
     iframe (this caused the 'doubled page' when clicking unported links)."""
@@ -1070,6 +1187,30 @@ class ComingSoonView(HomeAssistantView):
             nspanels=[],
         )
         return web.Response(text=html, content_type="text/html", status=404)
+
+
+_PANEL_SCREENSAVER_MODES = (
+    "with_background", "without_background",
+    "datetime_with_background", "datetime_without_background",
+    "no_screensaver",
+)
+
+
+def _resolve_screensaver_mode(panel, settings) -> str:
+    """Resolve the mode string the display understands.
+
+    Per-panel "global" (and any legacy/invalid value) falls back to the
+    global settings default; anything still invalid falls back to
+    with_background so the panel never receives a mode it rejects.
+    """
+    sm = getattr(panel, "screensaver_mode", "")
+    if not isinstance(sm, str):
+        sm = str(sm)
+    if sm == "global" or sm not in _PANEL_SCREENSAVER_MODES:
+        sm = getattr(settings, "screensaver_mode", "")
+    if not isinstance(sm, str) or sm not in _PANEL_SCREENSAVER_MODES:
+        sm = "with_background"
+    return sm
 
 
 def _panel_json_config(manager, panel) -> dict:
@@ -1107,9 +1248,9 @@ def _panel_json_config(manager, panel) -> dict:
         "screen_dim_level": panel.screen_dim_level,
         "screensaver_dim_level": panel.screensaver_dim_level,
         "screensaver_activation_timeout": panel.screensaver_activation_timeout,
-        "screensaver_mode": str(panel.screensaver_mode),
+        "screensaver_mode": _resolve_screensaver_mode(panel, s),
         "clock_us_style": "True" if panel.clock_us_style else "False",
-        "lock_to_default_room": "False",
+        "lock_to_default_room": "True" if panel.lock_to_default_room else "False",
         "is_us_panel": "True" if panel.is_us_panel else "False",
         "button1_mode": panel.button1_mode,
         "button2_mode": panel.button2_mode,
@@ -1358,6 +1499,29 @@ def _redirect(request, location: str) -> web.Response:
     raise web.HTTPFound(location)
 
 
+def _redirect_back(request, fallback: str) -> web.Response:
+    """Rooms/settings forms live on several pages: go back to the same-origin
+    page that invoked them instead of always landing on the fallback."""
+    try:
+        ref = str(request.headers.get("Referer", "") or "")
+    except Exception:  # noqa: BLE001
+        ref = ""
+    if ref.startswith("/") and ref.startswith(URL_BASE):
+        return _redirect(request, ref)
+    for prefix in ("http://", "https://"):
+        if ref.startswith(prefix):
+            try:
+                from urllib.parse import urlparse
+
+                path = urlparse(ref).path or ""
+            except Exception:  # noqa: BLE001
+                path = ""
+            if path.startswith(URL_BASE):
+                return _redirect(request, path)
+            break
+    return _redirect(request, fallback)
+
+
 class SaveNewRoomView(HomeAssistantView):
     url = f"{URL_BASE}/save_new_room"
     name = "nspanel_core:save_new_room"
@@ -1372,7 +1536,7 @@ class SaveNewRoomView(HomeAssistantView):
         if len(name) > 64:
             return web.Response(text="Room name too long (max 64)", status=400)
         await manager.add_room(name)
-        return _redirect(request, f"{URL_BASE}/settings")
+        return _redirect_back(request, f"{URL_BASE}/settings")
 
 
 class UpdateRoomView(HomeAssistantView):
@@ -1409,7 +1573,7 @@ class UpdateRoomView(HomeAssistantView):
             return web.Response(text="Bad temperature provider", status=400)
         room.temp_sensor_entity = sensor
         await manager.async_save()
-        raise web.HTTPFound(f"{URL_BASE}/settings")
+        return _redirect_back(request, f"{URL_BASE}/settings")
 
 
 class DeleteRoomView(HomeAssistantView):
@@ -1428,7 +1592,7 @@ class DeleteRoomView(HomeAssistantView):
         if len(manager.config.rooms) <= 1:
             return web.Response(text="Cannot delete the last room", status=400)
         await manager.remove_room(room_id)
-        return _redirect(request, f"{URL_BASE}/settings")
+        return _redirect_back(request, f"{URL_BASE}/settings")
 
 
 class RestartView(HomeAssistantView):
@@ -1592,6 +1756,8 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         PlaceholderPageView,
         RestartView,
         ThemeView,
+        ReorderRoomsView,
+        GetIpByHostnameView,
         MessagesView,
         StompView,
         WebappStompView,
@@ -1611,11 +1777,6 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         SelectWeatherOutsideTempSensorView,
         SelectWeatherOutsideTempProviderView,
         SelectWeatherLocationView,
-        SaveSettingsView,
-        UpdateRoomView,
-        SaveFirmwareView,
-        SaveDataFileView,
-        SaveTftFileView,
         DownloadFirmwareView,
         DownloadDataFileView,
         ChecksumFirmwareView,

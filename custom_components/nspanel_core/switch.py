@@ -23,12 +23,34 @@ async def async_setup_entry(
         new_entities = []
         for panel in manager.panels():
             for relay in (1, 2):
-                unique = f"{DOMAIN}_{panel.mac}_relay{relay}"
-                if panel.accepted and unique not in added:
+                unique = f"{DOMAIN}_{topic_safe(panel.mac)}_relay{relay}"
+                if panel.accepted and not panel.denied and unique not in added:
                     added.add(unique)
                     new_entities.append(RelaySwitch(entry, manager, panel, relay))
         if new_entities:
             async_add_entities(new_entities)
+        _remove_stale()
+
+    def _remove_stale() -> None:
+        """Drop switches for removed/denied panels — they would sit dead forever."""
+        from homeassistant.helpers import entity_registry as er
+
+        try:
+            reg = er.async_get(hass)
+        except Exception:  # noqa: BLE001
+            return
+        live = {
+            f"{DOMAIN}_{topic_safe(p.mac)}_relay{r}"
+            for p in manager.panels()
+            if p.accepted and not p.denied
+            for r in (1, 2)
+        }
+        for unique in list(added):
+            if unique not in live:
+                entity_id = reg.async_get_entity_id("switch", DOMAIN, unique)
+                if entity_id is not None:
+                    reg.async_remove(entity_id)
+                added.discard(unique)
 
     _add_new()
     entry.async_on_unload(manager.add_new_panel_listener(_add_new))
@@ -46,7 +68,10 @@ class RelaySwitch(SwitchEntity):
         self._relay = relay
         self._attr_name = f"Relay {relay}"
         self._attr_unique_id = f"{DOMAIN}_{topic_safe(panel.mac)}_relay{relay}"
-        self._state = False
+        try:
+            self._state = bool(manager.relay_state(self._subscribe_topic()))
+        except Exception:  # noqa: BLE001
+            self._state = False
         entry.async_on_unload(manager.add_relay_listener(panel, relay, self._on_state))
 
     def _on_state(self, state: bool) -> None:

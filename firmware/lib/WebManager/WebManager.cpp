@@ -331,8 +331,15 @@ bool WebManager::_update(uint8_t type, const char *url) {
   LOG_DEBUG("Checking size of '", downloadUrl.c_str(), "'.");
   vTaskDelay(500 / portTICK_PERIOD_MS);
   size_t totalSize = 0;
-  while (totalSize == 0) {
+  for (int i = 0; i < 60 && totalSize == 0; i++) {
     totalSize = HttpLib::GetFileSize(downloadUrl.c_str());
+    if (totalSize == 0) {
+      vTaskDelay(2000 / portTICK_PERIOD_MS);
+    }
+  }
+  if (totalSize == 0) {
+    LOG_ERROR("Could not determine remote file size, aborting update.");
+    return false;
   }
   LOG_INFO("Size of remote file '", downloadUrl.c_str(), "' is ", totalSize, " bytes.");
 
@@ -347,9 +354,19 @@ bool WebManager::_update(uint8_t type, const char *url) {
   HTTPClient http;
   http.begin(downloadUrl.c_str());
   int http_code = http.GET();
-  if (http_code == 200) {
-    LOG_INFO("Established download stream for firmware update.");
-    Update.writeStream(http.getStream());
+  if (http_code != 200) {
+    LOG_ERROR("Firmware download failed, HTTP code: ", http_code);
+    http.end();
+    Update.abort();
+    return false;
+  }
+  LOG_INFO("Established download stream for firmware update.");
+  size_t written = Update.writeStream(http.getStream());
+  http.end();
+  if (written != totalSize) {
+    LOG_ERROR("Firmware download short: wrote ", written, " of ", totalSize);
+    Update.abort();
+    return false;
   }
 
   if (!Update.end()) {

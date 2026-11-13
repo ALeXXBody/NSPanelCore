@@ -286,6 +286,7 @@ iframe at the new UI path.
 | v1.3.14 | 2026-11-12 | Fresh 0.1.152 firmware build shipped; auto data-file OTA disabled (wipes remote WiFi) |
 | v1.3.15 | 2026-11-12 | Panel setup page + About dialog rebranded to NSPanel Core; rebuilt data fs + merged images |
 | v1.3.16 | 2026-11-12 | Fix OTA progress display (manager published "progress", UI read "update_progress" — always blank); verified live render |
+| v1.3.36 | 2026-11-13 | Audit repair batches 1+2 + pass-2 deep audit: STOMP await (SEND+last-will+fanout), base.js token scope, save radio/enum/orientation/float fixes, phantom-flag wipe, weather context+knots, reorder/get_ip endpoints, rooms redirects, relay/switch cleanup, modals include, fw 0.1.161 (TFT/ESP OTA robustness, full config guards); sandbox+unit+binary verified |
 
 ---
 
@@ -299,3 +300,5 @@ iframe at the new UI path.
 6. **Version**: Follow semver (bug fix = patch, feature = minor, breaking = major)
 7. **Never reuse a version number** for different changes
 8. **Never skip verification** — if you skip, you audit 100 times
+| P33 | FULL AUDIT (user-ordered): integration core, dashboard/UI, STOMP+realtime, ESP firmware, webUI+OTA+delivery, display files — verify every claim, fix confirmed bugs | ✅ Done (batches 1+2 fixed, verified; pass-2 deep audit done, all real finds fixed) |
+| P34 | REPAIR ALL (user-ordered): fix every verified audit bug batch 1 integration + batch 2 firmware 0.1.161, then redo audit deeper | ✅ Done — v1.3.36 + fw 0.1.161 published; sandbox + unit + binary verified |
