@@ -449,8 +449,12 @@ class NSPanelCoreManager:
         return dict(self._firmware_status)
 
     async def activate_firmware_version(self) -> tuple[bool, str]:
-        """Download + activate the latest manifest firmware. Panels pick it
-        up via the normal md5-triggered OTA on their next register."""
+        """Download + activate the latest manifest firmware, then push OTA.
+
+        Same OTA path as the per-panel update buttons: every accepted panel
+        is evaluated against the newly served checksums immediately instead
+        of waiting for its next register.
+        """
         from . import firmware_store as _fs
 
         manifest = await _fs.fetch_manifest(
@@ -458,7 +462,24 @@ class NSPanelCoreManager:
         )
         if not manifest:
             return False, "manifest fetch failed"
-        return await _fs.download_and_activate(self.hass, self, manifest)
+        ok, message = await _fs.download_and_activate(self.hass, self, manifest)
+        if not ok:
+            return ok, message
+        pushed = 0
+        for panel in self.config.panels:
+            if not panel.accepted or panel.denied:
+                continue
+            self._last_ota_trigger.pop(panel.mac, None)
+            await self._maybe_trigger_firmware_ota(
+                panel,
+                {
+                    "md5_firmware": panel.firmware_md5,
+                    "md5_littlefs": panel.littlefs_md5,
+                    "md5_tft_file": panel.tft_md5,
+                },
+            )
+            pushed += 1
+        return True, f"{message}; OTA pushed to {pushed} panel(s)"
 
     def _reschedule_weather(self) -> None:
         for unsub in list(self._weather_unsubs):

@@ -237,7 +237,7 @@ class PanelActionView(HomeAssistantView):
         except (KeyError, ValueError, TypeError):
             return web.Response(text="Bad panel id", status=400)
         action = request.match_info.get("action", "")
-        if action not in ("accept", "deny", "delete"):
+        if action not in ("accept", "deny", "delete", "update_firmware", "update_tft"):
             return web.Response(text="Unknown action", status=400)
         panel = next((p for p in manager.config.panels if p.id == panel_id), None)
         if panel is None:
@@ -258,6 +258,19 @@ class PanelActionView(HomeAssistantView):
                 manager.config.panels.remove(panel)
                 await manager.async_save()
                 await manager._publish_panel_status(panel, "offline")
+            elif action in ("update_firmware", "update_tft"):
+                if not panel.accepted or panel.denied:
+                    return web.Response(text="Panel not accepted", status=409)
+                from .const import panel_mqtt_topic
+
+                command = "firmware_update" if action == "update_firmware" else "tft_update"
+                # Same OTA path the auto-trigger uses: MQTT command, panel
+                # downloads over HTTP and flashes itself.
+                manager._last_ota_trigger.pop(panel.mac, None)
+                await manager._publish(
+                    panel_mqtt_topic(panel.name, "command"),
+                    json.dumps({"command": command}),
+                )
         html = _render(
             "index_htmx_nspanels_section.html",
             nspanels=_panels_context(manager),
@@ -1000,8 +1013,7 @@ class FirmwareCheckView(HomeAssistantView):
 class FirmwareInstallView(HomeAssistantView):
     """POST: download + activate the latest manifest firmware.
 
-    Panels pick it up automatically via the normal md5-triggered OTA on
-    their next register/status cycle — no app update needed.
+    Panels are pushed the update over the same MQTT OTA path immediately.
     """
 
     url = f"{URL_BASE}/firmware_install"
