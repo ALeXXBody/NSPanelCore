@@ -57,6 +57,30 @@
                         <button class="btn btn-xs btn-warning mr-2" onclick="if(confirm('Reboot all accepted panels?'))document.querySelectorAll('.nspanel-reboot-button').forEach(b=>b.click());">Reboot</button>
                     </div>
                 </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Update firmware on all panels</span>
+                        </label>
+                        <button class="btn btn-xs btn-warning mr-2" onclick="if(confirm('Flash ESP firmware on ALL panels? This also refreshes their setup web UI and WIPES their WiFi settings. Continue?'))document.querySelectorAll('[id^=firmware-update-]').forEach(b=>b.click());">Flash all</button>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Update display on all panels</span>
+                        </label>
+                        <button class="btn btn-xs btn-warning mr-2" onclick="document.querySelectorAll('[id^=screen-update-]').forEach(b=>b.click());">Flash all</button>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Restart NSPanel Core</span>
+                        </label>
+                        <button class="btn btn-xs btn-error mr-2" hx-post="/nspanel_core/api/restart" hx-swap="none">Restart</button>
+                    </div>
+                </li>
             </ul>
           </div>
       </div>
