@@ -1,6 +1,6 @@
 {
   "version": "0.1.159",
-  "notes": "Dark mode toggle switch that works (fixed missing script tag that killed all page JS); version-busted setup CSS.",
+  "notes": "Rebranded display file (NSPanelCore boot animation), compiled from project HMI with Nextion Editor 1.68.2",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
@@ -20,7 +20,7 @@
     },
     "tft/gui.tft": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui.tft",
-      "md5": "62bccfe0e1b5566485d7ab26ebb75893"
+      "md5": "233cbc923f9021a42ddfdbc35c8cfca8"
     },
     "tft/gui_us.tft": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui_us.tft",
