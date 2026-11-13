@@ -816,8 +816,10 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
 static void _powerCycleDisplay() {
   // Hard power-cycle the display so its bootloader is listening from a
   // clean reset. GPIO4 switches the screen supply on NSPanel hardware.
+  // OFF time is deliberately long (3s): the display's capacitors hold
+  // charge and a short cut only browns it out without a clean reset.
   digitalWrite(4, HIGH); // Turn off power to the display
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
+  vTaskDelay(3000 / portTICK_PERIOD_MS);
   digitalWrite(4, LOW); // Turn on power to the display
   vTaskDelay(1200 / portTICK_PERIOD_MS);
 }
@@ -835,20 +837,54 @@ static void _sendWhmiWris(unsigned long file_size) {
 }
 
 // Recovery probe: a bricked bootloader never answers "connect"/comok — it
-// only reacts to whmi-wris. Power-cycle, send the upload command
-// IMMEDIATELY (no connect dance), and watch up to 3s for 0x05/0x08 or any
-// traffic at all. Returns true when the display accepted the upload.
-static bool _probeUploadAtBaud(int baud, unsigned long file_size) {
+// only reacts to the upload command itself. Power-cycle, send BOTH upload
+// command variants (v1.2 `whmi-wris` first, then legacy v1.0 `whmi-wri`
+// for bootloaders that predate v1.2), watching 2.5s each for ANY reply.
+// Logs everything heard; returns true on 0x05/0x08 (upload accepted).
+// Sets *used_v1 when the legacy command was the one accepted.
+static bool _probeUploadAtBaud(int baud, unsigned long file_size, bool *used_v1) {
+  *used_v1 = false;
   Serial2.updateBaudRate(baud);
   _powerCycleDisplay();
   _sendWhmiWris(file_size);
   unsigned long start = millis();
   bool accepted = false;
-  while (millis() - start < 3000) {
+  while (millis() - start < 2500) {
     while (Serial2.available() > 0) {
       uint8_t c = Serial2.read();
-      LOG_ERROR("Heard display at baud ", baud, ": 0x", String(c, HEX).c_str());
+      LOG_ERROR("Heard display at baud ", baud, " (v1.2): 0x", String(c, HEX).c_str());
       if (c == 0x05 || c == 0x08) {
+        accepted = true;
+      }
+    }
+    if (accepted) {
+      break;
+    }
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+  }
+  if (accepted) {
+    return true;
+  }
+  // No answer to v1.2: try the legacy v1.0 command on the same (already
+  // power-cycled) display.
+  {
+    std::string cmd = "whmi-wri ";
+    cmd.append(std::to_string(file_size));
+    cmd.append(",");
+    cmd.append(std::to_string(NSPMConfig::instance->tft_upload_baud));
+    cmd.append(",0");
+    while (Serial2.available() > 0) { Serial2.read(); }
+    Serial2.print(cmd.c_str());
+    { static const uint8_t _term[3] = {0xFF, 0xFF, 0xFF}; Serial2.write(_term, 3); }
+    LOG_DEBUG("Sent legacy TFT upload command: ", cmd.c_str());
+  }
+  start = millis();
+  while (millis() - start < 2500) {
+    while (Serial2.available() > 0) {
+      uint8_t c = Serial2.read();
+      LOG_ERROR("Heard display at baud ", baud, " (v1.0): 0x", String(c, HEX).c_str());
+      if (c == 0x05 || c == 0x08) {
+        *used_v1 = true;
         accepted = true;
       }
     }
@@ -891,12 +927,18 @@ bool NSPanel::_updateTFTOTA() {
   }
   if (!init_ok) {
     // No handshake on any rotated baud. A bricked bootloader never answers
-    // "connect" — probe whmi-wris directly at each baud (power-cycle, send
-    // immediately, watch 3s). First 0x05/0x08 wins and streams below.
-    const int bauds[] = {115200, 9600, 57600, 38400, 19200, 230400};
+    // "connect" — probe the upload command itself at each baud (power-cycle,
+    // send v1.2 then legacy v1.0 immediately, watch for 0x05/0x08).
+    // First accept wins and streams below.
+    const int bauds[] = {115200, 9600, 57600, 38400, 19200, 230400, 460800, 921600};
     for (unsigned i = 0; i < sizeof(bauds) / sizeof(bauds[0]); i++) {
-      if (_probeUploadAtBaud(bauds[i], file_size)) {
-        LOG_ERROR("Display accepted upload at baud ", bauds[i], " — streaming.");
+      bool used_v1 = false;
+      if (_probeUploadAtBaud(bauds[i], file_size, &used_v1)) {
+        LOG_ERROR("Display accepted upload at baud ", bauds[i], used_v1 ? " (v1.0)" : " (v1.2)", " — streaming.");
+        // The upload command tells the display to use tft_upload_baud for
+        // data; match it like the normal init path does.
+        Serial2.updateBaudRate(NSPMConfig::instance->tft_upload_baud);
+        vTaskDelay(50 / portTICK_PERIOD_MS);
         init_ok = true;
         break;
       }
