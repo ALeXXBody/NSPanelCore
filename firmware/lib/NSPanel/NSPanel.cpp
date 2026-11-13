@@ -824,11 +824,11 @@ static void _powerCycleDisplay() {
   vTaskDelay(1200 / portTICK_PERIOD_MS);
 }
 
-static void _sendWhmiWris(unsigned long file_size) {
+static void _sendWhmiWrisAt(unsigned long file_size, uint32_t baud_param) {
   std::string cmd = "whmi-wris ";
   cmd.append(std::to_string(file_size));
   cmd.append(",");
-  cmd.append(std::to_string(NSPMConfig::instance->tft_upload_baud));
+  cmd.append(std::to_string(baud_param));
   cmd.append(",1");
   while (Serial2.available() > 0) { Serial2.read(); }
   Serial2.print(cmd.c_str());
@@ -836,37 +836,47 @@ static void _sendWhmiWris(unsigned long file_size) {
   LOG_DEBUG("Sent TFT upload command: ", cmd.c_str());
 }
 
+static void _sendWhmiWris(unsigned long file_size) {
+  _sendWhmiWrisAt(file_size, NSPMConfig::instance->tft_upload_baud);
+}
+
 // Recovery probe: a bricked bootloader never answers "connect"/comok — it
 // only reacts to the upload command itself. Power-cycle, send BOTH upload
 // command variants (v1.2 `whmi-wris` first, then legacy v1.0 `whmi-wri`
-// for bootloaders that predate v1.2), watching 2.5s each for ANY reply.
-// Logs everything heard; returns true on 0x05/0x08 (upload accepted).
-// Sets *used_v1 when the legacy command was the one accepted.
-static bool _probeUploadAtBaud(int baud, unsigned long file_size, bool *used_v1) {
+// for bootloaders that predate v1.2), watching 4s each for ANY reply.
+// Logs everything heard. Returns 2 on clean accept (0x05/0x08), 1 on any
+// traffic (garbled reply = wrong baud but a LIVE display), 0 on silence.
+// Sets *used_v1 when the legacy command was the one accepted, *traffic to
+// the number of reply bytes heard.
+static int _probeUploadAtBaud(int baud, unsigned long file_size, bool *used_v1, int *traffic) {
   *used_v1 = false;
+  *traffic = 0;
   Serial2.updateBaudRate(baud);
   _powerCycleDisplay();
   _sendWhmiWris(file_size);
   unsigned long start = millis();
-  bool accepted = false;
-  while (millis() - start < 2500) {
+  int result = 0;
+  while (millis() - start < 4000) {
     while (Serial2.available() > 0) {
       uint8_t c = Serial2.read();
+      (*traffic)++;
       LOG_ERROR("Heard display at baud ", baud, " (v1.2): 0x", String(c, HEX).c_str());
       if (c == 0x05 || c == 0x08) {
-        accepted = true;
+        result = 2;
+      } else if (result == 0) {
+        result = 1;
       }
     }
-    if (accepted) {
+    if (result == 2) {
       break;
     }
     vTaskDelay(50 / portTICK_PERIOD_MS);
   }
-  if (accepted) {
-    return true;
+  if (result == 2) {
+    return 2;
   }
-  // No answer to v1.2: try the legacy v1.0 command on the same (already
-  // power-cycled) display.
+  // No clean accept to v1.2: try the legacy v1.0 command on the same
+  // (already power-cycled) display.
   {
     std::string cmd = "whmi-wri ";
     cmd.append(std::to_string(file_size));
@@ -879,21 +889,44 @@ static bool _probeUploadAtBaud(int baud, unsigned long file_size, bool *used_v1)
     LOG_DEBUG("Sent legacy TFT upload command: ", cmd.c_str());
   }
   start = millis();
-  while (millis() - start < 2500) {
+  while (millis() - start < 4000) {
     while (Serial2.available() > 0) {
       uint8_t c = Serial2.read();
+      (*traffic)++;
       LOG_ERROR("Heard display at baud ", baud, " (v1.0): 0x", String(c, HEX).c_str());
       if (c == 0x05 || c == 0x08) {
         *used_v1 = true;
-        accepted = true;
+        result = 2;
+      } else if (result == 0) {
+        result = 1;
       }
     }
-    if (accepted) {
+    if (result == 2) {
       break;
     }
     vTaskDelay(50 / portTICK_PERIOD_MS);
   }
-  return accepted;
+  return result;
+}
+
+// Standard baud rates to try as neighbors of a baud that showed traffic
+// (a garbled reply usually means we are 2x off in either direction).
+static int _neighborBaud(int baud, bool up) {
+  const int std[] = {9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600};
+  const unsigned n = sizeof(std) / sizeof(std[0]);
+  for (unsigned i = 0; i < n; i++) {
+    if (std[i] != baud) {
+      continue;
+    }
+    if (!up && i > 0) {
+      return std[i - 1];
+    }
+    if (up && i + 1 < n) {
+      return std[i + 1];
+    }
+    return 0;
+  }
+  return 0;
 }
 
 bool NSPanel::_updateTFTOTA() {
@@ -929,18 +962,54 @@ bool NSPanel::_updateTFTOTA() {
     // No handshake on any rotated baud. A bricked bootloader never answers
     // "connect" — probe the upload command itself at each baud (power-cycle,
     // send v1.2 then legacy v1.0 immediately, watch for 0x05/0x08).
-    // First accept wins and streams below.
+    // Pass 1: clean accept wins immediately. Pass 2: any baud with garbled
+    // traffic gets its neighbors probed (wrong-baud replies decode as
+    // garbage — the display is alive, we are just off frequency).
+    // Last resort below streams anyway: silence-tolerant, worst case the
+    // bytes go nowhere.
     const int bauds[] = {115200, 9600, 57600, 38400, 19200, 230400, 460800, 921600};
-    for (unsigned i = 0; i < sizeof(bauds) / sizeof(bauds[0]); i++) {
+    const unsigned nbauds = sizeof(bauds) / sizeof(bauds[0]);
+    int traffic_bauds[8];
+    unsigned ntraffic = 0;
+    for (unsigned i = 0; i < nbauds; i++) {
       bool used_v1 = false;
-      if (_probeUploadAtBaud(bauds[i], file_size, &used_v1)) {
+      int heard = 0;
+      int res = _probeUploadAtBaud(bauds[i], file_size, &used_v1, &heard);
+      if (res == 2) {
         LOG_ERROR("Display accepted upload at baud ", bauds[i], used_v1 ? " (v1.0)" : " (v1.2)", " — streaming.");
-        // The upload command tells the display to use tft_upload_baud for
-        // data; match it like the normal init path does.
         Serial2.updateBaudRate(NSPMConfig::instance->tft_upload_baud);
         vTaskDelay(50 / portTICK_PERIOD_MS);
         init_ok = true;
         break;
+      }
+      if (res == 1 && ntraffic < 8) {
+        traffic_bauds[ntraffic++] = bauds[i];
+      }
+    }
+    if (!init_ok && ntraffic > 0) {
+      LOG_ERROR("Display talks (garbled) — hunting neighbors.");
+      for (unsigned i = 0; i < ntraffic && !init_ok; i++) {
+        int neighbors[2] = {_neighborBaud(traffic_bauds[i], false), _neighborBaud(traffic_bauds[i], true)};
+        for (unsigned j = 0; j < 2 && !init_ok; j++) {
+          if (neighbors[j] == 0) {
+            continue;
+          }
+          bool used_v1 = false;
+          int heard = 0;
+          int res = _probeUploadAtBaud(neighbors[j], file_size, &used_v1, &heard);
+          if (res == 2) {
+            LOG_ERROR("Display accepted upload at baud ", neighbors[j], used_v1 ? " (v1.0)" : " (v1.2)", " — streaming.");
+            Serial2.updateBaudRate(NSPMConfig::instance->tft_upload_baud);
+            vTaskDelay(50 / portTICK_PERIOD_MS);
+            init_ok = true;
+          } else if (res == 1) {
+            LOG_ERROR("Display still garbled at neighbor baud ", neighbors[j], " — will stream here anyway.");
+            Serial2.updateBaudRate((uint32_t)neighbors[j]);
+            vTaskDelay(50 / portTICK_PERIOD_MS);
+            _sendWhmiWrisAt(file_size, (uint32_t)neighbors[j]);
+            init_ok = true;
+          }
+        }
       }
     }
     if (!init_ok) {
