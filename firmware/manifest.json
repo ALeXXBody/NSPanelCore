@@ -1,6 +1,6 @@
 {
   "version": "0.1.167",
-  "notes": "Recovery probe: whmi-wris-first at 6 bauds for comok-dead bootloaders",
+  "notes": "whmi-wris-first recovery probe at 6 bauds for comok-dead bootloaders",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
