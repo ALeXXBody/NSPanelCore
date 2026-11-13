@@ -108,7 +108,7 @@ private:
   /// @brief If updating, contains the % done of the update
   uint8_t _update_progress;
   /// @brief A boolean indicating wether or not we have received the "NSPM"-text from the panel once it started.
-  bool _has_received_nspm;
+  bool _display_ready = false;
 };
 
 #endif

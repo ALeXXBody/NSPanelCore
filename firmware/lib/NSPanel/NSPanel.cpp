@@ -180,13 +180,17 @@ bool NSPanel::init() {
   digitalWrite(4, LOW); // Turn on power to the display
   vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-  std::string result = "";
-  this->_readDataToString(&result, 2500, false);
-  if (result.compare("NSPM") == 0) {
-    this->_has_received_nspm = true;
+  // Drain any boot chatter from the display so the handshake below reads a
+  // clean reply. (There used to be a 2.5 s wait here for a magic "NSPM"
+  // string that no display firmware sends — dead logic, removed.)
+  unsigned long silence_start = millis();
+  while (millis() - silence_start < 1500) {
+    while (Serial2.available() > 0) {
+      Serial2.read();
+      silence_start = millis();
+    }
+    vTaskDelay(25 / portTICK_PERIOD_MS);
   }
-
-  LOG_DEBUG("Got text from panel: ", result.c_str());
 
   while (true) {
     if (xSemaphoreTake(NSPanel::instance->_mutexWriteSerialData, portMAX_DELAY)) {
@@ -219,23 +223,38 @@ bool NSPanel::init() {
   }
 
   LOG_DEBUG("Sending final connect to panel");
-  Serial2.print("connect");
-  NSPanel::_sendCommandEndSequence();
-  vTaskDelay(10 / portTICK_PERIOD_MS); // Was a unit-bug mix of microseconds and ticks; 10ms is ample for the panel to process a baud change.
-
-  std::string reply_data = "";
-  while (Serial2.available() > 0) {
-    reply_data.push_back(Serial2.read());
-
-    if (Serial2.available() == 0) {
-      vTaskDelay(25 / portTICK_PERIOD_MS);
+  // A live display answers the connect handshake (typically "comok ...").
+  // Retry a few times: a slow-booting screen needs a moment after its
+  // power cycle. Any non-empty reply proves the serial link works.
+  this->_display_ready = false;
+  for (uint8_t attempt = 0; attempt < 3 && !this->_display_ready; attempt++) {
+    Serial2.print("connect");
+    NSPanel::_sendCommandEndSequence();
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    std::string reply_data = "";
+    unsigned long reply_deadline = millis() + 1000;
+    while ((long)(reply_deadline - millis()) > 0) {
+      while (Serial2.available() > 0) {
+        reply_data.push_back((char)Serial2.read());
+      }
+      if (!reply_data.empty() && Serial2.available() == 0) {
+        vTaskDelay(25 / portTICK_PERIOD_MS);
+        if (Serial2.available() == 0) break;
+      } else {
+        vTaskDelay(25 / portTICK_PERIOD_MS);
+      }
+    }
+    while (reply_data.length() > 3 && reply_data.back() == (char)0xFF) {
+      reply_data.pop_back(); // Strip Nextion 0xFF terminators for the log.
+    }
+    if (!reply_data.empty()) {
+      LOG_INFO("Got reply from display: ", reply_data.c_str());
+      this->_display_ready = true;
+    } else {
+      LOG_WARNING("No reply from display on connect attempt ", String(attempt + 1).c_str());
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
   }
-  if (reply_data.length() > 3) {
-    reply_data.erase(reply_data.length() - 3); // Remove last three 0xFF bytes from panel connect line.
-  }
-  LOG_INFO("Got reply from display: ", reply_data.c_str());
-  reply_data.clear();
 
   if (NSPMConfig::instance->md5_tft_file.empty()) {
     LOG_WARNING("No stored MD5 for TFT. Is the panel flashed with NSPanel Core TFT?");
@@ -259,7 +278,7 @@ bool NSPanel::init() {
   xSemaphoreGive(NSPanel::instance->_mutexReadSerialData);
   Serial2.onReceive(NSPanel::_onSerialData, false);
   LOG_INFO("NSPanel::init complete.");
-  return this->_has_received_nspm;
+  return this->_display_ready;
 }
 
 void NSPanel::_startListeningToPanel() {
@@ -621,14 +640,14 @@ uint8_t NSPanel::getUpdateProgress() {
 
 std::string NSPanel::getWarnings() {
   std::string return_string = "";
-  if (!NSPanel::instance->_has_received_nspm) {
-    return_string.append("Did not receive NSPM-flag from screen. Is the screen running the NSPanel Core TFT file?\n");
+  if (!NSPanel::instance->_display_ready) {
+    return_string.append("No response from the display. Check the display serial connection and power.\n");
   }
   return return_string;
 }
 
 bool NSPanel::ready() {
-  return this->_has_received_nspm;
+  return this->_display_ready;
 }
 
 bool NSPanel::_initTFTUpdate(int communication_baud_rate) {

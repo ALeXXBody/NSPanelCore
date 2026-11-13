@@ -99,6 +99,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P29 | Firmware tab removed: hardcoded manifest URL + 6h auto-check with Messages inbox notify; manual check/install in Actions menu; fixed blocking-I/O | ✅ Done, released v1.3.31 |
 | P30 | Panel firmware version on each card (small, discrete; hidden when unknown) | ✅ Done, needs release |
 | P31 | Black screen root causes: (1) panel.hostname/panel.name split (space) black-holed all MQTT both ways — reunited on KitchenPanel name; (2) screen_dim_level default 0 blanked backlight at boot — default 100 + brightness push | ✅ Done, needs release |
+| P32 | Kill dead NSPM-flag handshake (no display file ever sent it; permanent bogus warning): real comok-based display check, _display_ready rename, honest warning text (fw 0.1.160, no app release) | ✅ Done |
 | P27 | Save POST shadowed by action route (rename always 400 "Unknown action"): dedicated /api/panel_save/{id} endpoint, verified 404-proper on sandbox | ✅ Done |
 | P28 | STOMP auth ERROR loop (dead token retried forever, blank cards): beforeConnect re-reads token every attempt, ERROR decodes+refresh+reconnect, login banner after 3 | ✅ Done, verified in harness |
 | P21 | Push OTA to panels immediately on firmware activation (same OTA path as TFT) + per-panel update_firmware/update_tft actions | ✅ Done, needs release |
