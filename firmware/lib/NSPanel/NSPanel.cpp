@@ -813,57 +813,58 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
   return true;
 }
 
-static int _sweepDisplayBaud() {
-  // Diagnostic + recovery probe: the display may be alive on a baud we
-  // don't expect (corrupt system data resets it to the 9600 default).
-  // Power-cycles per baud, sends "connect", logs ANY traffic heard.
-  // Returns the first baud with traffic, else 0.
-  const int bauds[] = {115200, 9600, 57600, 38400, 19200, 230400};
-  for (unsigned i = 0; i < sizeof(bauds) / sizeof(bauds[0]); i++) {
-    int b = bauds[i];
-    Serial2.updateBaudRate(b);
-    while (Serial2.available() > 0) { Serial2.read(); }
-    Serial2.print("connect");
-    { static const uint8_t _term[3] = {0xFF, 0xFF, 0xFF}; Serial2.write(_term, 3); }
-    unsigned long start = millis();
-    bool heard = false;
-    while (millis() - start < 2500) {
-      while (Serial2.available() > 0) {
-        heard = true;
-        uint8_t c = Serial2.read();
-        LOG_ERROR("Heard display at baud ", b, ": 0x", String(c, HEX).c_str());
+static void _powerCycleDisplay() {
+  // Hard power-cycle the display so its bootloader is listening from a
+  // clean reset. GPIO4 switches the screen supply on NSPanel hardware.
+  digitalWrite(4, HIGH); // Turn off power to the display
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
+  digitalWrite(4, LOW); // Turn on power to the display
+  vTaskDelay(1200 / portTICK_PERIOD_MS);
+}
+
+static void _sendWhmiWris(unsigned long file_size) {
+  std::string cmd = "whmi-wris ";
+  cmd.append(std::to_string(file_size));
+  cmd.append(",");
+  cmd.append(std::to_string(NSPMConfig::instance->tft_upload_baud));
+  cmd.append(",1");
+  while (Serial2.available() > 0) { Serial2.read(); }
+  Serial2.print(cmd.c_str());
+  { static const uint8_t _term[3] = {0xFF, 0xFF, 0xFF}; Serial2.write(_term, 3); }
+  LOG_DEBUG("Sent TFT upload command: ", cmd.c_str());
+}
+
+// Recovery probe: a bricked bootloader never answers "connect"/comok — it
+// only reacts to whmi-wris. Power-cycle, send the upload command
+// IMMEDIATELY (no connect dance), and watch up to 3s for 0x05/0x08 or any
+// traffic at all. Returns true when the display accepted the upload.
+static bool _probeUploadAtBaud(int baud, unsigned long file_size) {
+  Serial2.updateBaudRate(baud);
+  _powerCycleDisplay();
+  _sendWhmiWris(file_size);
+  unsigned long start = millis();
+  bool accepted = false;
+  while (millis() - start < 3000) {
+    while (Serial2.available() > 0) {
+      uint8_t c = Serial2.read();
+      LOG_ERROR("Heard display at baud ", baud, ": 0x", String(c, HEX).c_str());
+      if (c == 0x05 || c == 0x08) {
+        accepted = true;
       }
-      vTaskDelay(50 / portTICK_PERIOD_MS);
     }
-    if (heard) {
-      return b;
+    if (accepted) {
+      break;
     }
-    LOG_DEBUG("Silent at baud ", b);
+    vTaskDelay(50 / portTICK_PERIOD_MS);
   }
-  return 0;
+  return accepted;
 }
 
 bool NSPanel::_updateTFTOTA() {
   LOG_INFO("_updateTFTOTA Started.");
   bool init_ok = NSPanel::_initTFTUpdate(115200);
-  if (!init_ok) {
-    // No handshake on any rotated baud. Sweep once for diagnostics (logs
-    // any display traffic at 6 bauds), then stream anyway: a display whose
-    // TX line is dead can still be receiving, and the tolerant stream below
-    // treats silence as continue. Worst case the bytes go nowhere.
-    int heard = _sweepDisplayBaud();
-    if (heard) {
-      LOG_ERROR("Display talks at baud ", heard, " — retrying init there.");
-      Serial2.updateBaudRate(heard);
-      init_ok = NSPanel::_initTFTUpdate(heard);
-    }
-    if (!init_ok) {
-      LOG_ERROR("Proceeding with blind tolerant upload at 115200 (no handshake).");
-      Serial2.updateBaudRate(115200);
-    }
-  }
-
-  // URL to download TFT file from
+  // File size is needed by the recovery probes below; fetch it once here
+  // (the stream loop below reuses it).
   std::string downloadUrl = "http://";
   downloadUrl.append(NSPMConfig::instance->manager_address);
   downloadUrl.append(":");
@@ -887,6 +888,25 @@ bool NSPanel::_updateTFTOTA() {
   if (file_size == 0) {
     LOG_ERROR("TFT flash aborted: could not get file size.");
     return false;
+  }
+  if (!init_ok) {
+    // No handshake on any rotated baud. A bricked bootloader never answers
+    // "connect" — probe whmi-wris directly at each baud (power-cycle, send
+    // immediately, watch 3s). First 0x05/0x08 wins and streams below.
+    const int bauds[] = {115200, 9600, 57600, 38400, 19200, 230400};
+    for (unsigned i = 0; i < sizeof(bauds) / sizeof(bauds[0]); i++) {
+      if (_probeUploadAtBaud(bauds[i], file_size)) {
+        LOG_ERROR("Display accepted upload at baud ", bauds[i], " — streaming.");
+        init_ok = true;
+        break;
+      }
+    }
+    if (!init_ok) {
+      LOG_ERROR("Proceeding with blind tolerant upload at 115200 (no handshake).");
+      Serial2.updateBaudRate(115200);
+      _powerCycleDisplay();
+      _sendWhmiWris(file_size);
+    }
   }
   unsigned long startWaitingForOKForNextChunk = 0;
   unsigned long nextStartWriteOffset = 0;
