@@ -97,6 +97,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P20 | Decouple firmware from app releases (COMPLETE): evergreen assets + publish.sh + RELEASING.md rule; bogus v1.3.28 app release for firmware-only change DELETED (release+tag), version strings reverted to 1.3.27 | ✅ Done |
 | P26 | Remote access dead (Nabu Casa/reverse proxy): STOMP URL built as host: + empty port; fixed with conditional port, sandbox-verified | ✅ Done, needs release |
 | P29 | Firmware tab removed: hardcoded manifest URL + 6h auto-check with Messages inbox notify; manual check/install in Actions menu; fixed blocking-I/O | ✅ Done, released v1.3.31 |
+| P30 | Panel firmware version on each card (small, discrete; hidden when unknown) | ✅ Done, needs release |
 | P27 | Save POST shadowed by action route (rename always 400 "Unknown action"): dedicated /api/panel_save/{id} endpoint, verified 404-proper on sandbox | ✅ Done |
 | P28 | STOMP auth ERROR loop (dead token retried forever, blank cards): beforeConnect re-reads token every attempt, ERROR decodes+refresh+reconnect, login banner after 3 | ✅ Done, verified in harness |
 | P21 | Push OTA to panels immediately on firmware activation (same OTA path as TFT) + per-panel update_firmware/update_tft actions | ✅ Done, needs release |

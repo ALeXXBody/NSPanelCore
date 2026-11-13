@@ -179,6 +179,7 @@ def _panels_context(manager) -> list[dict]:
                 "accepted": panel.accepted,
                 "denied": panel.denied,
                 "ip_address": "",
+                "fw_version": panel.version,
             },
         })
     return out

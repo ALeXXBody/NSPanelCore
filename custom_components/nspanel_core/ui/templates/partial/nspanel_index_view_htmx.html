@@ -40,6 +40,7 @@ stomp_subscribe("nspanel/{{ nspanel.data.mac_address }}/status", (frame) => {
             <div class="w-full">
             <span class="">
                 {% include 'components/nspanel_name.html' %}
+                {% if nspanel.data.fw_version and nspanel.data.fw_version != "UNKNOWN" %}<span class="text-xs opacity-60 ms-1">v{{ nspanel.data.fw_version }}</span>{% endif %}
             </span>
             </div>
             <!-- Status-->
