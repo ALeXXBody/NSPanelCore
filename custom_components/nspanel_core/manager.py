@@ -79,6 +79,7 @@ class NSPanelCoreManager:
         self._report_listeners: list = []
         self._relay_listeners: dict[str, list] = {}
         self._relay_state: dict[str, bool] = {}
+        self._last_telemetry: dict[str, dict] = {}
         self._log_backlog: dict[str, list] = {}
         self._last_ota_trigger: dict[str, float] = {}
         self._save_timer = None
@@ -558,14 +559,25 @@ class NSPanelCoreManager:
         )
 
     async def _publish_panel_status(
-        self, panel: PanelConfig, state: str, progress: int = 0, warnings: list | None = None
+        self, panel: PanelConfig, state: str, progress: int = 0, warnings: list | None = None,
+        telemetry: dict | None = None,
     ) -> None:
         if self.stomp is None:
             return
+        # Remember the last live values: state-only publishes (online/offline
+        # flaps) must not wipe them or the UI blanks until the next report.
+        if telemetry:
+            last = self._last_telemetry.setdefault(panel.mac, {})
+            for key in ("rssi", "temperature", "ram_usage", "ip"):
+                value = telemetry.get(key)
+                if value is not None:
+                    last[key] = value
+        payload: dict = {"state": state, "update_progress": progress, "warnings": warnings or []}
+        payload.update(self._last_telemetry.get(panel.mac, {}))
         self.stomp.set_retained(panel_topic(panel.mac, "status"), True)
         self.stomp.update_topic(
             panel_topic(panel.mac, "status"),
-            json.dumps({"state": state, "update_progress": progress, "warnings": warnings or []}),
+            json.dumps(payload),
         )
 
     # ------------------------------------------------------------------
@@ -846,7 +858,13 @@ class NSPanelCoreManager:
             except (ValueError, TypeError):
                 progress = 0
             await self._publish_panel_status(
-                panel, state_map.get(report.get("state", ""), "online"), progress, report.get("warnings", [])
+                panel, state_map.get(report.get("state", ""), "online"), progress, report.get("warnings", []),
+                telemetry={
+                    "rssi": report.get("rssi"),
+                    "temperature": report.get("temperature"),
+                    "ram_usage": report.get("heap_used_pct"),
+                    "ip": report.get("ip"),
+                },
             )
         # Legacy reports carry checksums: evaluate OTA here too (accepted
         # panels only, cooldown-guarded). JSON reports don't include md5s.
