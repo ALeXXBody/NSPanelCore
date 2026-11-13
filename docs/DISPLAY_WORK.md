@@ -3,21 +3,22 @@
 All claims below were verified by parsing the HMI binaries and the firmware
 sources (2026-11-13). Nothing here is guessed.
 
-## 1. US display file: rebrand done, compile pending
+## 1. US display file: DONE 2026-11-13
 
-- Patched project: `/tmp/opencode/nxwork/us/gui.HMI` (backup `gui.HMI.bak`).
-  All 48 boot frames were byte-swapped with the rebranded set from
-  `/tmp/opencode/coreframes_us/` (verified: rebranded bytes present,
-  originals gone). Same proven method as the shipped EU file.
-- To finish: open the patched HMI in Nextion Editor 1.68.x → File → TFT
-  file output. Verify the header: editor bytes `01 44`, vendor `0x4E`,
-  resolution `e0 01 40 01` (480×320), orientation flag `0x02` (portrait),
-  internal size field `@0x3C` equals the actual file size.
-- Ship the result as `custom_components/nspanel_core/tft/gui_us.tft`,
-  publish via `firmware/publish.sh` (it re-hashes + verifies).
-- Blocked 2026-11-13: the build host has no working X server (Xvfb and Xvnc
-  both abort with `double free or corruption`), so the editor GUI cannot
-  run there. Needs any machine with a display (or a working Xvfb build).
+- Compiled `gui_us.tft` (12,655,224 bytes) with Nextion Editor 1.68.2 under
+  Wine + Xvfb: compile 0 errors, 0 warnings; header verified (editor `01 44`,
+  vendor `0x4E`, 480x320, portrait `0x02`, internal size matches). Published
+  via `publish.sh` to `firmware-latest` (re-download verified).
+- Source: `/tmp/opencode/nxwork/us/gui.HMI` (rebrand-patched; `gui.HMI.bak`
+  is the pre-patch copy).
+- Environment fix that unblocked this (Xvfb aborted at startup: NVIDIA EGL
+  crashed in drmFreeDevice via libnvidia-egl-gbm): hide NVIDIA EGL vendors
+  and force Mesa software rendering —
+  `__EGL_VENDOR_LIBRARY_FILENAMES=<dir with only 50_mesa.json>`
+  `__GLX_VENDOR_LIBRARY_NAME=mesa` `LIBGL_ALWAYS_SOFTWARE=1`
+  `EGL_PLATFORM=surfaceless`. Run Xvfb, then openbox (a WM is required for
+  xdotool focus), then Wine. Keyboard input works reliably; mouse clicks
+  often do NOT reach Wine — prefer Tab/Space/Enter/Ctrl+O.
 
 ## 2. Missing display pages (EU and US HMI alike)
 
