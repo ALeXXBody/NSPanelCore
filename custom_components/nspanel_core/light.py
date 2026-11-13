@@ -47,8 +47,8 @@ async def async_setup_entry(
         live = {
             f"{DOMAIN}_{topic_safe(p.mac)}_relay{r}_as_light"
             for p in manager.panels()
-            if _wanted(p, r)
             for r in (1, 2)
+            if _wanted(p, r)
         }
         for unique in list(added):
             if unique not in live:

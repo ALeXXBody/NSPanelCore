@@ -131,8 +131,11 @@ def test_config_json_keys_cover_firmware_reads():
     # keys the dashboard builder emits (string literals in _panel_json_config)
     builder_region = dash[dash.find("def _panel_json_config"):dash.find("def _panel_json_config") + 4000]
     emitted = set(re.findall(r'"([a-z_0-9]+)":', builder_region))
-    missing = {k for k in reads if k not in emitted and k not in ("rooms",)}
-    # rooms list is emitted separately; lights/scenes shapes checked below
+    # "rooms" is the id list alongside the builder; "lights"/"scenes"/"name"
+    # belong to the per-room document (/api/get_nspanel_config room branch),
+    # covered by test_room_json_keys_cover_firmware_reads — not this builder.
+    room_scoped = {"rooms", "lights", "scenes", "name"}
+    missing = {k for k in reads if k not in emitted and k not in room_scoped}
     assert not missing, f"firmware reads keys the manager never sends: {missing}"
 
 

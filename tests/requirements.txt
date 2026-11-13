@@ -1,2 +1,10 @@
 paho-mqtt
 pytest
+pytest-asyncio
+jinja2
+aiohttp
+multidict
+# NOTE: test_handlers.py and test_platforms.py import the integration and
+# need homeassistant importable. Run the full suite with an HA dev venv:
+#   /tmp/opencode/ha-venv-2611/bin/python -m pytest tests/ -v
+# The contract + template tests run on plain system python too.
