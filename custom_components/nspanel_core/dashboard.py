@@ -250,15 +250,18 @@ class PanelActionView(HomeAssistantView):
                 await manager.async_save()
                 await manager._send_panel_config(panel)
                 await manager._publish_panel_status(panel, "online")
+                manager.notify_panels_changed()
             elif action == "deny":
                 panel.denied = True
                 panel.accepted = False
                 await manager.async_save()
                 await manager._publish_panel_status(panel, "offline")
+                manager.notify_panels_changed()
             elif action == "delete":
                 manager.config.panels.remove(panel)
                 await manager.async_save()
                 await manager._publish_panel_status(panel, "offline")
+                manager.notify_panels_changed()
             elif action in ("update_firmware", "update_tft"):
                 if not panel.accepted or panel.denied:
                     return web.Response(text="Panel not accepted", status=409)
@@ -269,7 +272,7 @@ class PanelActionView(HomeAssistantView):
                 # downloads over HTTP and flashes itself.
                 manager._last_ota_trigger.pop(panel.mac, None)
                 await manager._publish(
-                    panel_mqtt_topic(panel.name, "command"),
+                    panel_mqtt_topic(panel.wifi_hostname or panel.name, "command"),
                     json.dumps({"command": command}),
                 )
         referer = request.headers.get("Referer", "") or ""
@@ -339,6 +342,12 @@ class EditPanelView(HomeAssistantView):
             room = None
         panel_dict["button1_detached_mode_entity"] = _Stub()
         panel_dict["button2_detached_mode_entity"] = _Stub()
+        # Detached-mode room selects: pre-select the room of the stored light.
+        _light_room = {l.id: l.room_id for l in manager.config.lights}
+        panel_dict["button1_detached_room"] = _light_room.get(
+            panel.button1_detached_light, panel.room_id)
+        panel_dict["button2_detached_room"] = _light_room.get(
+            panel.button2_detached_light, panel.room_id)
         panel_info = {"data": panel_dict}
         nspanel = {"data": panel_dict}
         room_views = []
@@ -442,7 +451,7 @@ class SavePanelSettingsView(HomeAssistantView):
         # Radio groups post "True"/"False" strings (one option always checked):
         # presence-check would force True. Parse the value instead.
         for radio_bool in ("reverse_relays", "relay1_default_mode", "relay2_default_mode",
-                           "lock_to_default_room"):
+                           "lock_to_default_room", "relay1_is_light", "relay2_is_light"):
             if radio_bool in form:
                 b = _parse_bool_strict(form[radio_bool])
                 if b is not None:
@@ -481,6 +490,21 @@ class SavePanelSettingsView(HomeAssistantView):
             # Empty selection = show every room (matches the config builder
             # fallback); storing it keeps the panel on "all rooms".
             panel.rooms = sorted(set(selected))
+        # Detached-mode light: the firmware toggles a panel light by its
+        # LightConfig.id (button1_detached_light in the panel JSON). The form
+        # posts the select value; anything that is not 0 or a known light
+        # id is rejected instead of silently stored.
+        light_ids = {l.id for l in manager.config.lights}
+        for key in ("button1_detached_light", "button2_detached_light"):
+            form_key = "button1_detached_mode_light" if key == "button1_detached_light" else "button2_detached_mode_light"
+            if form_key in form:
+                try:
+                    lid = int(form[form_key])
+                except (ValueError, TypeError):
+                    return web.Response(text=f"Bad {form_key}: must be a light id", status=422)
+                if lid != 0 and lid not in light_ids:
+                    return web.Response(text=f"Unknown light id: {lid}", status=404)
+                setattr(panel, key, lid)
         if "room_id" in form:
             try:
                 room_id = int(form["room_id"])
@@ -491,6 +515,7 @@ class SavePanelSettingsView(HomeAssistantView):
             panel.room_id = room_id
         await manager.async_save()
         await manager._send_panel_config(panel)
+        manager.notify_panels_changed()
         return _redirect(request, UI_PATH)
 
 
@@ -658,6 +683,7 @@ class SettingsView(HomeAssistantView):
             max_log_buffer_size=1000,
             is_home_assistant_addon=True,
             default_nspanel_type="sonoff",
+            auto_tft_updates=getattr(s, "auto_tft_updates", True),
             rooms=[
                 {
                     "id": r.id,
@@ -1270,8 +1296,8 @@ def _panel_json_config(manager, panel) -> dict:
         "name": panel.name,
         "rooms": room_ids,
         "scenes": scenes,
-        "button1_detached_light": 0,
-        "button2_detached_light": 0,
+        "button1_detached_light": panel.button1_detached_light,
+        "button2_detached_light": panel.button2_detached_light,
     }
     return cfg
 

@@ -427,7 +427,7 @@
                 <div class="flex flex-row-reverse">
                   <select name="button1_detached_mode_room" id="button1_detached_mode_room" class="rounded-none bg-base-300 border-neutral rounded-e-md border border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/default_page">
                     {% for room in rooms %}
-                      {% if panel_info.data.button1_detached_mode_entity.room == room %}
+                      {% if room.id == panel_info.data.button1_detached_room %}
                           <option value="{{ room.id }}" selected>{{ room.friendly_name }}</option>
                       {% else %}
                           <option value="{{ room.id }}">{{ room.friendly_name }}</option>
@@ -446,14 +446,12 @@
                 <label for="button1_detached_mode_light" class="block mt-2 text-sm font-medium">Entity</label>
                 <div class="flex flex-row-reverse">
                     <select name="button1_detached_mode_light" id="button1_detached_mode_light" class="rounded-none bg-base-300 border-neutral rounded-e-md border border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/default_page">
-                        {% for room in rooms %}
-                          {% for entity in room.entity_set.all %}
-                            {% if panel_info.data.button1_detached_mode_entity == entity %}
-                            <option class="button1_detached_mode_light_option" data-room-id="{{ room.id }}" value="{{ entity.id }}" selected>{{ entity.friendly_name }}</option>
+                        {% for light in lights %}
+                            {% if panel_info.data.button1_detached_light == light.id %}
+                            <option class="button1_detached_mode_light_option" data-room-id="{{ light.room_id }}" value="{{ light.id }}" selected>{{ light.name }}</option>
                             {% else %}
-                            <option class="button1_detached_mode_light_option" data-room-id="{{ room.id }}" value="{{ entity.id }}">{{ entity.friendly_name }}</option>
+                            <option class="button1_detached_mode_light_option" data-room-id="{{ light.room_id }}" value="{{ light.id }}">{{ light.name }}</option>
                             {% endif %}
-                          {% endfor %}
                         {% endfor %}
                     </select>
                     <span class="inline-flex items-center px-3 text-sm border border-neutral rounded-e-0 rounded-s-md peer-focus/default_page:border-accent">
@@ -502,41 +500,6 @@
               </div>
             </div>
 
-            <!-- Button 1 Thermostat mode -->
-            <div id="button1_thermostat_mode_controls" class="hidden">
-                <div class="mt-2">
-                    {% include 'components/alert.html' %}
-                </div>
-                <div class="mt-2">
-                    {% include 'components/alert.html' %}
-                </div>
-                <div class="mt-2 mb-2">
-                    {% include 'components/alert.html' %}
-                </div>
-
-              <div class="">
-                <label for="button1_relay_lower_temperature" class="block mb-2 text-sm font-medium">Relay 1 lower temperature</label>
-                <div class="flex flex-row-reverse">
-                  <input class="outline-none rounded-none bg-base-300 border-neutral rounded-e-md border border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/name"
-                  type="text" class="input" name="button1_relay_lower_temperature" value="{{ settings.button1_relay_lower_temperature }}">
-                  <span class="inline-flex items-center px-3 text-sm border border-neutral rounded-e-0 rounded-s-md peer-focus/name:border-accent">
-                      <span class="mdi mdi-thermometer"></span>
-                  </span>
-                </div>
-              </div>
-
-              <div class="">
-                <label for="button1_relay_upper_temperature" class="block mb-2 text-sm font-medium">Relay 1 upper temperature</label>
-                <div class="flex flex-row-reverse">
-                  <input class="outline-none rounded-none bg-base-300 border-neutral rounded-e-md border border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/name"
-                  type="text" class="input" name="button1_relay_upper_temperature" value="{{ settings.button1_relay_upper_temperature }}">
-                  <span class="inline-flex items-center px-3 text-sm border border-neutral rounded-e-0 rounded-s-md peer-focus/name:border-accent">
-                      <span class="mdi mdi-thermometer"></span>
-                  </span>
-                </div>
-              </div>
-            </div>
-
           </div>
 
           <!-- Button 2 -->
@@ -565,7 +528,7 @@
                 <div class="flex flex-row-reverse">
                   <select name="button2_detached_mode_room" id="button2_detached_mode_room" class="rounded-none bg-base-300 border-neutral rounded-e-md border border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/default_page">
                     {% for room in rooms %}
-                      {% if panel_info.data.button2_detached_mode_entity.room == room %}
+                      {% if room.id == panel_info.data.button2_detached_room %}
                           <option value="{{ room.id }}" selected>{{ room.friendly_name }}</option>
                       {% else %}
                           <option value="{{ room.id }}">{{ room.friendly_name }}</option>
@@ -584,15 +547,13 @@
                 <label for="button2_detached_mode_light" class="block mt-2 text-sm font-medium">Entity</label>
                 <div class="flex flex-row-reverse">
                     <select name="button2_detached_mode_light" id="button2_detached_mode_light" class="rounded-none bg-base-300 border-neutral rounded-e-md border border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/default_page">
-                        {% for room in rooms %}
-                          {% for entity in room.entity_set.all %}
-                            {% if panel_info.data.button2_detached_mode_entity == entity %}
-                            <option class="button2_detached_mode_light_option" data-room-id="{{ room.id }}" value="{{ entity.id }}" selected>{{ entity.friendly_name }}</option>
+                        {% for light in lights %}
+                            {% if panel_info.data.button2_detached_light == light.id %}
+                            <option class="button2_detached_mode_light_option" data-room-id="{{ light.room_id }}" value="{{ light.id }}" selected>{{ light.name }}</option>
                             {% else %}
-                            <option class="button2_detached_mode_light_option" data-room-id="{{ room.id }}" value="{{ entity.id }}">{{ entity.friendly_name }}</option>
+                            <option class="button2_detached_mode_light_option" data-room-id="{{ light.room_id }}" value="{{ light.id }}">{{ light.name }}</option>
                             {% endif %}
-                          {% endfor %}
-                    {% endfor %}
+                        {% endfor %}
                     </select>
                     <span class="inline-flex items-center px-3 text-sm border border-neutral rounded-e-0 rounded-s-md peer-focus/default_page:border-accent">
                         <svg class="w-4 h-4" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -640,40 +601,6 @@
               </div>
             </div>
 
-            <!-- Button 1 Thermostat mode -->
-            <div id="button2_thermostat_mode_controls" class="hidden">
-                <div class="mt-2">
-                    {% include 'components/alert.html' %}
-                </div>
-                <div class="mt-2">
-                    {% include 'components/alert.html' %}
-                </div>
-                <div class="mt-2 mb-2">
-                    {% include 'components/alert.html' %}
-                </div>
-
-              <div class="">
-                <label for="button2_relay_lower_temperature" class="block mb-2 text-sm font-medium">Relay 2 lower temperature</label>
-                <div class="flex flex-row-reverse">
-                  <input class="outline-none rounded-none bg-base-300 border-neutral rounded-e-md border border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/name"
-                  type="text" class="input" name="button2_relay_lower_temperature" value="{{ settings.button2_relay_lower_temperature }}">
-                  <span class="inline-flex items-center px-3 text-sm border border-neutral rounded-e-0 rounded-s-md peer-focus/name:border-accent">
-                      <span class="mdi mdi-thermometer"></span>
-                  </span>
-                </div>
-              </div>
-
-              <div class="">
-                <label for="button2_relay_upper_temperature" class="block mb-2 text-sm font-medium">Relay 2 upper temperature</label>
-                <div class="flex flex-row-reverse">
-                  <input class="outline-none rounded-none bg-base-300 border-neutral rounded-e-md border border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/name"
-                  type="text" class="input" name="button2_relay_upper_temperature" value="{{ settings.button2_relay_upper_temperature }}">
-                  <span class="inline-flex items-center px-3 text-sm border border-neutral rounded-e-0 rounded-s-md peer-focus/name:border-accent">
-                      <span class="mdi mdi-thermometer"></span>
-                  </span>
-                </div>
-              </div>
-            </div>
 
           </div>
         </div>
@@ -853,68 +780,6 @@
               </svg>
             </span>
           </div>
-        </div>
-
-        <!-- Screensaver inside temperature settings -->
-        <div class="flex-auto mt-4">
-            <h3 class="block mb-2 text-sm font-medium">Screensaver inside temperature</h3>
-            <ul class="items-center w-full text-sm font-medium border border-neutral rounded-lg sm:flex">
-                <li class="w-full border-t sm:border-t-0 border-neutral">
-                    <div class="flex items-center ps-3">
-                    <input id="show_screensaver_inside_temperature_global" type="radio" name="show_screensaver_inside_temperature" value="global" {% if settings.show_screensaver_inside_temperature == "global" %}checked{% endif %}
-                        class="w-4 h-4 radio radio-accent">
-                    <label for="show_screensaver_inside_temperature_global" class="w-full py-3 ms-2 text-sm font-medium">Global</label>
-                    </div>
-                </li>
-
-                <li class="w-full border-t sm:border-t-0 border-neutral">
-                    <div class="flex items-center ps-3">
-                        <input id="show_screensaver_inside_temperature" type="radio" name="show_screensaver_inside_temperature" value="True" {% if settings.show_screensaver_inside_temperature == "True" %}checked{% endif %}
-                            class="w-4 h-4 radio radio-accent">
-                        <label for="show_screensaver_inside_temperature" class="w-full py-3 ms-2 text-sm font-medium">Show inside temperature</label>
-                    </div>
-                </li>
-
-                <li class="w-full border-t sm:border-t-0 border-neutral">
-                    <div class="flex items-center ps-3">
-                    <input id="hide_screensaver_inside_temperature" type="radio" name="show_screensaver_inside_temperature" value="False" {% if settings.show_screensaver_inside_temperature == "False" %}checked{% endif %}
-                        class="w-4 h-4 radio radio-accent">
-                    <label for="hide_screensaver_inside_temperature"
-                        class="w-full py-3 ms-2 text-sm font-medium">Hide inside temperature</label>
-                    </div>
-                </li>
-            </ul>
-        </div>
-
-        <!-- Screensaver outside temperature settings -->
-        <div class="flex-auto mt-4" id="screensaver_outside_temperature_setting">
-            <h3 class="block mb-2 text-sm font-medium">Screensaver outside temperature</h3>
-            <ul class="items-center w-full text-sm font-medium border border-neutral rounded-lg sm:flex">
-                <li class="w-full border-t sm:border-t-0 border-neutral">
-                    <div class="flex items-center ps-3">
-                    <input id="show_screensaver_outside_temperature_global" type="radio" name="show_screensaver_outside_temperature" value="global" {% if settings.show_screensaver_outside_temperature == "global" %}checked{% endif %}
-                        class="w-4 h-4 radio radio-accent">
-                    <label for="show_screensaver_outside_temperature_global" class="w-full py-3 ms-2 text-sm font-medium">Global</label>
-                    </div>
-                </li>
-
-                <li class="w-full border-t sm:border-t-0 border-neutral">
-                    <div class="flex items-center ps-3">
-                        <input id="show_screensaver_outside_temperature" type="radio" name="show_screensaver_outside_temperature" value="True" {% if settings.show_screensaver_outside_temperature == "True" %}checked{% endif %}
-                            class="w-4 h-4 radio radio-accent">
-                        <label for="show_screensaver_outside_temperature" class="w-full py-3 ms-2 text-sm font-medium">Show outside temperature</label>
-                    </div>
-                </li>
-
-                <li class="w-full border-t sm:border-t-0 border-neutral">
-                    <div class="flex items-center ps-3">
-                    <input id="hide_screensaver_outside_temperature" type="radio" name="show_screensaver_outside_temperature" value="False" {% if settings.show_screensaver_outside_temperature == "False" %}checked{% endif %}
-                        class="w-4 h-4 radio radio-accent">
-                    <label for="hide_screensaver_outside_temperature"
-                        class="w-full py-3 ms-2 text-sm font-medium">Hide outside temperature</label>
-                    </div>
-                </li>
-            </ul>
         </div>
 
         <!-- Temperature calibration -->

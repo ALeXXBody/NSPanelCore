@@ -122,4 +122,4 @@ STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}_config"
 
 # HA platforms this integration provides
-PLATFORMS = ["sensor", "switch"]
+PLATFORMS = ["sensor", "switch", "light"]

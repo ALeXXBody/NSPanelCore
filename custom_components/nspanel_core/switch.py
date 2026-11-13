@@ -19,12 +19,20 @@ async def async_setup_entry(
     manager = hass.data[DOMAIN][entry.entry_id]
     added: set[str] = set()
 
+    def _wanted(panel, relay: int) -> bool:
+        # Relays flagged "register as light" live in the light platform.
+        return (
+            bool(panel.accepted)
+            and not bool(panel.denied)
+            and not bool(getattr(panel, f"relay{relay}_is_light", False))
+        )
+
     def _add_new():
         new_entities = []
         for panel in manager.panels():
             for relay in (1, 2):
                 unique = f"{DOMAIN}_{topic_safe(panel.mac)}_relay{relay}"
-                if panel.accepted and not panel.denied and unique not in added:
+                if _wanted(panel, relay) and unique not in added:
                     added.add(unique)
                     new_entities.append(RelaySwitch(entry, manager, panel, relay))
         if new_entities:
@@ -32,7 +40,7 @@ async def async_setup_entry(
         _remove_stale()
 
     def _remove_stale() -> None:
-        """Drop switches for removed/denied panels — they would sit dead forever."""
+        """Drop switches for removed/denied panels AND relays flipped to light."""
         from homeassistant.helpers import entity_registry as er
 
         try:
@@ -42,8 +50,8 @@ async def async_setup_entry(
         live = {
             f"{DOMAIN}_{topic_safe(p.mac)}_relay{r}"
             for p in manager.panels()
-            if p.accepted and not p.denied
             for r in (1, 2)
+            if _wanted(p, r)
         }
         for unique in list(added):
             if unique not in live:
@@ -69,7 +77,7 @@ class RelaySwitch(SwitchEntity):
         self._attr_name = f"Relay {relay}"
         self._attr_unique_id = f"{DOMAIN}_{topic_safe(panel.mac)}_relay{relay}"
         try:
-            self._state = bool(manager.relay_state(self._subscribe_topic()))
+            self._state = bool(manager.relay_state(self._panel, self._relay))
         except Exception:  # noqa: BLE001
             self._state = False
         entry.async_on_unload(manager.add_relay_listener(panel, relay, self._on_state))
@@ -77,11 +85,6 @@ class RelaySwitch(SwitchEntity):
     def _on_state(self, state: bool) -> None:
         self._state = state
         self.schedule_update_ha_state()
-
-    def _subscribe_topic(self) -> str:
-        from .const import panel_mqtt_topic
-
-        return panel_mqtt_topic(self._panel.name, f"r{self._relay}_state")
 
     @property
     def device_info(self) -> DeviceInfo:

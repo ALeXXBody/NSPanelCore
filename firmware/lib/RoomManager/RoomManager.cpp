@@ -305,7 +305,7 @@ void RoomManager::loadAllRooms(bool is_update) {
   }
 
   // All rooms and lights has loaded, prep buttonmanager
-  if (NSPMConfig::instance->button1_mode == BUTTON_MODE::DETACHED) {
+  if (NSPMConfig::instance->button1_mode == BUTTON_MODE::DETACHED && (*roomData).containsKey("button1_detached_light")) {
     ButtonManager::button1_detached_mode_light = LightManager::getLightById((*roomData)["button1_detached_light"].as<uint16_t>());
     if (ButtonManager::button1_detached_mode_light != nullptr) {
       LOG_DEBUG("Button 1 detached mode light: ", ButtonManager::button1_detached_mode_light->getName().c_str());
@@ -315,7 +315,7 @@ void RoomManager::loadAllRooms(bool is_update) {
   } else {
     ButtonManager::button1_detached_mode_light = nullptr;
   }
-  if (NSPMConfig::instance->button2_mode == BUTTON_MODE::DETACHED) {
+  if (NSPMConfig::instance->button2_mode == BUTTON_MODE::DETACHED && (*roomData).containsKey("button2_detached_light")) {
     ButtonManager::button2_detached_mode_light = LightManager::getLightById((*roomData)["button2_detached_light"].as<uint16_t>());
     if (ButtonManager::button2_detached_mode_light != nullptr) {
       LOG_DEBUG("Button 2 detached mode light: ", ButtonManager::button2_detached_mode_light->getName().c_str());

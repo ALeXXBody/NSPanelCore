@@ -164,6 +164,8 @@ class PanelConfig:
     reverse_relays: bool = False
     relay1_default_mode: bool = False
     relay2_default_mode: bool = False
+    relay1_is_light: bool = False
+    relay2_is_light: bool = False
     temperature_calibration: float = 0.0
     has_humidity: bool = False
     has_pressure: bool = False
@@ -173,6 +175,8 @@ class PanelConfig:
     button1_mqtt_payload: str = ""
     button2_mqtt_topic: str = ""
     button2_mqtt_payload: str = ""
+    button1_detached_light: int = 0  # LightConfig.id toggled in DETACHED mode (0 = none)
+    button2_detached_light: int = 0
     show_home_scenes: bool = True
     show_home_ceiling: bool = True
     show_home_table: bool = True
@@ -195,6 +199,11 @@ class PanelConfig:
     firmware_md5: str = ""
     tft_md5: str = ""
     littlefs_md5: str = ""
+    wifi_hostname: str = ""
+    # Last-seen MQTT topic segment (the panel's wifi_hostname). The firmware
+    # publishes/subscribes on nspanel/<wifi_hostname>/... while panel.name is
+    # the user-curated display name — after any rename these differ, so all
+    # routing and command topics use this field (falling back to name).
 
     _SCREENSAVER_MODES = (
         "with_background", "without_background",
@@ -262,6 +271,7 @@ class GlobalSettings:
     light_turn_on_brightness: int = 0
     use_fahrenheit: bool = False
     weather_update_interval: int = 30
+    auto_tft_updates: bool = True
     screensaver_mode: str = "with_background"
     location_latitude: str = ""
     location_longitude: str = ""

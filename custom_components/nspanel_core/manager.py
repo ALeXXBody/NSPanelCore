@@ -77,8 +77,8 @@ class NSPanelCoreManager:
         self._unsub = []
         self._new_panel_listeners: list = []
         self._report_listeners: list = []
-        self._relay_listeners: dict[str, list] = {}
-        self._relay_state: dict[str, bool] = {}
+        self._relay_listeners: dict = {}
+        self._relay_state: dict = {}
         self._last_telemetry: dict[str, dict] = {}
         self._log_backlog: dict[str, list] = {}
         self._last_ota_trigger: dict[str, float] = {}
@@ -271,7 +271,7 @@ class NSPanelCoreManager:
                 else:
                     errors[key] = "must be kmh, ms, mph or kn"
             elif key in ("use_fahrenheit", "reverse_color_temp", "optimistic_mode",
-                         "clock_us_style"):
+                         "clock_us_style", "auto_tft_updates"):
                 b = _bool(value)
                 if b is None:
                     errors[key] = "must be true or false"
@@ -619,6 +619,7 @@ class NSPanelCoreManager:
         panel = self._panel_by_topic(segment)
         if panel is None:
             return
+        self._note_panel_hostname(panel, self._topic_segment(msg.topic))
         if state == "online":
             if not panel.online:
                 panel.online = True
@@ -651,6 +652,7 @@ class NSPanelCoreManager:
                 id=self.config.next_id_for("panel"),
                 mac=mac,
                 name=friendly,
+                wifi_hostname=friendly,
                 model=data.get("model", "sonoff"),
                 room_id=self.config.rooms[0].id,
                 version=data.get("version", "UNKNOWN"),
@@ -679,6 +681,14 @@ class NSPanelCoreManager:
                 panel.name,
                 data.get("friendly_name"),
             )
+        # The wire hostname is tracked separately from the display name so a
+        # manager-side rename never moves the command topics (split-brain fix).
+        # Not adopted when the firmware reports the compiled default after a
+        # config wipe — that would point commands at a hostname the panel
+        # abandons on its next register.
+        _friendly = str(data.get("friendly_name") or "")
+        if _friendly and _friendly != "NSPanelCore":
+            panel.wifi_hostname = _friendly
         if data.get("model"):
             panel.model = data["model"]
         if data.get("version"):
@@ -696,10 +706,10 @@ class NSPanelCoreManager:
             # their own hostname-based command topic (the only topic the
             # panel subscribes to).
             await self._publish(
-                panel_mqtt_topic(panel.name, "command"), reply, True
+                self._panel_cmd_topic(panel, "command"), reply, True
             )
             await self._publish(
-                panel_mqtt_topic(panel.name, "command"),
+                self._panel_cmd_topic(panel, "command"),
                 json.dumps({"command": "reload"}),
             )
             await self._publish_panel_status(panel, "online")
@@ -731,12 +741,12 @@ class NSPanelCoreManager:
         There is no protobuf on the wire.
         """
         await self._publish(
-            panel_mqtt_topic(panel.name, "command"),
+            self._panel_cmd_topic(panel, "command"),
             json.dumps(self._register_accept_reply(panel)),
             True,
         )
         await self._publish(
-            panel_mqtt_topic(panel.name, "command"),
+            self._panel_cmd_topic(panel, "command"),
             json.dumps({"command": "reload"}),
         )
         # The stored checksums (from registration) decide OTA here: accept is
@@ -769,6 +779,7 @@ class NSPanelCoreManager:
         panel = self._panel_by_topic(segment)
         if not panel:
             return
+        self._note_panel_hostname(panel, self._topic_segment(msg.topic))
         md5s: dict = {}
         try:
             data = json.loads(msg.payload)
@@ -916,15 +927,54 @@ class NSPanelCoreManager:
             out["md5_tft_file"] = out["md5_tft_gui"]
         return out
 
+    def _panel_cmd_topic(self, panel: PanelConfig, suffix: str) -> str:
+        """Command topic the panel subscribes to.
+
+        Always hostname-based: the firmware subscribes on
+        nspanel/<wifi_hostname>/..., never on the curated display name.
+        """
+        return panel_mqtt_topic(panel.wifi_hostname or panel.name, suffix)
+
+    @staticmethod
+    def _topic_segment(topic: str) -> str:
+        """Verbatim nspanel/<segment>/... segment (case/spaces preserved).
+
+        mac_from_topic() normalizes (lowercase/underscores) for lookup, but
+        the stored wifi_hostname must match the panel's subscription byte
+        for byte, so command topics have to use the verbatim form.
+        """
+        try:
+            parts = str(topic).split("/")
+            if len(parts) >= 3 and parts[0] == "nspanel":
+                return parts[1]
+        except (AttributeError, TypeError):
+            pass
+        return ""
+
+    def _note_panel_hostname(self, panel: PanelConfig, segment: str) -> None:
+        """Remember the topic segment a panel was last seen on.
+
+        Called on every inbound message so a hostname change on the device
+        (or a manager-side rename) heals routing instead of black-holing it.
+        """
+        if segment and segment != panel.wifi_hostname:
+            panel.wifi_hostname = segment
+
     def _panel_by_topic(self, segment: str) -> PanelConfig | None:
         """Find a panel by a topic segment: hostname (wifi_hostname) or MAC.
 
+        The wifi_hostname is checked FIRST: it is the topic the firmware
+        actually publishes on. The curated display name is only a fallback
+        (it equals the hostname until the user renames the panel).
         Verbatim match first (MQTT topics are case-sensitive); normalized
         match second with a drift warning so a case/charset mismatch that
         would black-hole commands is visible instead of silent.
         """
         if not segment:
             return None
+        for panel in self.config.panels:
+            if panel.wifi_hostname and panel.wifi_hostname == segment:
+                return panel
         for panel in self.config.panels:
             if panel.name == segment or panel.mac == segment:
                 return panel
@@ -987,7 +1037,7 @@ class NSPanelCoreManager:
 
         if fw_md5 and report.get("md5_firmware") and report["md5_firmware"] != fw_md5:
             _LOGGER.info("Firmware update available for panel %s — triggering OTA", panel.name)
-            await self._publish(panel_mqtt_topic(panel.name, "command"), json.dumps({"command": "firmware_update"}))
+            await self._publish(self._panel_cmd_topic(panel, "command"), json.dumps({"command": "firmware_update"}))
 
         if data_md5 and report.get("md5_littlefs") and report["md5_littlefs"] != data_md5:
             # NOTE: data_file updates are DELIBERATELY never triggered
@@ -1003,11 +1053,18 @@ class NSPanelCoreManager:
         tft_filename = "gui_us.tft" if panel.is_us_panel else "gui.tft"
         tft_md5 = self.ota_md5("tft", tft_filename)
         if tft_md5 and report.get("md5_tft_file") and report["md5_tft_file"] != tft_md5:
-            _LOGGER.info("TFT update available for panel %s — triggering OTA", panel.name)
-            await self._publish(panel_mqtt_topic(panel.name, "command"), json.dumps({"command": "tft_update"}))
+            if not self.config.settings.auto_tft_updates:
+                _LOGGER.info(
+                    "TFT update available for panel %s — NOT triggering automatically "
+                    "(auto display updates disabled; flash it from the panel Actions menu)",
+                    panel.name,
+                )
+            else:
+                _LOGGER.info("TFT update available for panel %s — triggering OTA", panel.name)
+                await self._publish(self._panel_cmd_topic(panel, "command"), json.dumps({"command": "tft_update"}))
 
-    def relay_state(self, topic: str) -> bool:
-        return self._relay_state.get(topic, False)
+    def relay_state(self, panel: PanelConfig, relay: int) -> bool:
+        return self._relay_state.get((topic_safe(panel.mac), int(relay)), False)
 
     @staticmethod
     def _hash_ota_files() -> dict[str, str]:
@@ -1066,7 +1123,7 @@ class NSPanelCoreManager:
 
     async def set_relay(self, panel: PanelConfig, relay: int, state: bool) -> None:
         await self._publish(
-            panel_mqtt_topic(panel.name, f"r{relay}_cmd"), "1" if state else "0"
+            self._panel_cmd_topic(panel, f"r{relay}_cmd"), "1" if state else "0"
         )
 
     async def set_relay_group(self, group_id: int, state: bool) -> None:
@@ -1079,6 +1136,19 @@ class NSPanelCoreManager:
             panel = self._panel_by_mac(mac) if mac else None
             if panel is not None:
                 await self.set_relay(panel, relay, state)
+
+    def notify_panels_changed(self) -> None:
+        """Re-run new-panel listeners (entity add/remove re-evaluation).
+
+        Called after settings saves / accept / deny: relay is_light flips,
+        capability changes etc. only take effect in HA when the entity
+        platforms re-evaluate.
+        """
+        for listener in list(self._new_panel_listeners):
+            try:
+                listener()
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("New-panel listener failed")
 
     def add_new_panel_listener(self, listener):
         """Register a listener; returns an unsubscribe closure for async_on_unload."""
@@ -1105,12 +1175,12 @@ class NSPanelCoreManager:
         return _unsubscribe
 
     def add_relay_listener(self, panel: PanelConfig, relay: int, listener):
-        topic = panel_mqtt_topic(panel.name, f"r{relay}_state")
-        self._relay_listeners.setdefault(topic, []).append(listener)
+        key = (topic_safe(panel.mac), int(relay))
+        self._relay_listeners.setdefault(key, []).append(listener)
 
         def _unsubscribe() -> None:
             try:
-                self._relay_listeners.get(topic, []).remove(listener)
+                self._relay_listeners.get(key, []).remove(listener)
             except ValueError:
                 pass
 
@@ -1205,8 +1275,8 @@ class NSPanelCoreManager:
             panel.room_id = int(body["room_id"] or 0)
         await self.async_save()
         if panel.accepted and not panel.denied:
-            reply = self._register_accept_reply(panel)
-            await self._publish(panel_mqtt_topic(panel.name, "command"), reply, True)
+            # _send_panel_config already delivers register_accept + reload;
+            # a second direct publish here caused double config delivery.
             await self._send_panel_config(panel)
             await self._publish_panel_status(panel, "online")
 
@@ -1391,8 +1461,26 @@ class NSPanelCoreManager:
 
     async def _on_relay_state(self, msg) -> None:
         state = str(msg.payload).strip().lower() in ("1", "true", "on")
-        self._relay_state[msg.topic] = state
-        for listener in list(self._relay_listeners.get(msg.topic, [])):
+        # Dispatch by (mac, relay), never by topic string: the topic carries
+        # the hostname, which changes on rename — MAC-keyed state survives.
+        # Parse the segment verbatim (hostnames keep case/spaces on the wire).
+        segment, relay = "", 0
+        try:
+            parts = str(msg.topic).split("/")
+            if len(parts) == 3 and parts[0] == "nspanel" and parts[2] in ("r1_state", "r2_state"):
+                segment = parts[1]
+                relay = int(parts[2][1])
+        except (ValueError, TypeError, IndexError):
+            segment, relay = "", 0
+        panel = self._panel_by_topic(segment) if segment else None
+        key = (topic_safe(panel.mac), relay) if panel is not None and relay in (1, 2) else None
+        if key is None:
+            # Unparseable or unknown panel: keep the raw topic as a fallback
+            # key so the payload is still recorded.
+            self._relay_state[msg.topic] = state
+            return
+        self._relay_state[key] = state
+        for listener in list(self._relay_listeners.get(key, [])):
             try:
                 listener(state)
             except Exception:  # noqa: BLE001
@@ -1423,7 +1511,7 @@ class NSPanelCoreManager:
             command = {"gui_update": "tft_update", "firmware_update_force": "firmware_update"}.get(body, body)
             payload = {"command": command}
         self.hass.async_create_task(
-            self._publish(panel_mqtt_topic(panel.name, "command"), json.dumps(payload))
+            self._publish(self._panel_cmd_topic(panel, "command"), json.dumps(payload))
         )
 
     async def _on_panel_log(self, msg) -> None:
@@ -1438,6 +1526,7 @@ class NSPanelCoreManager:
         panel = self._panel_by_topic(segment)
         if panel is None or self.stomp is None:
             return
+        self._note_panel_hostname(panel, self._topic_segment(msg.topic))
         if isinstance(msg.payload, (bytes, bytearray)):
             text = msg.payload.decode("utf-8", "replace")
         else:
@@ -1718,7 +1807,7 @@ class NSPanelCoreManager:
         for panel in self.config.panels:
             if panel.accepted:
                 await self._publish(
-                    panel_mqtt_topic(panel.name, "screensaver_mode"),
+                    self._panel_cmd_topic(panel, "screensaver_mode"),
                     str(panel.screensaver_mode),
                     True,
                 )

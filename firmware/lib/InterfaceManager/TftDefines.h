@@ -253,7 +253,7 @@
 #define ROOM_LIGHT12_SW_CAP_ID 42
 
 #define LIGHT_PAGE_ID 5
-#define LIGHT_PAGE_NAME "Lights"
+#define LIGHT_PAGE_NAME "lights"
 #define LIGHT_PAGE_BACK_BUTTON_ID 1
 #define LIGHT_PAGE_LIGHT_LABEL_NAME "currentLight"
 #define LIGHT_PAGE_SWITCH_MODE_BUTTON_ID 8

@@ -43,14 +43,8 @@ function update_shown_elements() {
   $("#button2_detached_mode_light").addClass("hidden");
   $("#button1_mqtt_mode_controls").addClass("hidden");
   $("#button2_mqtt_mode_controls").addClass("hidden");
-  $("#button1_thermostat_mode_controls").addClass("hidden");
-  $("#button2_thermostat_mode_controls").addClass("hidden");
   $("#button1_detached_mode_light").prop("required", false);
   $("#button2_detached_mode_light").prop("required", false);
-  $("#button1_relay_lower_temperature").prop("required", false);
-  $("#button1_relay_upper_temperature").prop("required", false);
-  $("#button2_relay_lower_temperature").prop("required", false);
-  $("#button2_relay_upper_temperature").prop("required", false);
 
   if ($("#button1_mode").val() == 0) {
     // Direct mode
@@ -64,11 +58,6 @@ function update_shown_elements() {
     $("#button1_mqtt_mode_controls").removeClass("hidden");
   } else if ($("#button1_mode").val() == 3) {
     // Follow mode
-  } else if ($("#button1_mode").val() == 4 || $("#button1_mode").val() == 5) {
-    // Thermostat mode
-    $("#button1_thermostat_mode_controls").removeClass("hidden");
-    $("#button1_relay_lower_temperature").prop("required", true);
-    $("#button1_relay_upper_temperature").prop("required", true);
   }
 
   if ($("#button2_mode").val() == 0) {
@@ -83,11 +72,6 @@ function update_shown_elements() {
     $("#button2_mqtt_mode_controls").removeClass("hidden");
   } else if ($("#button2_mode").val() == 3) {
     // Follow mode
-  } else if ($("#button2_mode").val() == 4 || $("#button2_mode").val() == 5) {
-    // Thermostat mode
-    $("#button2_thermostat_mode_controls").removeClass("hidden");
-    $("#button2_relay_lower_temperature").prop("required", true);
-    $("#button2_relay_upper_temperature").prop("required", true);
   }
 
   // Update shown lights depending on selected room
@@ -167,20 +151,6 @@ function update_shown_elements() {
     } else {
       $("#button2_detached_mode_light").val("").change();
     }
-  }
-
-  // Update if screensaver outside temperature setting is available or not.
-  var screensaver_mode = $("#screensaver_mode").val();
-  if (screensaver_mode == "global") {
-    screensaver_mode = global_screensaver_mode;
-  }
-  if (
-    screensaver_mode == "datetime_with_background" ||
-    screensaver_mode == "datetime_without_background"
-  ) {
-    $("#screensaver_outside_temperature_setting").removeClass("hidden");
-  } else {
-    $("#screensaver_outside_temperature_setting").addClass("hidden");
   }
 }
 

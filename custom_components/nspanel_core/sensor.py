@@ -73,21 +73,39 @@ async def async_setup_entry(
 
     def _remove_incapable() -> None:
         """Drop humidity/pressure entities for panels that never reported
-        the capability — they would sit at Unknown forever."""
+        the capability — they would sit at Unknown forever. Also drops all
+        sensors of removed/unaccepted/denied panels."""
         from homeassistant.helpers import entity_registry as er
 
         try:
             reg = er.async_get(hass)
         except Exception:  # noqa: BLE001
             return
+
+        def _drop(unique: str) -> None:
+            try:
+                entity_id = reg.async_get_entity_id("sensor", DOMAIN, unique)
+            except Exception:  # noqa: BLE001
+                entity_id = None
+            if entity_id is not None:
+                reg.async_remove(entity_id)
+            added.discard(unique)
+
         for panel in manager.panels():
             for kind, cap in REQUIRES_CAPABILITY.items():
                 if getattr(panel, cap, False):
                     continue
-                unique = f"{DOMAIN}_{topic_safe(panel.mac)}_{kind}"
-                entity_id = reg.async_get_entity_id("sensor", DOMAIN, unique)
-                if entity_id is not None:
-                    reg.async_remove(entity_id)
+                _drop(f"{DOMAIN}_{topic_safe(panel.mac)}_{kind}")
+        for unique in list(added):
+            # unique format: nspanel_core_<mac>_<kind>; drop when its panel
+            # is gone, unaccepted or denied.
+            owner = None
+            for panel in manager.panels():
+                if panel.mac and unique.startswith(f"{DOMAIN}_{topic_safe(panel.mac)}_"):
+                    owner = panel
+                    break
+            if owner is None or not owner.accepted or owner.denied:
+                _drop(unique)
 
     _add_new()
     entry.async_on_unload(manager.add_new_panel_listener(_add_new))
