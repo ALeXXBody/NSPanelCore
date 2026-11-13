@@ -3,27 +3,27 @@
   "notes": "Dark mode toggle switch that works (fixed missing script tag that killed all page JS); version-busted setup CSS.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.28/custom_components/nspanel_core/firmware/sonoff/firmware.bin",
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
       "md5": "18d10528bcbe582ab8665dd59caa400f"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.28/custom_components/nspanel_core/firmware/sonoff/data_file.bin",
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
       "md5": "46a5c6ceaec4eed0bf4bb40e46eab8d5"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.28/custom_components/nspanel_core/firmware/custom/firmware.bin",
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
       "md5": "18d10528bcbe582ab8665dd59caa400f"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.28/custom_components/nspanel_core/firmware/custom/data_file.bin",
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
       "md5": "46a5c6ceaec4eed0bf4bb40e46eab8d5"
     },
     "tft/gui.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.27/custom_components/nspanel_core/tft/gui.tft",
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui.tft",
       "md5": "62bccfe0e1b5566485d7ab26ebb75893"
     },
     "tft/gui_us.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.27/custom_components/nspanel_core/tft/gui_us.tft",
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui_us.tft",
       "md5": "c69c752526c7abbf900a0843223098ee"
     }
   }
