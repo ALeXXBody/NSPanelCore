@@ -154,7 +154,7 @@ class PanelConfig:
     button_long_press_time: int = 400
     special_mode_trigger_time: int = 350
     special_mode_release_time: int = 600
-    screen_dim_level: int = 0
+    screen_dim_level: int = 100
     screensaver_dim_level: int = 20
     clock_us_style: bool = False
     use_fahrenheit: bool = False
