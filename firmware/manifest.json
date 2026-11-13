@@ -1,10 +1,10 @@
 {
-  "version": "0.1.166",
-  "notes": "Spec-compliant v1.2 streaming (silence=continue) + baud sweep diagnostic + blind-stream last resort",
+  "version": "0.1.167",
+  "notes": "Recovery probe: whmi-wris-first at 6 bauds for comok-dead bootloaders",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "f308adeb6f7e49ff318132dc5acc7ba5"
+      "md5": "70c67a4c9bfcd57cff86df0f2fd7828a"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "f308adeb6f7e49ff318132dc5acc7ba5"
+      "md5": "70c67a4c9bfcd57cff86df0f2fd7828a"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
