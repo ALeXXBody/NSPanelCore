@@ -1,10 +1,10 @@
 {
-  "version": "0.1.168",
-  "notes": "v1.0 whmi-wri fallback probe at 8 bauds + 3s power cycle (community recovery recipe)",
+  "version": "0.1.169",
+  "notes": "Traffic-aware probe: any reply counts, neighbor-baud hunt, matched upload baud param",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "686b03383938fafbe371f77355518936"
+      "md5": "0d40579a9b746da97eddb5b35138dfbd"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "686b03383938fafbe371f77355518936"
+      "md5": "0d40579a9b746da97eddb5b35138dfbd"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
