@@ -98,7 +98,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P21 | Push OTA to panels immediately on firmware activation (same OTA path as TFT) + per-panel update_firmware/update_tft actions | ✅ Done, needs release |
 | P22 | Fix duplicated reboot; unpopulated UI values: forward rssi/temperature/heap/ip to STOMP status topic (verified merge), heap inversion fix, new ip/heap sensors, capability-gated humidity/pressure | ✅ Done, released |
 | P23 | UI cleanup batch: rename save fix, auto default room, Actions menu (replaces Themes), dropped Web app/Rooms/Upload tabs, ESP web UI proper dark mode (verified light+dark) | ✅ Done, needs release |
-| P24 | Per-panel dashboard customization in Core app: rooms shown on each panel (checkbox list, saved to panel.rooms, pushed via reload) | ✅ Done, needs release |
+| P24 | Per-panel rooms UI — REVERTED, user never asked for it; awaiting concrete dashboard spec | ❌ Reverted |
 
 > **P13 recon (read-only, 2026-11-12):**
 > - Panel `.23:80` serves its own config UI: `wifi_hostname=KitchenPanel`,

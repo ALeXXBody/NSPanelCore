@@ -411,17 +411,6 @@ class SavePanelSettingsView(HomeAssistantView):
                      "reverse_relays", "relay1_default_mode", "relay2_default_mode",
                      "optimistic_mode"):
             panel.__setattr__(flag, flag in form)
-        if "rooms" in form:
-            try:
-                selected = [int(v) for v in form.getall("rooms")]
-            except (ValueError, TypeError):
-                return web.Response(text="Bad rooms: must be room ids", status=400)
-            valid_ids = {r.id for r in manager.config.rooms}
-            if any(v not in valid_ids for v in selected):
-                return web.Response(text="Unknown room id", status=400)
-            # Empty selection = show every room (matches the config builder
-            # fallback); storing it keeps the panel on "all rooms".
-            panel.rooms = sorted(set(selected))
         if "room_id" in form:
             try:
                 room_id = int(form["room_id"])
