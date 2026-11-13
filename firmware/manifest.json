@@ -1,10 +1,10 @@
 {
-  "version": "0.1.167",
-  "notes": "whmi-wris-first recovery probe at 6 bauds for comok-dead bootloaders",
+  "version": "0.1.168",
+  "notes": "v1.0 whmi-wri fallback probe at 8 bauds + 3s power cycle (community recovery recipe)",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "70c67a4c9bfcd57cff86df0f2fd7828a"
+      "md5": "686b03383938fafbe371f77355518936"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "70c67a4c9bfcd57cff86df0f2fd7828a"
+      "md5": "686b03383938fafbe371f77355518936"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
