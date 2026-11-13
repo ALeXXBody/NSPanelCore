@@ -267,13 +267,13 @@ try {
     base = base || location.origin;
     return base.replace(/\/+$/, "") + "/";
   }
-  async function nspanelRefreshTokenIfNeeded() {
+  async function nspanelRefreshTokenIfNeeded(force) {
     var found = null;
     try { found = nspanelTokenStore(); } catch (e) { return; }
     if (!found || !found.tokens || !found.tokens.refresh_token) return;
     var tok = found.tokens;
     var expiresAt = tok.expires || 0;
-    if (expiresAt - Date.now() > 120000) return; // still fresh
+    if (!force && expiresAt - Date.now() > 120000) return; // still fresh
     try {
       var body = "grant_type=refresh_token&refresh_token=" + encodeURIComponent(tok.refresh_token) +
                  "&client_id=" + encodeURIComponent(nspanelClientId());

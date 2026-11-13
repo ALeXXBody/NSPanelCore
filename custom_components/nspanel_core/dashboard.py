@@ -372,7 +372,7 @@ class EditPanelView(HomeAssistantView):
 
 
 class SavePanelSettingsView(HomeAssistantView):
-    url = f"{URL_BASE}/api/panel/{{panel_id}}/save"
+    url = f"{URL_BASE}/api/panel_save/{{panel_id}}"
     name = "nspanel_core:api:panel_save"
     requires_auth = True
 

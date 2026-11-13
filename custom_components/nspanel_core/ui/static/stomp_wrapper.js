@@ -1,7 +1,9 @@
 var stomp_subscription_callbacks = {};
 var stomp_subscription_destinations = {};
+var stomp_auth_failures = 0;
 function stomp_connected_callback() {
   console.log("Connected to STOMP. Resubscribing...");
+  stomp_auth_failures = 0;
   $("#ws_connection_in_progress_notification").addClass("hidden");
 
   // Resubscribe to all subscriptions
@@ -38,7 +40,38 @@ function stomp_websocket_error_callback() {
 }
 
 function stomp_error_callback(error) {
-  console.error("STOMP error:", error);
+  var detail = "";
+  try {
+    if (error && typeof error.body === "string" && error.body) detail = error.body;
+  } catch (e) {}
+  if (!detail) {
+    try {
+      var bin = error && (error.binaryBody || error._binaryBody);
+      if (bin && bin.length) detail = new TextDecoder().decode(bin);
+    } catch (e2) {}
+  }
+  console.error("STOMP error:" + (detail ? " " + detail : ""));
+  // Auth failures (expired/revoked token) would otherwise retry forever
+  // with the same dead credentials: refresh once, then reconnect cleanly.
+  // Without this the card sits on "Unknown state" indefinitely.
+  var msg = (detail || "").toLowerCase();
+  var auth = msg.indexOf("not authorized") !== -1 || msg.indexOf("missing or invalid access_token") !== -1 || msg.indexOf("unauthorized") !== -1;
+  if (!auth) return;
+  stomp_auth_failures += 1;
+  if (stomp_auth_failures > 3) {
+    console.error("STOMP auth failed repeatedly — stopping retries. Please log in to Home Assistant again.");
+    try { stomp_client.deactivate(); } catch (e3) {}
+    try { if (typeof nspanelShowLoginBanner === "function") nspanelShowLoginBanner(); } catch (e4) {}
+    return;
+  }
+  try { stomp_client.deactivate(); } catch (e5) {}
+  setTimeout(function () {
+    var p = null;
+    try { if (typeof nspanelRefreshTokenIfNeeded === "function") p = nspanelRefreshTokenIfNeeded(true); } catch (e6) {}
+    Promise.resolve(p).catch(function () {}).then(function () {
+      try { stomp_client.activate(); } catch (e7) {}
+    });
+  }, 1500);
 }
 
 function stomp_subscribe(topic, callback) {
@@ -132,6 +165,11 @@ stomp_client.onDisconnect = stomp_disconnected_callback;
 stomp_client.onWebSocketClose = stomp_websocket_close_callback;
 stomp_client.onWebSocketError = stomp_websocket_error_callback;
 stomp_client.onStompError = stomp_error_callback;
+stomp_client.beforeConnect = function () {
+  // Re-read the token on EVERY (re)connect — the header captured at load
+  // goes stale (30-min expiry) and retrying with it loops on ERROR forever.
+  try { stomp_client.connectHeaders["access_token"] = nspanelStompToken(); } catch (e) {}
+};
 stomp_client.stompVersions = new StompJs.Versions([]); // Set empty versions as to not set the "Sec-WebSocket-Protocol" header as that causes chrome to fail to connect.
 
 $(document).ready(() => {
