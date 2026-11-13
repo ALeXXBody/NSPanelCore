@@ -60,3 +60,4 @@ docker/MQTTManager/build/
 docker/MQTTManager/conan_cache/
 mqttmanager-build/*
 !mqttmanager-build/.gitkeep
+node_modules/

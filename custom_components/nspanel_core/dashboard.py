@@ -388,6 +388,7 @@ class SavePanelSettingsView(HomeAssistantView):
             return web.Response(text="Panel not found", status=404)
         field_map = {
             "friendly_name": ("name", str),
+            "name": ("name", str),
             "screensaver_mode": ("screensaver_mode", int),
             "screensaver_activation_timeout": ("screensaver_activation_timeout", int),
             "min_button_push_time": ("min_button_push_time", int),

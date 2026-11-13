@@ -43,7 +43,7 @@ from .const import (
     topic_safe,
     status_topic,
 )
-from .models import IntegrationConfig, LightConfig, PanelConfig, SceneConfig, ThermostatConfig, RelayGroupConfig
+from .models import IntegrationConfig, LightConfig, PanelConfig, SceneConfig, ThermostatConfig, RelayGroupConfig, RoomConfig
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -635,8 +635,13 @@ class NSPanelCoreManager:
         if created:
             friendly = data.get("friendly_name", f"NSPanel {mac[-4:].upper()}")
             if not self.config.rooms:
-                _LOGGER.error("Cannot register NSPanel: no rooms exist. Create a room first.")
-                return
+                # Rooms tab was removed from the UI — a panel must belong
+                # somewhere, so keep a single automatic default room.
+                self.config.rooms.append(
+                    RoomConfig(id=self.config.next_id_for("room"), name="Default room")
+                )
+                await self.async_save()
+                _LOGGER.info("Auto-created default room for panel registration")
             panel = PanelConfig(
                 id=self.config.next_id_for("panel"),
                 mac=mac,
