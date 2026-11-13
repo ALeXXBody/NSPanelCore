@@ -88,6 +88,7 @@ class NSPanelCoreManager:
         self._ota_overlay: dict[str, str] = {}
         self._ota_active_version: str = ""
         self._firmware_unsubs: list = []
+        self._firmware_notified_version: str = ""
         self._firmware_status: dict = {"checking": False, "error": ""}
         self.stomp = None
 
@@ -289,16 +290,6 @@ class NSPanelCoreManager:
                     errors[key] = "unknown theme"
             elif key in ("outside_temp_sensor_entity", "outside_temp_provider"):
                 clean[key] = str(value or "").strip()
-            elif key == "firmware_manifest_url":
-                v = str(value or "").strip()
-                if v and not v.startswith(("http://", "https://")):
-                    errors[key] = "must be an http(s) URL"
-                else:
-                    clean[key] = v or "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/manifest.json"
-            elif key == "firmware_auto_check_hours":
-                n = _int(value, 0, 168)
-                if n is not None:
-                    clean[key] = n
             # else: legacy/unknown form field — ignored deliberately
         cmin = clean.get("color_temp_min", current.get("color_temp_min", 2700))
         cmax = clean.get("color_temp_max", current.get("color_temp_max", 6500))
@@ -321,9 +312,9 @@ class NSPanelCoreManager:
         await self._publish_manager_status()
         if clean.get("weather_update_interval", old_interval) != old_interval:
             self._reschedule_weather()
-        if "firmware_auto_check_hours" in clean or "firmware_manifest_url" in clean:
-            self._reschedule_firmware_check()
         return {}
+
+    _FIRMWARE_CHECK_HOURS = 6
 
     def _reschedule_firmware_check(self) -> None:
         for unsub in list(self._firmware_unsubs):
@@ -332,19 +323,27 @@ class NSPanelCoreManager:
             except Exception:  # noqa: BLE001
                 pass
         self._firmware_unsubs = []
-        try:
-            hours = int(self.config.settings.firmware_auto_check_hours or 0)
-        except (ValueError, TypeError):
-            hours = 0
-        if hours > 0:
-            self._firmware_unsubs.append(
-                async_track_time_interval(
-                    self.hass, self._poll_firmware_manifest, timedelta(hours=hours)
-                )
+        # Fixed 6-hour cadence — the only source and schedule, no UI for it.
+        self._firmware_unsubs.append(
+            async_track_time_interval(
+                self.hass, self._poll_firmware_manifest, timedelta(hours=self._FIRMWARE_CHECK_HOURS)
             )
+        )
 
     async def _poll_firmware_manifest(self, _now) -> None:
-        await self.check_firmware_updates(auto=True)
+        status = await self.check_firmware_updates(auto=True)
+        latest = status.get("latest") if isinstance(status, dict) else ""
+        if (
+            status.get("update_available")
+            and latest
+            and latest != self._firmware_notified_version
+        ):
+            self._firmware_notified_version = latest
+            self.add_message(
+                "Panel firmware update available",
+                f"Version {latest} is ready ({status.get('notes', '') or 'see manifest notes'})."
+                " Install it from the Actions menu (Download + activate latest).",
+            )
 
     def servable_path(self, kind: str, name: str) -> str | None:
         """Resolve an OTA file to disk: active overlay first, bundled fallback."""
@@ -418,9 +417,7 @@ class NSPanelCoreManager:
             return dict(self._firmware_status)
         self._firmware_status = {"checking": True, "error": ""}
         try:
-            manifest = await _fs.fetch_manifest(
-                self.hass, self.config.settings.firmware_manifest_url
-            )
+            manifest = await _fs.fetch_manifest(self.hass, _fs.DEFAULT_MANIFEST_URL)
             from datetime import datetime, timezone
 
             self.config.settings.firmware_last_check = datetime.now(timezone.utc).isoformat(
@@ -431,8 +428,8 @@ class NSPanelCoreManager:
                 return dict(self._firmware_status)
             latest = str(manifest.get("version", ""))
             self.config.settings.firmware_latest_version = latest
-            current = self._ota_active_version or _fs.bundled_version(
-                os.path.dirname(__file__)
+            current = self._ota_active_version or await self.hass.async_add_executor_job(
+                _fs.bundled_version, os.path.dirname(__file__)
             )
             update_available = _fs.is_newer(latest, current) if latest else False
             self._firmware_status = {
@@ -458,9 +455,7 @@ class NSPanelCoreManager:
         """
         from . import firmware_store as _fs
 
-        manifest = await _fs.fetch_manifest(
-            self.hass, self.config.settings.firmware_manifest_url
-        )
+        manifest = await _fs.fetch_manifest(self.hass, _fs.DEFAULT_MANIFEST_URL)
         if not manifest:
             return False, "manifest fetch failed"
         ok, message = await _fs.download_and_activate(self.hass, self, manifest)

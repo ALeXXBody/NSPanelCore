@@ -38,7 +38,15 @@
                         <label class="label">
                             <span class="label-text justify-start w-full ml-2">Check firmware updates</span>
                         </label>
-                        <button class="btn btn-xs btn-info mr-2" onclick="fetch('/nspanel_core/firmware_check',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.latest?('Latest: '+j.latest):('Check failed: '+(j.error||'unknown')))).catch(e=>alert('Check failed'));">Check</button>
+                        <button class="btn btn-xs btn-info mr-2" onclick="fetch('/nspanel_core/firmware_check',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.latest?('Latest: '+j.latest+(j.update_available?' — update available (install it from Actions > Download + activate latest).':' (up to date)')):('Check failed: '+(j.error||'unknown')))).catch(e=>alert('Check failed'));">Check</button>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Download + activate latest firmware</span>
+                        </label>
+                        <button class="btn btn-xs btn-warning mr-2" onclick="if(confirm('Download and activate the latest firmware? Panels update over MQTT OTA.'))fetch('/nspanel_core/firmware_install',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.message)).catch(e=>alert('Install failed'));">Install</button>
                     </div>
                 </li>
                 <li>

@@ -610,11 +610,6 @@ class SettingsView(HomeAssistantView):
             max_log_buffer_size=1000,
             is_home_assistant_addon=True,
             default_nspanel_type="sonoff",
-            firmware_manifest_url=s.firmware_manifest_url,
-            firmware_auto_check_hours=s.firmware_auto_check_hours,
-            firmware_active_version=s.firmware_active_version,
-            firmware_latest_version=s.firmware_latest_version,
-            firmware_last_check=s.firmware_last_check,
             rooms=[
                 {
                     "id": r.id,
@@ -1014,8 +1009,8 @@ class FirmwareStatusView(HomeAssistantView):
 
         manager = _manager(request)
         s = manager.config.settings
-        current = manager._ota_active_version or _fs.bundled_version(
-            _os.path.dirname(__file__)
+        current = manager._ota_active_version or await manager.hass.async_add_executor_job(
+            _fs.bundled_version, _os.path.dirname(__file__)
         )
         status = dict(manager._firmware_status)
         status.update(
@@ -1023,8 +1018,8 @@ class FirmwareStatusView(HomeAssistantView):
                 "current": current,
                 "latest": s.firmware_latest_version or "",
                 "last_check": s.firmware_last_check or "",
-                "manifest_url": s.firmware_manifest_url,
-                "auto_check_hours": s.firmware_auto_check_hours,
+                "manifest_url": _fs.DEFAULT_MANIFEST_URL,
+                "auto_check_hours": 6,
             }
         )
         return web.json_response(status)
