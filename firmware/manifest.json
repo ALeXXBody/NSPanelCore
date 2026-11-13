@@ -1,29 +1,29 @@
 {
-  "version": "0.1.155",
-  "notes": "TFT download robustness (Range end, full-chunk reads, ACK bounds); boot animation kill; download+chunk fixes.",
+  "version": "0.1.156",
+  "notes": "Heap inversion fix, download robustness, boot animation kill.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.20/custom_components/nspanel_core/firmware/sonoff/firmware.bin",
-      "md5": "99b2794297db58e7e3a044fefcb06bb6"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.22/custom_components/nspanel_core/firmware/sonoff/firmware.bin",
+      "md5": "c818529b5a974921cbecea30986d008d"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.20/custom_components/nspanel_core/firmware/sonoff/data_file.bin",
-      "md5": "3dbf9be885e3cfd4b48244d25759bf81"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.22/custom_components/nspanel_core/firmware/sonoff/data_file.bin",
+      "md5": "0ac8309968798635bd2937cbf2eb6d18"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.20/custom_components/nspanel_core/firmware/custom/firmware.bin",
-      "md5": "99b2794297db58e7e3a044fefcb06bb6"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.22/custom_components/nspanel_core/firmware/custom/firmware.bin",
+      "md5": "c818529b5a974921cbecea30986d008d"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.20/custom_components/nspanel_core/firmware/custom/data_file.bin",
-      "md5": "3dbf9be885e3cfd4b48244d25759bf81"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.22/custom_components/nspanel_core/firmware/custom/data_file.bin",
+      "md5": "0ac8309968798635bd2937cbf2eb6d18"
     },
     "tft/gui.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.20/custom_components/nspanel_core/tft/gui.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.22/custom_components/nspanel_core/tft/gui.tft",
       "md5": "62bccfe0e1b5566485d7ab26ebb75893"
     },
     "tft/gui_us.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.20/custom_components/nspanel_core/tft/gui_us.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.22/custom_components/nspanel_core/tft/gui_us.tft",
       "md5": "c69c752526c7abbf900a0843223098ee"
     }
   }

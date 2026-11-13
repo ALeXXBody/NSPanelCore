@@ -311,7 +311,7 @@ void taskManageWifiAndMqtt(void *param) {
           char display_temp[7]; // Displayed temperature should NEVER have to be more than 7 chars. Example, 1000.0 is 6 chars, -100.0 is 6 chars. Neither should happen!
           std::snprintf(display_temp, sizeof(display_temp), "%.1f", averageTemperature);
           status_report_doc["rssi"] = WiFi.RSSI();
-          status_report_doc["heap_used_pct"] = round((float(ESP.getFreeHeap()) / float(ESP.getHeapSize())) * 100);
+          status_report_doc["heap_used_pct"] = 100 - round((float(ESP.getFreeHeap()) / float(ESP.getHeapSize())) * 100);
           status_report_doc["mac"] = WiFi.macAddress();
           status_report_doc["temperature"] = display_temp;
           status_report_doc["ip"] = WiFi.localIP().toString();

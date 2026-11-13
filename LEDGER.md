@@ -96,6 +96,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P19 | Full firmware audit + boot-animation rebrand: audit fixes (0.1.153); boot frames rebranded CORE (EU+US, staged); editor path blocked by env (Xvfb crash/hung MSI) — animation killed in fw via tm_animation.en=0 (0.1.154) as immediate mitigation | ✅ Done, needs release + OTA |
 | P20 | Decouple firmware from app releases: manifest-driven check/download/activate + overlay serving, TFT download OOB fixes, fw 0.1.155, settings UI | ✅ Done, needs release |
 | P21 | Push OTA to panels immediately on firmware activation (same OTA path as TFT) + per-panel update_firmware/update_tft actions | ✅ Done, needs release |
+| P22 | Fix duplicated reboot button + unpopulated wifi/processor/temperature: single reboot handler, heap inversion fix (fw 0.1.156), new ip/heap sensors, capability-gated humidity/pressure, numeric coercion | ✅ Done, needs release |
 
 > **P13 recon (read-only, 2026-11-12):**
 > - Panel `.23:80` serves its own config UI: `wifi_hostname=KitchenPanel`,

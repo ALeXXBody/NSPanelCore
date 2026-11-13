@@ -163,6 +163,8 @@ class PanelConfig:
     relay1_default_mode: bool = False
     relay2_default_mode: bool = False
     temperature_calibration: int = 0
+    has_humidity: bool = False
+    has_pressure: bool = False
     button1_mode: int = 0  # 0=DIRECT 1=FOLLOW 2=NOTIFY_MANAGER 3/4 thermostat
     button2_mode: int = 0
     raise_to_100_light_level: int = 0

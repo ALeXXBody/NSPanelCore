@@ -761,6 +761,11 @@ class NSPanelCoreManager:
                 rssi = int(data.get("rssi")) if data.get("rssi") is not None else None
             except (ValueError, TypeError):
                 rssi = None
+            try:
+                heap = int(data.get("heap_used_pct")) if data.get("heap_used_pct") is not None else None
+            except (ValueError, TypeError):
+                heap = None
+            ip = str(data.get("ip") or "").strip() or None
             raw_warnings = data.get("warnings", "")
             warnings: list = []
             if isinstance(raw_warnings, list):
@@ -774,6 +779,8 @@ class NSPanelCoreManager:
             report = {
                 "temperature": temperature,
                 "rssi": rssi,
+                "heap_used_pct": heap,
+                "ip": ip,
                 "has_humidity": False,
                 "has_pressure": False,
                 "warnings": warnings,
@@ -810,8 +817,13 @@ class NSPanelCoreManager:
             }
         was_online = panel.online
         panel.online = report.get("state", "") not in ("updating_tft", "updating_fw", "updating_fs")
+        caps_changed = False
+        for cap in ("has_humidity", "has_pressure"):
+            if bool(report.get(cap)) and not getattr(panel, cap, False):
+                setattr(panel, cap, True)
+                caps_changed = True
         self._schedule_save()
-        if panel.online != was_online:
+        if panel.online != was_online or caps_changed:
             for listener in list(self._new_panel_listeners):
                 try:
                     listener()
