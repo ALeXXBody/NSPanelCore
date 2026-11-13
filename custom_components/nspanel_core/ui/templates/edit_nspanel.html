@@ -292,6 +292,25 @@
           </ul>
         </div>
 
+        <!-- Rooms shown on this panel -->
+        <div class="flex-auto mt-2">
+          <label class="block mb-2 text-sm font-medium">Rooms on this panel's dashboard (all checked = show every room)</label>
+          <ul
+            class="items-center w-full text-sm font-medium border border-neutral rounded-lg bg-base-300 divide-y divide-neutral">
+            {% for room in rooms %}
+            <li class="w-full">
+              <div class="flex items-center ps-3">
+                <input id="panel_room_{{ room.id }}" type="checkbox" name="rooms" value="{{ room.id }}"
+                {% if not settings.rooms or room.id in settings.rooms %}checked{% endif %}
+                  class="w-4 h-4 checkbox checkbox-accent">
+                <label for="panel_room_{{ room.id }}"
+                  class="w-full py-3 ms-2 text-sm font-medium">{{ room.friendly_name }}</label>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+
         <!-- Default page -->
         <div class="mt-4">
           <label for="default_page" class="block mb-2 text-sm font-medium">Default page</label>
