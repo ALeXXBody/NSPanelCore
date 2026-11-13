@@ -6,22 +6,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta charset="utf-8" />
   <meta name="color-scheme" content="dark light" />
-  <link rel="stylesheet" href="static/main.css" />
+  <link rel="stylesheet" href="static/main.css?v=%version%" />
   <script>
-    // Proper dark mode: saved choice wins, otherwise follow the OS.
-    (function () {
+    // Theme: saved choice wins, otherwise follow the OS. Runs early so
+    // the checkbox below reflects the same state once the DOM exists.
+    function nspanel_is_dark() {
       try {
         var t = localStorage.getItem('nspanel-theme');
-        if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-          document.documentElement.classList.add('dark');
-        }
+        if (t === 'dark') return true;
+        if (t === 'light') return false;
       } catch (e) {}
-    })();
-    function toggle_theme() {
-      var el = document.documentElement;
-      var dark = el.classList.toggle('dark');
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    function nspanel_apply_theme(dark) {
+      document.documentElement.classList.toggle('dark', !!dark);
+      var box = document.getElementById('theme_toggle');
+      if (box) box.checked = !!dark;
       try { localStorage.setItem('nspanel-theme', dark ? 'dark' : 'light'); } catch (e) {}
     }
+    (function () {
+      if (nspanel_is_dark()) document.documentElement.classList.add('dark');
+      document.addEventListener('DOMContentLoaded', function () {
+        var box = document.getElementById('theme_toggle');
+        if (box) box.checked = document.documentElement.classList.contains('dark');
+      });
+    })();
+    function toggle_theme(dark) {
+      nspanel_apply_theme(dark);
+    }
+  </script>
   <script>
     function close_wifi_select_modal() {
       var select_wifi_modal = document.getElementById("select_wifi_modal");
@@ -221,8 +234,11 @@
       <h1 class="text-4xl font-medium text-gray-900 dark:text-gray-50" id="page-title">NSPanelCore</h1>
       <h2 class="text-xl text-gray-700 dark:text-gray-300" id="page-subtitle">Version %version%</h2>
       </div>
-      <button type="button" onclick="toggle_theme()" title="Toggle dark mode"
-        class="mt-2 shrink-0 rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100">Dark mode</button>
+      <label class="mt-2 shrink-0 inline-flex items-center gap-2 cursor-pointer select-none rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100">
+        <span>Dark mode</span>
+        <input type="checkbox" id="theme_toggle" class="peer sr-only" onchange="toggle_theme(this.checked)">
+        <span aria-hidden="true" class="relative block w-11 h-6 rounded-full bg-gray-300 dark:bg-gray-700 transition-colors peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-5"></span>
+      </label>
     </div>
   </section>
 

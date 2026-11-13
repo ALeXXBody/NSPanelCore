@@ -1,22 +1,22 @@
 {
-  "version": "0.1.158",
-  "notes": "Per-panel customizable dashboard: rooms shown, custom button MQTT actions (modes now save), home widget visibility (fw applies).",
+  "version": "0.1.159",
+  "notes": "Dark mode toggle switch that works (fixed missing script tag that killed all page JS); version-busted setup CSS.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.27/custom_components/nspanel_core/firmware/sonoff/firmware.bin",
-      "md5": "b311dcf3813496a627bceac843a66f47"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.28/custom_components/nspanel_core/firmware/sonoff/firmware.bin",
+      "md5": "18d10528bcbe582ab8665dd59caa400f"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.27/custom_components/nspanel_core/firmware/sonoff/data_file.bin",
-      "md5": "dca4d9ddad63a5d131e0333f60ce5e69"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.28/custom_components/nspanel_core/firmware/sonoff/data_file.bin",
+      "md5": "46a5c6ceaec4eed0bf4bb40e46eab8d5"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.27/custom_components/nspanel_core/firmware/custom/firmware.bin",
-      "md5": "b311dcf3813496a627bceac843a66f47"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.28/custom_components/nspanel_core/firmware/custom/firmware.bin",
+      "md5": "18d10528bcbe582ab8665dd59caa400f"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.27/custom_components/nspanel_core/firmware/custom/data_file.bin",
-      "md5": "dca4d9ddad63a5d131e0333f60ce5e69"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.28/custom_components/nspanel_core/firmware/custom/data_file.bin",
+      "md5": "46a5c6ceaec4eed0bf4bb40e46eab8d5"
     },
     "tft/gui.tft": {
       "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.27/custom_components/nspanel_core/tft/gui.tft",

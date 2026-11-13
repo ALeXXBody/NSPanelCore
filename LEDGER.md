@@ -97,7 +97,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P20 | Decouple firmware from app releases: manifest-driven check/download/activate + overlay serving, TFT download OOB fixes, fw 0.1.155, settings UI | ✅ Done, needs release |
 | P21 | Push OTA to panels immediately on firmware activation (same OTA path as TFT) + per-panel update_firmware/update_tft actions | ✅ Done, needs release |
 | P22 | Fix duplicated reboot; unpopulated UI values: forward rssi/temperature/heap/ip to STOMP status topic (verified merge), heap inversion fix, new ip/heap sensors, capability-gated humidity/pressure | ✅ Done, released |
-| P23 | UI cleanup batch: rename save fix, auto default room, Actions menu (replaces Themes), dropped Web app/Rooms/Upload tabs, ESP web UI proper dark mode (verified light+dark) | ✅ Done, needs release |
+| P23 | UI cleanup + ESP dark mode | ✅ + follow-up: toggle was dead (missing </script> killed page JS); fixed, verified click→dark→persist, CSS cache-busted (fw 0.1.159) |
 | P24 | Per-panel rooms UI — REVERTED, user never asked for it; awaiting concrete dashboard spec | ❌ Reverted |
 | P25 | Customisable panel dashboard (A rooms shown, C button modes+MQTT topics now save+serve, B home widget visibility fw+config+UI) | ✅ Done, needs verify+release |
 
