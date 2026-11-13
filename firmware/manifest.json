@@ -1,6 +1,6 @@
 {
   "version": "0.1.159",
-  "notes": "Rebranded display file (NSPanelCore boot animation), compiled from project HMI with Nextion Editor 1.68.2",
+  "notes": "Rebranded EU display file (NSPanelCore boot animation), compiled from project HMI",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
