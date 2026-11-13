@@ -700,8 +700,10 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
   // 9600 matters: a corrupt system-data flash resets the display's stored
   // baud to the Nextion default, so the bootloader only hears 9600.
   auto _next_baud = [](int current) -> int {
-    if (current == 115200) return NSPMConfig::instance->tft_upload_baud;
-    if (current == NSPMConfig::instance->tft_upload_baud) return 9600;
+    uint32_t up = NSPMConfig::instance->tft_upload_baud;
+    if (current == 9600) return 115200;
+    if ((uint32_t)current == up && up != 9600) return 9600;
+    if (current == 115200) return (up != 115200 && up != 9600) ? (int)up : 9600;
     return 115200;
   };
   if (comok_string.length() > 3) {
