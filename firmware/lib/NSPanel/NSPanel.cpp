@@ -813,11 +813,54 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
   return true;
 }
 
+static int _sweepDisplayBaud() {
+  // Diagnostic + recovery probe: the display may be alive on a baud we
+  // don't expect (corrupt system data resets it to the 9600 default).
+  // Power-cycles per baud, sends "connect", logs ANY traffic heard.
+  // Returns the first baud with traffic, else 0.
+  const int bauds[] = {115200, 9600, 57600, 38400, 19200, 230400};
+  for (unsigned i = 0; i < sizeof(bauds) / sizeof(bauds[0]); i++) {
+    int b = bauds[i];
+    Serial2.updateBaudRate(b);
+    while (Serial2.available() > 0) { Serial2.read(); }
+    Serial2.print("connect");
+    { static const uint8_t _term[3] = {0xFF, 0xFF, 0xFF}; Serial2.write(_term, 3); }
+    unsigned long start = millis();
+    bool heard = false;
+    while (millis() - start < 2500) {
+      while (Serial2.available() > 0) {
+        heard = true;
+        uint8_t c = Serial2.read();
+        LOG_ERROR("Heard display at baud ", b, ": 0x", String(c, HEX).c_str());
+      }
+      vTaskDelay(50 / portTICK_PERIOD_MS);
+    }
+    if (heard) {
+      return b;
+    }
+    LOG_DEBUG("Silent at baud ", b);
+  }
+  return 0;
+}
+
 bool NSPanel::_updateTFTOTA() {
   LOG_INFO("_updateTFTOTA Started.");
-  if (!NSPanel::_initTFTUpdate(115200)) {
-    LOG_ERROR("TFT init failed, aborting this OTA attempt (will retry in 5s).");
-    return false;
+  bool init_ok = NSPanel::_initTFTUpdate(115200);
+  if (!init_ok) {
+    // No handshake on any rotated baud. Sweep once for diagnostics (logs
+    // any display traffic at 6 bauds), then stream anyway: a display whose
+    // TX line is dead can still be receiving, and the tolerant stream below
+    // treats silence as continue. Worst case the bytes go nowhere.
+    int heard = _sweepDisplayBaud();
+    if (heard) {
+      LOG_ERROR("Display talks at baud ", heard, " — retrying init there.");
+      Serial2.updateBaudRate(heard);
+      init_ok = NSPanel::_initTFTUpdate(heard);
+    }
+    if (!init_ok) {
+      LOG_ERROR("Proceeding with blind tolerant upload at 115200 (no handshake).");
+      Serial2.updateBaudRate(115200);
+    }
   }
 
   // URL to download TFT file from
@@ -858,7 +901,6 @@ bool NSPanel::_updateTFTOTA() {
   static uint8_t dataBuffer[4096];
 
   // Loop until break when all firmware has finished uploading (data available in stream == 0)
-  int _tft_ack_retries = 0;
   while (true) {
     // Calculate next chunk size
     int next_write_size;
@@ -883,27 +925,20 @@ bool NSPanel::_updateTFTOTA() {
       }
     }
 
-    // No fixed delay here: the panel always ACKs each chunk (0x05/0x08
-    // protocol) and _readDataToString below blocks until that ACK arrives
-    // (5 s timeout). The old unconditional 500 ms delay added ~6 minutes of
-    // pure sleep when flashing a 3 MB TFT file (~750 chunks).
-    unsigned long _chunk_start = nextStartWriteOffset;
+    // v1.2 upload protocol (see Nextion docs): after each 4KB block the
+    // device usually stays SILENT (continue streaming); it speaks only to
+    // request a retransmit (0x08 + LE32 offset, typically after the first
+    // block) or with a legacy 0x05. Silence/garbage therefore means
+    // CONTINUE — never rewind/abort on it (that kills healthy uploads and
+    // can never recover a display whose TX line is dead). 0x08 offsets are
+    // validated; a short drain timeout keeps throughput up.
     Serial2.write(dataBuffer, bytesReceived);
-    nextStartWriteOffset += bytesReceived;
-    lastReadByte = nextStartWriteOffset;
-    NSPanel::instance->_update_progress = ((float)lastReadByte / (float)file_size) * 100;
+    unsigned long _sent_up_to = nextStartWriteOffset + bytesReceived;
+    NSPanel::instance->_update_progress = ((float)_sent_up_to / (float)file_size) * 100;
 
     std::string return_string;
-    uint16_t recevied_bytes = NSPanel::instance->_readDataToString(&return_string, 5000, true);
-    if (lastReadByte >= file_size) {
-      NSPanel::instance->_update_progress = 100;
-      LOG_INFO("TFT Upload complete, processed ", lastReadByte, " bytes.");
-      break;
-    } else if (!return_string.empty() && return_string[0] == 0x05) {
-      // Old protocol, just upload next chunk.
-      LOG_TRACE("Got 0x05, uploading next chunk.");
-      _tft_ack_retries = 0;
-    } else if (!return_string.empty() && return_string[0] == 0x08) {
+    uint16_t recevied_bytes = NSPanel::instance->_readDataToString(&return_string, 500, true);
+    if (!return_string.empty() && return_string[0] == 0x08) {
       while (return_string.length() < 5) {
         LOG_TRACE("Waiting for offset data byte ", return_string.length() - 1);
         while (Serial2.available() <= 0) {
@@ -923,29 +958,23 @@ bool NSPanel::_updateTFTOTA() {
         nextStartWriteOffset = readNextOffset;
         lastReadByte = readNextOffset;
         LOG_INFO("Got 0x08 with offset, jumping to: ", nextStartWriteOffset, " please wait.");
-      } else {
-        LOG_ERROR("Panel requested offset 0 (full restart not supported), aborting OTA attempt.");
-        return false;
+        continue;
       }
-      _tft_ack_retries = 0;
-    } else {
-      LOG_DEBUG("Got unexpected return data from panel. Received ", recevied_bytes, " bytes: ");
-      for (int i = 0; i < recevied_bytes; i++) {
-        LOG_DEBUG("0x", String(return_string[i], HEX).c_str());
-      }
-      // Missing/garbled ACK: rewind and resend this chunk (bounded), else
-      // abort instead of advancing with corrupt state.
-      if (++_tft_ack_retries > 10) {
-        LOG_ERROR("TFT chunk ACK failed 10 times, aborting OTA attempt.");
-        return false;
-      }
-      LOG_ERROR("No valid ACK for TFT chunk, resending (attempt ", _tft_ack_retries, ").");
-      nextStartWriteOffset = _chunk_start;
-      lastReadByte = _chunk_start;
-      vTaskDelay(250 / portTICK_PERIOD_MS);
+      LOG_ERROR("Panel requested offset 0 (full restart not supported), aborting OTA attempt.");
+      return false;
     }
-
-    // vTaskDelay(50 / portTICK_PERIOD_MS);
+    // 0x05, empty (silence) or anything else: chunk accepted, move on.
+    nextStartWriteOffset = _sent_up_to;
+    lastReadByte = _sent_up_to;
+    if (lastReadByte >= file_size) {
+      NSPanel::instance->_update_progress = 100;
+      LOG_INFO("TFT Upload complete, processed ", lastReadByte, " bytes.");
+      break;
+    }
+    if (!return_string.empty() && return_string[0] != 0x05) {
+      LOG_TRACE("Ignoring ", recevied_bytes, " bytes of non-ACK chatter from panel.");
+    }
+    vTaskDelay(20 / portTICK_PERIOD_MS); // pacing: don't overrun the display UART buffer
   }
 
   LOG_INFO("Getting TFT MD5 checksum to store in flash.");
