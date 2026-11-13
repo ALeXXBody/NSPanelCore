@@ -1,10 +1,10 @@
 {
-  "version": "0.1.160",
-  "notes": "Replace dead NSPM-flag handshake with real display comok check; honest warning text",
+  "version": "0.1.161",
+  "notes": "TFT OTA robustness (206-required ranges, bounded init, ack-gated retry, static buffer); ESP OTA status+size checks; config guards (dim/color/button validation)",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "624cfb284485268ed63279a1068e18ae"
+      "md5": "27500f63f48e2469ab92fb3f7082154e"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "624cfb284485268ed63279a1068e18ae"
+      "md5": "27500f63f48e2469ab92fb3f7082154e"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
