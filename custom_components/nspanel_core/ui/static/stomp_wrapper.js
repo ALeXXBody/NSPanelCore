@@ -111,7 +111,9 @@ if (location.protocol === "https:") {
   stomp_websocket_address = "ws://";
 }
 
-stomp_websocket_address += location.hostname + ":" + location.port + "/nspanel_core/ws";
+// Behind a reverse proxy / Nabu Casa the port is empty (default 443/80);
+// appending a bare ":" produces an invalid URL and the UI never connects.
+stomp_websocket_address += location.hostname + (location.port ? ":" + location.port : "") + "/nspanel_core/ws";
 const stomp_client = new StompJs.Client({
   brokerURL: stomp_websocket_address,
   connectHeaders: {
