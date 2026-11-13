@@ -1,22 +1,22 @@
 {
-  "version": "0.1.159",
-  "notes": "Rebranded EU display file (NSPanelCore boot animation), compiled from project HMI",
+  "version": "0.1.160",
+  "notes": "Replace dead NSPM-flag handshake with real display comok check; honest warning text",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "18d10528bcbe582ab8665dd59caa400f"
+      "md5": "624cfb284485268ed63279a1068e18ae"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
-      "md5": "46a5c6ceaec4eed0bf4bb40e46eab8d5"
+      "md5": "bd34be744ef1278ff8347eadaa96f7cd"
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "18d10528bcbe582ab8665dd59caa400f"
+      "md5": "624cfb284485268ed63279a1068e18ae"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
-      "md5": "46a5c6ceaec4eed0bf4bb40e46eab8d5"
+      "md5": "bd34be744ef1278ff8347eadaa96f7cd"
     },
     "tft/gui.tft": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui.tft",
