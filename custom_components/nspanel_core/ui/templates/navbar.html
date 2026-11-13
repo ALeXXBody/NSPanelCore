@@ -68,6 +68,38 @@
                 <li>
                     <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
                         <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Served display files (what panels download)</span>
+                        </label>
+                        <button class="btn btn-xs btn-info mr-2" onclick="fetch('/nspanel_core/firmware_status').then(r=>r.json()).then(j=>{var t=j.served_tft||{};var f=function(v){return v?(v.filename+': '+v.bytes+' bytes, md5 '+String(v.md5).slice(0,12)+'… ('+v.source+')'):'missing';};alert('EU display: '+f(t.eu)+'\nUS display: '+f(t.us));}).catch(e=>alert('Check failed'));">Show</button>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Upload display file (exact bytes panels will flash)</span>
+                        </label>
+                        <button class="btn btn-xs btn-warning mr-2" onclick="upload_tft_modal.showModal();">Upload</button>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Upload ESP firmware file</span>
+                        </label>
+                        <button class="btn btn-xs btn-warning mr-2" onclick="upload_firmware_modal.showModal();">Upload</button>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Upload ESP data file (wipes WiFi!)</span>
+                        </label>
+                        <button class="btn btn-xs btn-warning mr-2" onclick="upload_data_file_modal.showModal();">Upload</button>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
                             <span class="label-text justify-start w-full ml-2">Update display on all panels</span>
                         </label>
                         <button class="btn btn-xs btn-warning mr-2" onclick="document.querySelectorAll('[id^=screen-update-]').forEach(b=>b.click());">Flash all</button>

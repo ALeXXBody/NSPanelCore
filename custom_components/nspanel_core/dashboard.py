@@ -1079,6 +1079,13 @@ class SaveTftFileView(OtaUploadView):
         await manager.hass.async_add_executor_job(
             manager.invalidate_ota_cache, "tft", filename, dest
         )
+        # Pin the exact uploaded bytes: mirror into any overlay copy that
+        # would otherwise shadow the upload, and record proof metadata.
+        proof = await manager.hass.async_add_executor_job(
+            manager.note_custom_tft, filename
+        )
+        await manager.async_save()
+        _LOGGER.info("Custom TFT pinned for serving: %s", proof)
         return _redirect(request, f"{URL_BASE}/settings")
 
 
@@ -1105,6 +1112,9 @@ class FirmwareStatusView(HomeAssistantView):
                 "last_check": s.firmware_last_check or "",
                 "manifest_url": _fs.DEFAULT_MANIFEST_URL,
                 "auto_check_hours": 6,
+                "served_tft": await manager.hass.async_add_executor_job(
+                    manager.served_tft_info
+                ),
             }
         )
         return web.json_response(status)

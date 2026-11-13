@@ -374,6 +374,94 @@ class NSPanelCoreManager:
             pass
         self.hass.async_create_task(self.async_save())
 
+    def note_custom_tft(self, filename: str) -> dict:
+        """Pin a manually uploaded display file so it is served EXACTLY.
+
+        Copies the uploaded bytes over any overlay copy (overlays silently
+        shadow bundled files), re-hashes the served path, and records
+        name/md5/size/time in settings. Returns the served-file proof dict.
+        """
+        import hashlib as _hashlib
+        import os as _os
+        import shutil as _shutil
+        from datetime import datetime, timezone
+
+        kind, name = "tft", filename
+        bundled = _os.path.join(_os.path.dirname(__file__), "tft", filename)
+        # Overlay would shadow the upload — overwrite it with the exact bytes.
+        overlay = self._ota_overlay.get(f"{kind}/{name}", "")
+        if overlay and _os.path.abspath(overlay) != _os.path.abspath(bundled):
+            try:
+                _os.makedirs(_os.path.dirname(overlay), exist_ok=True)
+                _shutil.copyfile(bundled, overlay)
+            except OSError:
+                _LOGGER.warning("Could not mirror custom TFT into overlay", exc_info=True)
+        served = self.servable_path(kind, name) or bundled
+        h = _hashlib.md5()
+        size = 0
+        try:
+            with open(served, "rb") as f:
+                for chunk in iter(lambda: f.read(65536), b""):
+                    h.update(chunk)
+                    size += len(chunk)
+            digest = h.hexdigest()
+        except OSError:
+            digest = ""
+        try:
+            self._ota_md5[f"{kind}/{name}"] = digest
+        except (AttributeError, TypeError):
+            self._ota_md5 = {f"{kind}/{name}": digest}
+        s = self.config.settings
+        s.custom_tft_name = filename
+        s.custom_tft_md5 = digest
+        s.custom_tft_size = size
+        s.custom_tft_uploaded_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        s.custom_tft_source = "manual upload"
+        return {
+            "filename": filename,
+            "bytes": size,
+            "md5": digest,
+            "source": "manual upload",
+            "uploaded_at": s.custom_tft_uploaded_at,
+        }
+
+    def served_tft_info(self) -> dict:
+        """Proof of what the panels actually download, per variant."""
+        import hashlib as _hashlib
+        import os as _os
+
+        out = {}
+        for filename in ("gui.tft", "gui_us.tft"):
+            path = self.servable_path("tft", filename)
+            overlay_path = self._ota_overlay.get(f"tft/{filename}", "")
+            info = {"filename": filename, "bytes": 0, "md5": "", "source": "missing"}
+            if path and _os.path.isfile(path):
+                h = _hashlib.md5()
+                size = 0
+                try:
+                    with open(path, "rb") as f:
+                        for chunk in iter(lambda: f.read(65536), b""):
+                            h.update(chunk)
+                            size += len(chunk)
+                    info["bytes"] = size
+                    info["md5"] = h.hexdigest()
+                except OSError:
+                    pass
+                if info["md5"]:
+                    s = self.config.settings
+                    if overlay_path and _os.path.abspath(path) == _os.path.abspath(overlay_path):
+                        info["source"] = f"GitHub release (firmware {self._ota_active_version or 'bundled'})"
+                    elif (
+                        s.custom_tft_name == filename
+                        and s.custom_tft_md5
+                        and s.custom_tft_md5 == info["md5"]
+                    ):
+                        info["source"] = f"manual upload ({s.custom_tft_uploaded_at})"
+                    else:
+                        info["source"] = "bundled with integration"
+            out["eu" if filename == "gui.tft" else "us"] = info
+        return out
+
     async def refresh_ota_cache(self) -> None:
         """Re-hash served OTA files (bundled + overlay) in the executor."""
         def _rehash() -> dict[str, str]:

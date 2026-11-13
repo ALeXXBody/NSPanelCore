@@ -312,3 +312,4 @@ iframe at the new UI path.
 | P41 | Display hears nothing at any baud: whmi-wris-first probe at 6 bauds (fw 0.1.167) | ✅ Done — probe ran silent at all bauds; blind stream completed, screen unchanged |
 | P42 | ORIGINAL TFT TEST (user-ordered): serve upstream archive gui.tft (24985602) instead of rebrand to eliminate our file as brick cause; trigger+watch | 🔄 In progress (streaming) |
 | P43 | Community research (user-ordered): ESPHome #870/#3082 — blank-TFT recovery, v1.0-vs-v1.2 protocol, power-supply cause; implement v1.0-fallback probe + 3s power-cycle, serve official blank TFT as fast test vehicle (fw 0.1.168) | 🔄 In progress |
+| P44 | EXACT-FILE UPLOAD (user-ordered): TFT/firmware/datafile upload dialogs were dead (nothing opened them); wire Actions-menu Upload buttons, pin upload over overlay shadow, record proof metadata, served-file readout in Actions + firmware_status | 🔄 In progress |

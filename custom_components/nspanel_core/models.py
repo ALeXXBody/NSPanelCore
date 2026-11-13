@@ -272,6 +272,13 @@ class GlobalSettings:
     use_fahrenheit: bool = False
     weather_update_interval: int = 30
     auto_tft_updates: bool = True
+    # Last manually-uploaded display file (exact-file path: the panel
+    # downloads precisely these bytes; see SaveTftFileView).
+    custom_tft_name: str = ""
+    custom_tft_md5: str = ""
+    custom_tft_size: int = 0
+    custom_tft_uploaded_at: str = ""
+    custom_tft_source: str = ""
     screensaver_mode: str = "with_background"
     location_latitude: str = ""
     location_longitude: str = ""
