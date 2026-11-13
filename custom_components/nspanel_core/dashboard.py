@@ -389,6 +389,12 @@ class SavePanelSettingsView(HomeAssistantView):
         field_map = {
             "friendly_name": ("name", str),
             "name": ("name", str),
+            "button1_mode": ("button1_mode", int),
+            "button2_mode": ("button2_mode", int),
+            "button1_custom_mqtt_topic": ("button1_mqtt_topic", str),
+            "button1_custom_mqtt_payload": ("button1_mqtt_payload", str),
+            "button2_custom_mqtt_topic": ("button2_mqtt_topic", str),
+            "button2_custom_mqtt_payload": ("button2_mqtt_payload", str),
             "screensaver_mode": ("screensaver_mode", int),
             "screensaver_activation_timeout": ("screensaver_activation_timeout", int),
             "min_button_push_time": ("min_button_push_time", int),
@@ -407,10 +413,28 @@ class SavePanelSettingsView(HomeAssistantView):
                     setattr(panel, attr, typ(form[form_key]))
                 except (ValueError, TypeError):
                     pass
+        for mode_attr in ("button1_mode", "button2_mode"):
+            try:
+                v = int(getattr(panel, mode_attr, 0))
+            except (ValueError, TypeError):
+                v = 0
+            setattr(panel, mode_attr, min(max(v, 0), 3))
         for flag in ("clock_us_style", "use_fahrenheit", "is_us_panel",
                      "reverse_relays", "relay1_default_mode", "relay2_default_mode",
-                     "optimistic_mode"):
+                     "optimistic_mode", "show_home_scenes", "show_home_ceiling",
+                     "show_home_table", "show_home_kelvin"):
             panel.__setattr__(flag, flag in form)
+        if "rooms" in form:
+            try:
+                selected = [int(v) for v in form.getall("rooms")]
+            except (ValueError, TypeError):
+                return web.Response(text="Bad rooms: must be room ids", status=400)
+            valid_ids = {r.id for r in manager.config.rooms}
+            if any(v not in valid_ids for v in selected):
+                return web.Response(text="Unknown room id", status=400)
+            # Empty selection = show every room (matches the config builder
+            # fallback); storing it keeps the panel on "all rooms".
+            panel.rooms = sorted(set(selected))
         if "room_id" in form:
             try:
                 room_id = int(form["room_id"])
@@ -591,6 +615,14 @@ class SettingsView(HomeAssistantView):
             firmware_active_version=s.firmware_active_version,
             firmware_latest_version=s.firmware_latest_version,
             firmware_last_check=s.firmware_last_check,
+            rooms=[
+                {
+                    "id": r.id,
+                    "name": r.name,
+                    "panels": sum(1 for p in manager.config.panels if p.room_id == r.id),
+                }
+                for r in manager.config.rooms
+            ],
             themes=themes,
             theme=s.theme,
             page_title="Settings",
@@ -1088,10 +1120,14 @@ def _panel_json_config(manager, panel) -> dict:
         "use_fahrenheit": "True" if panel.use_fahrenheit else "False",
         "temperature_calibration": panel.temperature_calibration,
         "reverse_relays": "True" if panel.reverse_relays else "False",
-        "button1_mqtt_topic": "",
-        "button1_mqtt_payload": "",
-        "button2_mqtt_topic": "",
-        "button2_mqtt_payload": "",
+        "button1_mqtt_topic": panel.button1_mqtt_topic,
+        "button1_mqtt_payload": panel.button1_mqtt_payload,
+        "show_home_scenes": "True" if panel.show_home_scenes else "False",
+        "show_home_ceiling": "True" if panel.show_home_ceiling else "False",
+        "show_home_table": "True" if panel.show_home_table else "False",
+        "show_home_kelvin": "True" if panel.show_home_kelvin else "False",
+        "button2_mqtt_topic": panel.button2_mqtt_topic,
+        "button2_mqtt_payload": panel.button2_mqtt_payload,
         "relay1_default_mode": "True" if panel.relay1_default_mode else "False",
         "relay2_default_mode": "True" if panel.relay2_default_mode else "False",
         "name": panel.name,
@@ -1298,7 +1334,7 @@ class EditRoomView(HomeAssistantView):
         room_id = int(request.match_info["room_id"])
         room = next((r for r in manager.config.rooms if r.id == room_id), None)
         if room is None:
-            raise web.HTTPFound(f"{URL_BASE}/rooms")
+            raise web.HTTPFound(f"{URL_BASE}/settings")
         room_obj = type("Room", (), {
             "id": room.id,
             "friendly_name": room.name,
@@ -1340,7 +1376,7 @@ class SaveNewRoomView(HomeAssistantView):
         if len(name) > 64:
             return web.Response(text="Room name too long (max 64)", status=400)
         await manager.add_room(name)
-        return _redirect(request, f"{URL_BASE}/rooms")
+        return _redirect(request, f"{URL_BASE}/settings")
 
 
 class UpdateRoomView(HomeAssistantView):
@@ -1377,7 +1413,7 @@ class UpdateRoomView(HomeAssistantView):
             return web.Response(text="Bad temperature provider", status=400)
         room.temp_sensor_entity = sensor
         await manager.async_save()
-        raise web.HTTPFound(f"{URL_BASE}/rooms")
+        raise web.HTTPFound(f"{URL_BASE}/settings")
 
 
 class DeleteRoomView(HomeAssistantView):
@@ -1396,7 +1432,7 @@ class DeleteRoomView(HomeAssistantView):
         if len(manager.config.rooms) <= 1:
             return web.Response(text="Cannot delete the last room", status=400)
         await manager.remove_room(room_id)
-        return _redirect(request, f"{URL_BASE}/rooms")
+        return _redirect(request, f"{URL_BASE}/settings")
 
 
 class RestartView(HomeAssistantView):

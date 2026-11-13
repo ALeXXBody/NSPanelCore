@@ -1,29 +1,29 @@
 {
-  "version": "0.1.157",
-  "notes": "ESP web UI proper dark mode (OS-following + toggle); rename save fix; navbar cleanup (Actions menu, removed Web app/Rooms/Upload tabs); auto default room.",
+  "version": "0.1.158",
+  "notes": "Per-panel customizable dashboard: rooms shown, custom button MQTT actions (modes now save), home widget visibility (fw applies).",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.24/custom_components/nspanel_core/firmware/sonoff/firmware.bin",
-      "md5": "9774c5f2a76d66afb7e52b006cba64ed"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.27/custom_components/nspanel_core/firmware/sonoff/firmware.bin",
+      "md5": "b311dcf3813496a627bceac843a66f47"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.24/custom_components/nspanel_core/firmware/sonoff/data_file.bin",
-      "md5": "e54e0adeace939ea461dc2bb1246913c"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.27/custom_components/nspanel_core/firmware/sonoff/data_file.bin",
+      "md5": "dca4d9ddad63a5d131e0333f60ce5e69"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.24/custom_components/nspanel_core/firmware/custom/firmware.bin",
-      "md5": "9774c5f2a76d66afb7e52b006cba64ed"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.27/custom_components/nspanel_core/firmware/custom/firmware.bin",
+      "md5": "b311dcf3813496a627bceac843a66f47"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.24/custom_components/nspanel_core/firmware/custom/data_file.bin",
-      "md5": "e54e0adeace939ea461dc2bb1246913c"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.27/custom_components/nspanel_core/firmware/custom/data_file.bin",
+      "md5": "dca4d9ddad63a5d131e0333f60ce5e69"
     },
     "tft/gui.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.24/custom_components/nspanel_core/tft/gui.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.27/custom_components/nspanel_core/tft/gui.tft",
       "md5": "62bccfe0e1b5566485d7ab26ebb75893"
     },
     "tft/gui_us.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.24/custom_components/nspanel_core/tft/gui_us.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/v1.3.27/custom_components/nspanel_core/tft/gui_us.tft",
       "md5": "c69c752526c7abbf900a0843223098ee"
     }
   }

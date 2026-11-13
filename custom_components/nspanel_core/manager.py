@@ -1139,8 +1139,11 @@ class NSPanelCoreManager:
         self.config.rooms = [r for r in self.config.rooms if r.id != room_id]
         self.config.lights = [l for l in self.config.lights if l.room_id != room_id]
         self.config.pages = [p for p in self.config.pages if p.room_id != room_id]
+        fallback = self.config.rooms[0].id if self.config.rooms else 0
         for panel in self.config.panels:
             panel.rooms = [rid for rid in panel.rooms if rid != room_id]
+            if panel.room_id == room_id:
+                panel.room_id = fallback
         await self.async_save()
 
     async def add_light(

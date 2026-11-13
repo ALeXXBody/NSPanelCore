@@ -13,6 +13,7 @@ public:
   void init();
   void show();
   void update();
+  void applyHomeVisibility();
   void unshow();
   void processTouchEvent(uint8_t page, uint8_t component, bool pressed);
 

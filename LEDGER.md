@@ -99,6 +99,7 @@ the panels' firmware already speaks. No separate process, no WebSocket client, n
 | P22 | Fix duplicated reboot; unpopulated UI values: forward rssi/temperature/heap/ip to STOMP status topic (verified merge), heap inversion fix, new ip/heap sensors, capability-gated humidity/pressure | ✅ Done, released |
 | P23 | UI cleanup batch: rename save fix, auto default room, Actions menu (replaces Themes), dropped Web app/Rooms/Upload tabs, ESP web UI proper dark mode (verified light+dark) | ✅ Done, needs release |
 | P24 | Per-panel rooms UI — REVERTED, user never asked for it; awaiting concrete dashboard spec | ❌ Reverted |
+| P25 | Customisable panel dashboard (A rooms shown, C button modes+MQTT topics now save+serve, B home widget visibility fw+config+UI) | ✅ Done, needs verify+release |
 
 > **P13 recon (read-only, 2026-11-12):**
 > - Panel `.23:80` serves its own config UI: `wifi_hostname=KitchenPanel`,

@@ -53,8 +53,18 @@ void HomePage::_taskUpdateDisplay(void *param) {
 void HomePage::show() {
   NSPanel::instance->goToPage(HOME_PAGE_NAME);
   PageManager::SetCurrentPage(this);
+  this->applyHomeVisibility();
   this->updateDeviceEntitySubscriptions();
   this->update();
+}
+
+void HomePage::applyHomeVisibility() {
+  // Per-panel dashboard customization from the Core app: hide widgets
+  // the user turned off. Defaults are all visible.
+  NSPanel::instance->setComponentVisible(HOME_BUTTON_SCENES_NAME, InterfaceConfig::show_home_scenes);
+  NSPanel::instance->setComponentVisible(HOME_BUTTON_CEILING_NAME, InterfaceConfig::show_home_ceiling);
+  NSPanel::instance->setComponentVisible(HOME_BUTTON_TABLE_NAME, InterfaceConfig::show_home_table);
+  NSPanel::instance->setComponentVisible(HOME_LIGHT_COLOR_SLIDER_NAME, InterfaceConfig::show_home_kelvin);
 }
 
 void HomePage::updateDeviceEntitySubscriptions() {

@@ -167,6 +167,18 @@ class PanelConfig:
     has_pressure: bool = False
     button1_mode: int = 0  # 0=DIRECT 1=FOLLOW 2=NOTIFY_MANAGER 3/4 thermostat
     button2_mode: int = 0
+    button1_mqtt_topic: str = ""
+    button1_mqtt_payload: str = ""
+    button2_mqtt_topic: str = ""
+    button2_mqtt_payload: str = ""
+    show_home_scenes: bool = True
+    show_home_ceiling: bool = True
+    show_home_table: bool = True
+    show_home_kelvin: bool = True
+    show_home_scenes: bool = True
+    show_home_ceiling: bool = True
+    show_home_table: bool = True
+    show_home_kelvin: bool = True
     raise_to_100_light_level: int = 0
     optimistic_mode: bool = False
     temperature_unit: str = "celsius"

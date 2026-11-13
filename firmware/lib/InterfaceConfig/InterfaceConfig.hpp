@@ -43,6 +43,11 @@ public:
   static inline unsigned long screensaver_activation_timeout = 30000;
   /// @brief Wether or not to show clock on screensaver.
   static inline std::string screensaver_mode;
+  /// @brief Home dashboard widgets (per-panel, from manager config).
+  static inline bool show_home_scenes = true;
+  static inline bool show_home_ceiling = true;
+  static inline bool show_home_table = true;
+  static inline bool show_home_kelvin = true;
   /// @brief Show clock in US style. AM/PM?
   static inline bool clock_us_style = false;
   /// @brief All the global scenes.

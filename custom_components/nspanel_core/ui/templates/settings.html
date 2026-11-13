@@ -594,4 +594,32 @@
       <button type="submit" class="btn btn-success">Save</button>
     </div>
 </form>
+
+<div class="md:flex md:justify-between md:items-start mt-2">
+  <div class="p-4 rounded-box shadow-lg w-full bg-base-100">
+    <span class="block mb-2 text-xl">Rooms</span>
+    <p class="text-sm opacity-70 mb-2">Panels must belong to a room. Rename rooms, delete the ones you don't need, or add new ones. Deleting a room also removes its lights and moves its panels to the first remaining room.</p>
+    <ul class="divide-y divide-neutral border border-neutral rounded-box mb-2">
+      {% for room in rooms %}
+      <li class="flex items-center gap-2 p-2">
+        <form method="POST" data-authed action="/nspanel_core/update_room_form" class="flex flex-1 items-center gap-2">
+          <input type="hidden" name="room_id" value="{{ room.id }}">
+          <input type="text" name="friendly_name" value="{{ room.name }}" maxlength="64" required
+            class="outline-none rounded-md bg-base-300 border border-neutral focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2">
+          <span class="text-xs opacity-70 whitespace-nowrap">{{ room.panels }} panel(s)</span>
+          <button type="submit" class="btn btn-xs btn-info">Rename</button>
+        </form>
+        <form method="POST" data-authed action="/nspanel_core/api/rooms/{{ room.id }}/delete" onsubmit="return confirm('Delete room {{ room.name }} and its lights?');">
+          <button type="submit" class="btn btn-xs btn-error">Delete</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    <form method="POST" data-authed action="/nspanel_core/save_new_room" class="flex items-center gap-2">
+      <input type="text" name="friendly_name" placeholder="New room name" maxlength="64" required
+        class="outline-none rounded-md bg-base-300 border border-neutral focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2">
+      <button type="submit" class="btn btn-sm btn-success">Add room</button>
+    </form>
+  </div>
+</div>
 {% endblock %}

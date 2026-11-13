@@ -95,6 +95,19 @@ void RoomManager::loadAllRooms(bool is_update) {
   NSPMConfig::instance->use_fahrenheit = (*roomData)["use_fahrenheit"].as<String>().equalsIgnoreCase("true");
   NSPMConfig::instance->temperature_calibration = (*roomData)["temperature_calibration"].as<float>();
   NSPMConfig::instance->reverse_relays = (*roomData)["reverse_relays"].as<String>().equalsIgnoreCase("true");
+  // Home widget flags default to visible when the manager predates them.
+  if ((*roomData).containsKey("show_home_scenes")) {
+    InterfaceConfig::show_home_scenes = (*roomData)["show_home_scenes"].as<String>().equalsIgnoreCase("true");
+  }
+  if ((*roomData).containsKey("show_home_ceiling")) {
+    InterfaceConfig::show_home_ceiling = (*roomData)["show_home_ceiling"].as<String>().equalsIgnoreCase("true");
+  }
+  if ((*roomData).containsKey("show_home_table")) {
+    InterfaceConfig::show_home_table = (*roomData)["show_home_table"].as<String>().equalsIgnoreCase("true");
+  }
+  if ((*roomData).containsKey("show_home_kelvin")) {
+    InterfaceConfig::show_home_kelvin = (*roomData)["show_home_kelvin"].as<String>().equalsIgnoreCase("true");
+  }
   NSPMConfig::instance->button1_mqtt_topic = (*roomData)["button1_mqtt_topic"].as<String>().c_str();
   NSPMConfig::instance->button1_mqtt_payload = (*roomData)["button1_mqtt_payload"].as<String>().c_str();
   NSPMConfig::instance->button2_mqtt_topic = (*roomData)["button2_mqtt_topic"].as<String>().c_str();
