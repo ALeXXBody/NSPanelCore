@@ -1,10 +1,10 @@
 {
-  "version": "0.1.162",
-  "notes": "Detached-light guards; lights page rename; US display rebrand recompiled (1.68.2, portrait, 0 errors)",
+  "version": "0.1.163",
+  "notes": "TFT recovery: upload without comok handshake when display is stuck at System Data ERROR",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "591d9f5b2c2dd48ad4291bfa5596ec62"
+      "md5": "2e7f1cf8f1871dfee360fd03aa5bc977"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "591d9f5b2c2dd48ad4291bfa5596ec62"
+      "md5": "2e7f1cf8f1871dfee360fd03aa5bc977"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
