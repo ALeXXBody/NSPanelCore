@@ -652,8 +652,8 @@ bool NSPanel::ready() {
 
 bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
   static int _tft_init_depth = 0;
-  if (_tft_init_depth >= 4) {
-    LOG_ERROR("TFT init failed after 4 attempts, giving up (no stack recursion).");
+  if (_tft_init_depth >= 7) {
+    LOG_ERROR("TFT init failed after 7 attempts (two full baud cycles), giving up (no stack recursion).");
     _tft_init_depth = 0;
     return false;
   }
@@ -696,13 +696,32 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
   std::string comok_string = "";
   NSPanel::instance->_readDataToString(&comok_string, 10000, false);
   NSPanel::instance->_clearSerialBuffer();
+  // Baud rotation: 115200 (normal) -> configured upload baud -> 9600.
+  // 9600 matters: a corrupt system-data flash resets the display's stored
+  // baud to the Nextion default, so the bootloader only hears 9600.
+  auto _next_baud = [](int current) -> int {
+    if (current == 115200) return NSPMConfig::instance->tft_upload_baud;
+    if (current == NSPMConfig::instance->tft_upload_baud) return 9600;
+    return 115200;
+  };
   if (comok_string.length() > 3) {
     comok_string.erase(comok_string.length() - 3);
     LOG_DEBUG("Got comok: ", comok_string.c_str());
+  } else if (_tft_init_depth < 6) {
+    // We didn't receive a comok string back. Rotate through 115200 ->
+    // upload baud -> 9600 (a corrupt flash resets the stored baud to the
+    // Nextion default 9600). Budget allows two full cycles.
+    int next = _next_baud(communication_baud_rate);
+    LOG_ERROR("Didn't receive expected comok, got: '", comok_string.c_str(), "'. Will retry at ", next, ".");
+    return NSPanel::_initTFTUpdate(next);
   } else {
-    // We didn't receive a comok string back. Try again at baud 9600 (default 115200)
-    LOG_ERROR("Didn't receive expected comok, got: '", comok_string.c_str(), "'. Will retry.");
-    return NSPanel::_initTFTUpdate(communication_baud_rate == 115200 ? NSPMConfig::instance->tft_upload_baud : 115200);
+    // No comok after repeated tries: the display is most likely stuck at
+    // "System Data ERROR!" (corrupt TFT flash — the application that would
+    // answer comok never runs). The ROM bootloader still accepts the upload
+    // command right after a power cycle, so proceed to whmi-wris WITHOUT
+    // comok as a last resort instead of failing forever at progress 0.
+    // A failed 0x05 wait below still aborts the attempt.
+    LOG_ERROR("No comok after retries — display may be bricked; attempting upload without handshake.");
   }
 
   // URL to download TFT file from
