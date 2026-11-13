@@ -1,10 +1,10 @@
 {
-  "version": "0.1.165",
-  "notes": "TFT baud rotation fix (was stuck re-trying 115200, never reached 9600)",
+  "version": "0.1.166",
+  "notes": "Spec-compliant v1.2 streaming (silence=continue) + baud sweep diagnostic + blind-stream last resort",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "396fc61e4e6430a1a3f52507403595f8"
+      "md5": "f308adeb6f7e49ff318132dc5acc7ba5"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "396fc61e4e6430a1a3f52507403595f8"
+      "md5": "f308adeb6f7e49ff318132dc5acc7ba5"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
