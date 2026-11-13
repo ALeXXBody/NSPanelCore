@@ -449,14 +449,17 @@ class NSPanelCoreManager:
                     pass
                 if info["md5"]:
                     s = self.config.settings
-                    if overlay_path and _os.path.abspath(path) == _os.path.abspath(overlay_path):
-                        info["source"] = f"GitHub release (firmware {self._ota_active_version or 'bundled'})"
-                    elif (
+                    if (
                         s.custom_tft_name == filename
                         and s.custom_tft_md5
                         and s.custom_tft_md5 == info["md5"]
                     ):
-                        info["source"] = f"manual upload ({s.custom_tft_uploaded_at})"
+                        info["source"] = (
+                            f"manual upload ({s.custom_tft_uploaded_at})"
+                            + (" — pinned over overlay" if overlay_path and _os.path.isfile(overlay_path) else "")
+                        )
+                    elif overlay_path and _os.path.abspath(path) == _os.path.abspath(overlay_path):
+                        info["source"] = f"GitHub release (firmware {self._ota_active_version or 'bundled'})"
                     else:
                         info["source"] = "bundled with integration"
             out["eu" if filename == "gui.tft" else "us"] = info
