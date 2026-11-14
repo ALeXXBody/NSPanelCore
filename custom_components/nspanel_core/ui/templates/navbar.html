@@ -76,25 +76,13 @@
                 <li>
                     <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
                         <label class="label">
-                            <span class="label-text justify-start w-full ml-2">Upload display file (exact bytes panels will flash)</span>
+                            <span class="label-text justify-start w-full ml-2">Upload files (exact bytes panels get)</span>
                         </label>
-                        <button class="btn btn-xs btn-warning mr-2" onclick="upload_tft_modal.showModal();">Upload</button>
-                    </div>
-                </li>
-                <li>
-                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
-                        <label class="label">
-                            <span class="label-text justify-start w-full ml-2">Upload ESP firmware file</span>
-                        </label>
-                        <button class="btn btn-xs btn-warning mr-2" onclick="upload_firmware_modal.showModal();">Upload</button>
-                    </div>
-                </li>
-                <li>
-                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
-                        <label class="label">
-                            <span class="label-text justify-start w-full ml-2">Upload ESP data file (wipes WiFi!)</span>
-                        </label>
-                        <button class="btn btn-xs btn-warning mr-2" onclick="upload_data_file_modal.showModal();">Upload</button>
+                        <span class="mr-2 flex gap-1">
+                            <button class="btn btn-xs btn-warning" onclick="upload_tft_modal.showModal();">Display</button>
+                            <button class="btn btn-xs btn-warning" onclick="upload_firmware_modal.showModal();">ESP</button>
+                            <button class="btn btn-xs btn-warning" onclick="upload_data_file_modal.showModal();" title="Flashing the data file WIPES the panel WiFi settings!">Data!</button>
+                        </span>
                     </div>
                 </li>
                 <li>
