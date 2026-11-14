@@ -170,10 +170,6 @@ void NSPanel::restart() {
   this->_sendCommandWithoutResponse("rest");
 }
 
-// Forward declaration: single source of truth for the one configured baud
-// (defined below, used by init() above it).
-static uint32_t _tftBaud();
-
 bool NSPanel::init() {
   NSPanel::instance = this;
   this->_mutexReadSerialData = xSemaphoreCreateMutex();
@@ -186,9 +182,11 @@ bool NSPanel::init() {
 
   Serial2.setTxBufferSize(256);
   Serial2.setRxBufferSize(256);
-  // Single-baud rule: the configured baud drives normal communication too,
-  // not just uploads (same helper as the flash path — one rule, one place).
-  Serial2.begin(_tftBaud(), SERIAL_8N1, 17, 16);
+  // Fixed comm baud: normal operation and the TFT handshake always run at
+  // 115200 (the HMI default). The configurable upload baud applies ONLY to
+  // the bulk stream after whmi-wris — never to everyday talk. (Single-rate
+  // everywhere broke everyday talk whenever the two disagreed.)
+  Serial2.begin(115200, SERIAL_8N1, 17, 16);
   // Clear Serial2 read buffer
   // this->_clearSerialBuffer();
 
@@ -682,20 +680,21 @@ bool NSPanel::ready() {
   return this->_display_ready;
 }
 
-// Single-baud rule (user-proven: the upstream flash that revived this
-// panel ran both phases at 921600). One configured baud drives handshake,
-// whmi-wris param and streaming alike — talk==param by construction, so the
-// 0.1.171 divergence class (hardcoded talk vs configured param) cannot
-// recur. Falls back to 115200, the NSPMConfig default.
+// Upload baud ONLY: used for the whmi-wris param and the bulk stream.
+// Normal communication and the handshake always run at the fixed 115200
+// (the HMI default) — the display only switches baud when it accepts
+// whmi-wris, so opening the handshake at anything else is shouting into
+// the void. One user setting, one job.
 static uint32_t _tftBaud() {
   uint32_t b = NSPMConfig::instance->tft_upload_baud;
   return b ? b : 115200;
 }
 
 bool NSPanel::_initTFTUpdate() {
-  uint32_t baud = _tftBaud();
-  LOG_INFO("Trying to initialize TFT update at baud ", baud);
-  Serial2.updateBaudRate(baud);
+  // Handshake always at fixed comms baud; the upload baud applies only
+  // after the display accepts whmi-wris and switches itself.
+  Serial2.updateBaudRate(115200);
+  LOG_INFO("Trying to initialize TFT update at baud 115200");
 
   NSPanel::instance->_writeCommandsToSerial = false;
   NSPanel::instance->_update_progress = 0;
@@ -792,9 +791,15 @@ bool NSPanel::_initTFTUpdate() {
   NSPanel::instance->_sendCommandEndSequence();
   LOG_DEBUG("Sent TFT upload command: ", commandString.c_str());
 
-  // No baud switch here by design: Serial2 already runs at the single
-  // configured baud and the whmi-wris param carries the same value, so
-  // talk==param holds structurally (the 0.1.171 mismatch is impossible).
+  // Switch to the upload baud NOW, before waiting: the display switches the
+  // moment it accepts whmi-wris, so its 0x05 arrives at the NEW baud (this
+  // matches upstream). Talk==param holds on both sides of the switch.
+  vTaskDelay(50 / portTICK_PERIOD_MS);
+  uint32_t talkBaud = _tftBaud();
+  if ((uint32_t)Serial2.baudRate() != talkBaud) {
+    LOG_INFO("Switching flash baud rate on Serial2 from ", Serial2.baudRate(), " to ", talkBaud);
+    Serial2.updateBaudRate(talkBaud);
+  }
 
   // Wait until Nextion returns okay to transmit tft
   LOG_DEBUG("Waiting for panel reponse (max 10 seconds).");

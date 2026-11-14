@@ -47,13 +47,14 @@ func TestWindowAndJumpRules(t *testing.T) {
 	}
 }
 
-func TestSingleBaudRule(t *testing.T) {
-	// One configured baud drives handshake, whmi param and streaming.
-	// Talk==param by construction — the 0.1.171 divergence class cannot exist.
-	if fwupdate.SingleBaud(921600) != 921600 {
-		t.Fatal("configured baud must pass through")
+func TestTwoPhaseBauds(t *testing.T) {
+	if fwupdate.CommBaud() != 115200 {
+		t.Fatal("comms/handshake must be fixed 115200 (HMI default)")
 	}
-	if fwupdate.SingleBaud(0) != 115200 {
-		t.Fatal("unset baud must fall back to 115200")
+	if fwupdate.UploadBaud(921600) != 921600 {
+		t.Fatal("configured upload baud must pass through")
+	}
+	if fwupdate.UploadBaud(0) != 115200 {
+		t.Fatal("unset upload baud must fall back to 115200")
 	}
 }

@@ -119,16 +119,19 @@ def test_no_blind_ladder_or_probes():
         assert gone not in src, f"{gone} must be removed"
 
 
-def test_single_baud_rule():
-    """ONE configured baud drives everything (user-proven: the upstream
-    flash that revived this panel ran both phases at one rate). init(),
-    handshake, whmi param and streaming must all resolve through the same
-    _tftBaud() helper — no second baud anywhere, no talk!=param path."""
+def test_two_phase_single_setting():
+    """Fixed 115200 comms/handshake + ONE configured baud for the bulk
+    stream (user-confirmed: upstream ran 115200 talk, 921600 flash). The
+    whmi param and the post-accept Serial2 rate must come from the same
+    _tftBaud() value — talk==param at every step, no second UI setting."""
     src = _src(NSPANEL)
     assert "static uint32_t _tftBaud()" in src
-    # init() opens the port at the configured baud, not a hardcoded one.
-    assert "Serial2.begin(_tftBaud(), SERIAL_8N1, 17, 16)" in src
-    # No separate communication baud anywhere in the flash path.
+    # init() and the handshake run at hardcoded 115200 (HMI default).
+    assert "Serial2.begin(115200, SERIAL_8N1, 17, 16)" in src
+    # No separate communication-baud variable anywhere in the flash path.
     assert "communication_baud_rate" not in src
-    # Handshake retries the SAME baud (power-cycle + retry), no alternation.
+    # Handshake retries the SAME fixed baud (power-cycle + retry).
     assert src.count("return NSPanel::_initTFTUpdate();") >= 2
+    # The switch to the upload baud happens exactly once, AFTER whmi-wris
+    # is accepted, using the same value as the whmi param.
+    assert "Serial2.updateBaudRate(talkBaud)" in src

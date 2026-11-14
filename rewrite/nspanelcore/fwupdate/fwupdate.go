@@ -1,13 +1,19 @@
 // Package fwupdate locks the firmware TFT-upload protocol rules in
-// host-runnable form (the C++ itself only runs on ESP32): single-baud rule,
-// 0x08 LE32 offset validation, chunk accounting. Mirrors
+// host-runnable form (the C++ itself only runs on ESP32): fixed-115200
+// comms/handshake + one configured upload baud, 0x08 LE32 offset
+// validation, chunk accounting. Mirrors
 // NSPanel::_initTFTUpdate/_updateTFTOTA.
 package fwupdate
 
-// SingleBaud mirrors _tftBaud(): ONE configured baud drives handshake,
-// whmi-wris param and streaming alike — talk==param by construction.
-// Zero/unset falls back to 115200, the NSPMConfig default.
-func SingleBaud(configured uint32) uint32 {
+// CommBaud mirrors init/handshake: normal communication ALWAYS runs at the
+// fixed 115200 (the HMI default). The display only switches baud when it
+// accepts whmi-wris — opening anywhere else is shouting into the void.
+func CommBaud() uint32 { return 115200 }
+
+// UploadBaud mirrors _tftBaud(): the ONE configured baud, used for the
+// whmi-wris param and the bulk stream after the display accepts it.
+// Falls back to 115200 when unset.
+func UploadBaud(configured uint32) uint32 {
 	if configured == 0 {
 		return 115200
 	}
