@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <title>NSPanel Core — KitchenPanel</title>
+  <link rel="stylesheet" href="main.css?v=0.1.174" />
+  <script>
+    // Theme: saved choice wins, otherwise dark (panel UI is dark-first).
+    function nspanel_is_dark() {
+      try {
+        var t = localStorage.getItem('nspanel-theme');
+        if (t === 'dark') return true;
+        if (t === 'light') return false;
+      } catch (e) {}
+      return true;
+    }
+    function nspanel_apply_theme(dark) {
+      document.documentElement.classList.toggle('dark', !!dark);
+      var box = document.getElementById('theme_toggle');
+      if (box) box.checked = !!dark;
+      try { localStorage.setItem('nspanel-theme', dark ? 'dark' : 'light'); } catch (e) {}
+    }
+    (function () {
+      // Apply resolved theme immediately (before first paint): this both
+      // adds AND removes the class, unlike a bare classList.add which could
+      // never switch back to light once 'dark' was hardcoded on <html>.
+      nspanel_apply_theme(nspanel_is_dark());
+      document.addEventListener('DOMContentLoaded', function () {
+        var box = document.getElementById('theme_toggle');
+        if (box) box.checked = document.documentElement.classList.contains('dark');
+      });
+    })();
+    function toggle_theme(dark) {
+      nspanel_apply_theme(dark);
+    }
+  </script>
+  <script>
+    var connFailures = 0;
+    var doConnectionCheck = true;
+    function close_wifi_select_modal() {
+      document.getElementById("select_wifi_modal").classList.add("hidden");
+      doConnectionCheck = true;
+    }
+    function showWifiSelectModal() {
+      document.getElementById("available_wifi_networks").classList.add("hidden");
+      document.getElementById("wifi_failed_to_get_networks").classList.add("hidden");
+      document.getElementById("wifi_no_networks_found").classList.add("hidden");
+      document.getElementById("wifi_wait_div").classList.remove("hidden");
+      document.getElementById("select_wifi_modal").classList.remove("hidden");
+      getAvailableNetworks();
+    }
+    function getAvailableNetworks() {
+      doConnectionCheck = false;
+      var request = new XMLHttpRequest();
+      request.onreadystatechange = function () {
+        if (request.readyState === XMLHttpRequest.DONE && request.status === 200) {
+          var data = JSON.parse(request.responseText);
+          if (data.length > 0) {
+            populateModalWithWiFiNetworks(data);
+          } else {
+            getAvailableNetworks();
+          }
+        } else if (request.readyState === XMLHttpRequest.DONE) {
+          document.getElementById("wifi_wait_div").classList.add("hidden");
+          document.getElementById("wifi_failed_to_get_networks").classList.remove("hidden");
+        }
+      };
+      request.open("GET", "/available_wifi_networks");
+      request.send();
+    }
+    function populateModalWithWiFiNetworks(networks) {
+      var html = "";
+      for (var i = 0; i < networks.length; i++) {
+        var n = networks[i];
+        html += "<tr><th>" + '<a onclick="selectNetwork(\'' + n.ssid.replace(/'/g, "\\'") + '\');">' + n.ssid + "</a></th>"
+          + "<td>" + n.rssi + "</td><td>" + n.channel + "</td><td>" + n.security + "</td></tr>";
+      }
+      document.getElementById("available_wifi_networks_tbody").innerHTML = html || "<tr><td colspan=\"4\">No networks found.</td></tr>";
+      document.getElementById("wifi_wait_div").classList.add("hidden");
+      document.getElementById("available_wifi_networks").classList.remove("hidden");
+    }
+    function selectNetwork(network) {
+      document.getElementById("select_wifi_modal").classList.add("hidden");
+      document.getElementById("wifi_ssid").value = network;
+      var psk = document.getElementById("wifi_psk");
+      psk.select();
+      psk.focus();
+      doConnectionCheck = true;
+    }
+    function confirmAction(msg, url) {
+      if (confirm(msg)) { window.location.href = url; }
+      return false;
+    }
+    // Connection monitor: HEAD / every 5s. Shows the overlay after 2
+    // consecutive failures (avoids blinking on a single slow response),
+    // hides it on recovery. Paused while the WiFi modal scans.
+    function connectionMonitor() {
+      if (!doConnectionCheck) { setTimeout(connectionMonitor, 5000); return; }
+      var request = new XMLHttpRequest();
+      request.onreadystatechange = function () {
+        if (request.readyState === XMLHttpRequest.DONE) {
+          var overlay = document.getElementById("conn_modal");
+          if (!overlay) return;
+          if (request.status === 200) {
+            connFailures = 0;
+            overlay.classList.add("hidden");
+          } else if (++connFailures >= 2) {
+            overlay.classList.remove("hidden");
+          }
+        }
+      };
+      try {
+        request.open("HEAD", "/", true);
+        request.timeout = 4000;
+        request.send();
+      } catch (e) {}
+      setTimeout(connectionMonitor, 5000);
+    }
+    function onSaveSubmit() {
+      doConnectionCheck = false;
+      var overlay = document.getElementById("conn_modal");
+      var msg = document.getElementById("conn_modal_text");
+      if (msg) msg.textContent = "Saving — the panel will reboot to apply the new configuration.";
+      if (overlay) overlay.classList.remove("hidden");
+      return true;
+    }
+    document.addEventListener("DOMContentLoaded", function () {
+      document.getElementById("log_level").value = "3";
+      document.getElementById("upload_baud_rate").value = "115200";
+      setTimeout(connectionMonitor, 5000);
+    });
+  </script>
+</head>
+
+<body>
+  <div id="conn_modal" class="overlay hidden" role="alert">
+    <div class="overlay-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <p id="conn_modal_text">Connection lost. Reconnecting…</p>
+    </div>
+  </div>
+
+  <div id="select_wifi_modal" class="overlay hidden" role="dialog" aria-label="Select WiFi network">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>Select WiFi</h3>
+        <button type="button" class="icon-btn" onclick="close_wifi_select_modal();" aria-label="Close">✕</button>
+      </div>
+      <div id="wifi_wait_div" class="modal-body"><div class="spinner"></div><p>Scanning for networks…</p></div>
+      <div id="wifi_failed_to_get_networks" class="hidden"><div class="alert alert-error">Could not scan. Enter the SSID manually.</div></div>
+      <div id="wifi_no_networks_found" class="hidden"><div class="alert alert-warn">No networks found.</div></div>
+      <div id="available_wifi_networks" class="hidden">
+        <table>
+          <thead><tr><th>SSID</th><th>RSSI</th><th>Ch</th><th>Security</th></tr></thead>
+          <tbody id="available_wifi_networks_tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <header class="brandbar slim">
+    <svg class="brandmark" viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="8" width="48" height="48" rx="12" fill="none" stroke="currentColor" stroke-width="4"/><text x="32" y="45" text-anchor="middle" font-size="34" font-weight="700" fill="currentColor" font-family="system-ui,sans-serif">C</text></svg>
+    <div class="brandtext">
+      <h1>NSPanel <span>Core</span> <span class="ver">0.1.174</span><span class="dot" id="status_dot" title="Panel reachable"></span></h1>
+    </div>
+    <label class="theme-switch compact" title="Dark mode">
+      <input type="checkbox" id="theme_toggle" onchange="toggle_theme(this.checked)">
+      <span class="track" aria-hidden="true"></span>
+    </label>
+  </header>
+
+  <main>
+    <form method="POST" action="/save_config" id="config" onsubmit="return onSaveSubmit();">
+      <section class="card">
+        <h2>Device</h2>
+        <label class="field"><span>Name</span>
+          <input type="text" name="wifi_hostname" id="wifi_hostname" placeholder="Device name" value="KitchenPanel" required maxlength="32">
+        </label>
+        <p class="hint">Used on first registration only (A–Z a–z 0–9 - _). Rename later from Home Assistant.</p>
+      </section>
+
+      <section class="card">
+        <h2>WiFi</h2>
+        <label class="field"><span>SSID</span>
+          <div class="row">
+            <input type="text" name="wifi_ssid" id="wifi_ssid" placeholder="SSID" value="IoT_Network" required>
+            <button type="button" class="btn btn-ghost" onclick="showWifiSelectModal();">Scan</button>
+          </div>
+        </label>
+        <label class="field"><span>Password</span>
+          <input type="password" name="wifi_psk" id="wifi_psk" placeholder="Password" value="secret123" required>
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>MQTT</h2>
+        <label class="field"><span>Server</span>
+          <input type="text" name="mqtt_server" id="mqtt_server" placeholder="MQTT Server" value="192.168.50.20" required>
+        </label>
+        <div class="grid2">
+          <label class="field"><span>Port</span>
+            <input type="number" name="mqtt_port" id="mqtt_port" placeholder="1883" value="1883" required>
+          </label>
+          <label class="field"><span>Username</span>
+            <input type="text" name="mqtt_username" id="mqtt_username" placeholder="Username" value="ALeXX">
+          </label>
+        </div>
+        <label class="field"><span>Password</span>
+          <input type="password" name="mqtt_psk" id="mqtt_psk" placeholder="Password" value="mqttpass">
+        </label>
+      </section>
+
+      <details class="card advanced" id="advanced_section">
+        <summary>Advanced</summary>
+        <div class="details-body">
+        <label class="field"><span>Log level</span>
+          <select name="log_level" id="log_level">
+            <option value="0">None</option>
+            <option value="1">Error</option>
+            <option value="2">Warning</option>
+            <option value="3">Info</option>
+            <option value="4">Debug</option>
+            <option value="5">Trace</option>
+          </select>
+        </label>
+        <div class="seglabel">Display upload protocol</div>
+        <div class="seg" role="radiogroup" aria-label="Upload protocol">
+          <label><input type="radio" name="upload_protocol" value="latest" checked><span>v1.2</span></label>
+          <label><input type="radio" name="upload_protocol" value="legacy" ><span>v1.0</span></label>
+        </div>
+        <label class="field"><span>Baud rate</span>
+          <select name="upload_baud_rate" id="upload_baud_rate">
+            <option value="2400">2400</option>
+            <option value="4800">4800</option>
+            <option value="9600">9600 (Nextion default)</option>
+            <option value="19200">19200</option>
+            <option value="31250">31250</option>
+            <option value="38400">38400</option>
+            <option value="57600">57600</option>
+            <option value="115200">115200 (Sonoff default)</option>
+            <option value="250000">250000</option>
+            <option value="260000">260000</option>
+            <option value="512000">512000</option>
+            <option value="921600">921600</option>
+          </select>
+        </label>
+        <p class="hint">v1.2 works on most panels; use v1.0 as fallback. If uploads fail, try 115200 or 9600.</p>
+        <button type="button" class="btn btn-danger btn-block" onclick="return confirmAction('Erase all settings and reboot? You will need to set up WiFi again.', '/factory_reset');">Factory reset</button>
+        </div>
+      </details>
+
+      <div class="actions sticky">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <button type="button" class="btn btn-ghost" onclick="return confirmAction('Reboot the panel now?', '/do_reboot');">Reboot</button>
+      </div>
+    </form>
+  </main>
+
+  <footer>NSPanel <span class="core">Core</span> · smart wall OS</footer>
+</body>
+</html>
