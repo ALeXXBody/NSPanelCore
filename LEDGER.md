@@ -196,6 +196,13 @@ iframe at the new UI path.
 
 ## 3. Rules for development
 
+0. **HIGH PRIORITY (user-ordered 2026-11-14): EVERYTHING implemented or changed
+   must be PROPERLY TESTED before any release. No exceptions.**
+   "Properly tested" means: unit tests AND end-to-end verification of every
+   user-facing path the change touches (pages actually opened, flows actually
+   executed against a live panel/manager — not just data-level checks).
+   A release without this is a defective release. Violations found: v1.3.48
+   (Denied page 500 — unit test passed, page never opened).
 1. **Write in this ledger FIRST** before starting any task
 2. **Verify every change** — run full audit after every modification
 3. **Test end-to-end** — check that integration and firmware work together
@@ -343,3 +350,4 @@ iframe at the new UI path.
 | P72 | DELETE/DENY BUGS (user-found, “is not working!!!”): v1.3.48 shipped a 500-broken Denied page (dropped local asdict import → NameError on every visit — the deny flow was unusable in production; my earlier sandbox check tested the grid but never opened the Denied page). FIXED + FULLY LIVE-TESTED end-to-end with a real panel registering every 3s: delete → row gone, MAC ignored, stays deleted through 20s+ of live registers, visible under “Deleted panels” with Allow again (verified round-trip: allow → re-registers fresh); deny → row off main grid, on Denied page with Unblock, holds through repeated registers; denied page renders 200. 60/60 tests green | ✅ Done — v1.3.49 |
 | P73 | VENV COMPARISON (user-ordered): cloned NSPanelManager-firmware (true upstream of our ESP fw) and diffed the whole TFT path — _readDataToString identical; 5 divergences found, ROOT CAUSE = per-block response window 500ms (ours) vs 5000ms (upstream): a late 0x08 retransmit request is missed → stream diverges → garbage flash → System Data ERROR. Plus offset-0 rewind (upstream ignores), abort-on-incomplete-0x08, 20-try chunk abort, blind ladder (all ours, all divergence amplifiers). Lower baud = worse (slower replies). Full report: /tmp/opencode/fw-compare/FINDINGS.md. Fix = restore upstream semantics; NOT applied yet | 🔄 Awaiting approval |
 | P74 | FIRMWARE REPAIRED (user-ordered “repair then port”): 0.1.172 restores ALL five upstream semantics in _initTFTUpdate/_streamTFTFile — 5000ms window, 0x08 honored with offset-0 ignored (no rewind), unbounded offset wait + infinite chunk retry (no attempt aborts), init recurses the two bauds until comok (no cap, no blind ladder, no probes), upstream escape settle restored. Old blind/probe helpers deleted. 11/11 fw audit tests, 59/59 pytest, Go mirror updated (ResponseWindowMs/ShouldJump), esp32dev build SUCCESS, PUBLISHED to evergreen (md5 a1a982fd) | ✅ Done — port sequence next: needs old NSPanel Manager (port 8000) stopped to win the accept race |
+| RULE-R1 | HIGH PRIORITY RULE (user-ordered): everything implemented/changed must be properly tested (unit + end-to-end on every touched user-facing path) BEFORE any release. Violations: v1.3.48 (denied page 500) | 📌 Permanent rule |
