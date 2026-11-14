@@ -1,22 +1,22 @@
 {
-  "version": "0.1.173",
-  "notes": "Single-baud firmware: one configured rate for handshake+whmi+streaming (user-proven upstream behavior); talk==param by construction",
+  "version": "0.1.174",
+  "notes": "Two-phase display baud (fixed-115200 handshake, configured rate post-accept) + rewritten compact dark panel setup page (no-scroll, collapsible Advanced, sticky Save, theme-toggle fix)",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "6a22b76959e5f94e387c4bda32ec79d0"
+      "md5": "c8b30b5e74be066c68b6081c4cb46e4a"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
-      "md5": "54c313667f6e8655790fe946bb7b42b8"
+      "md5": "c084700090c27ed3439728e264c7dadb"
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "6a22b76959e5f94e387c4bda32ec79d0"
+      "md5": "c8b30b5e74be066c68b6081c4cb46e4a"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
-      "md5": "54c313667f6e8655790fe946bb7b42b8"
+      "md5": "c084700090c27ed3439728e264c7dadb"
     },
     "tft/gui.tft": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui.tft",
