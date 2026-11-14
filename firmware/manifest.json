@@ -1,10 +1,10 @@
 {
-  "version": "0.1.170",
-  "notes": "Display recovery: 3s post-reset settle, blind 9600 second pass; UART/0x71/tick-delay fixes",
+  "version": "0.1.171",
+  "notes": "Fix blind-upload baud mismatch (talk 115200 vs configured param deafened both sides); per-attempt baud ladder 38400/19200/9600 for marginal links",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "c1733d06ce98761144eea3424406eaae"
+      "md5": "755df9622f31e12f059787a51d6ceb65"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "c1733d06ce98761144eea3424406eaae"
+      "md5": "755df9622f31e12f059787a51d6ceb65"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
