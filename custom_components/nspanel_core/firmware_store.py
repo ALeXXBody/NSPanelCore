@@ -54,6 +54,15 @@ def overlay_dir(hass_config_path: str, version: str) -> str:
     return os.path.join(hass_config_path, ".storage", "nspanel_core", "firmware", version)
 
 
+def _rmtree(path: str) -> None:
+    import shutil
+
+    try:
+        shutil.rmtree(path, ignore_errors=True)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _version_tuple(v: str) -> tuple:
     parts = []
     for p in str(v).strip().split("."):
@@ -113,14 +122,20 @@ async def download_and_activate(hass, manager, manifest: dict) -> tuple[bool, st
     target = overlay_dir(hass.config.path(), version)
 
     def _download() -> dict[str, str]:
-        os.makedirs(target, exist_ok=True)
+        # Download into a temp dir first; a failed mid-set download must
+        # not leave half-overwritten files in the ACTIVE overlay dir
+        # (the boot path would then re-activate corrupt bytes).
+        staging = target + ".staging"
+        _rmtree(staging)
+        os.makedirs(staging, exist_ok=True)
         paths: dict[str, str] = {}
+        md5s: dict[str, str] = {}
         for key in SERVABLE_FILES:
             entry = files[key]
             url, want = entry.get("url", ""), (entry.get("md5") or "").lower()
             if not url or not want:
                 raise ValueError(f"{key}: manifest entry lacks url/md5")
-            dest = os.path.join(target, key.replace("/", "__"))
+            dest = os.path.join(staging, key.replace("/", "__"))
             req = urllib.request.Request(url, headers={"User-Agent": "NSPanelCore/1.0"})
             h = hashlib.md5()
             with urllib.request.urlopen(req, timeout=120) as resp, open(dest, "wb") as f:
@@ -133,16 +148,47 @@ async def download_and_activate(hass, manager, manifest: dict) -> tuple[bool, st
             if h.hexdigest() != want:
                 raise ValueError(f"{key}: checksum mismatch")
             paths[key] = dest
-        return paths
+            md5s[key] = h.hexdigest()
+        # All verified: atomically swap into the live overlay dir.
+        _rmtree(target)
+        os.rename(staging, target)
+        final = {k: os.path.join(target, k.replace("/", "__")) for k in paths}
+        return final, md5s
 
     try:
-        paths = await hass.async_add_executor_job(_download)
+        paths, md5s = await hass.async_add_executor_job(_download)
     except Exception as err:  # noqa: BLE001
         _LOGGER.warning("Firmware %s download failed: %s", version, err)
         return False, str(err)
 
-    manager.set_firmware_overlay(version, paths)
+    manager.set_firmware_overlay(version, paths, md5s)
     await manager.refresh_ota_cache()
+    # Re-pin a manually uploaded TFT if the bundled file still matches the
+    # recorded hash: the fresh overlay dir contains RELEASE TFTs and would
+    # otherwise silently overwrite the user's custom display file (and the
+    # panels' auto-TFT would push the release file over it).
+    s = getattr(manager.config, "settings", None)
+    if s is not None and getattr(s, "custom_tft_name", ""):
+        import hashlib as _hashlib
+
+        import nspanel_core  # local import avoids cycles
+
+        bundled = os.path.join(os.path.dirname(nspanel_core.__file__), "tft", s.custom_tft_name)
+        h = _hashlib.md5()
+        try:
+            with open(bundled, "rb") as f:
+                for chunk in iter(lambda: f.read(65536), b""):
+                    h.update(chunk)
+            if h.hexdigest() == s.custom_tft_md5:
+                proof = manager.note_custom_tft(s.custom_tft_name)
+                _LOGGER.info("Re-pinned custom %s after activating %s: %s", s.custom_tft_name, version, proof["md5"])
+            else:
+                _LOGGER.warning(
+                    "Custom %s no longer matches its recorded hash; not re-pinning",
+                    s.custom_tft_name,
+                )
+        except OSError:
+            pass
     return True, f"firmware {version} active"
 
 

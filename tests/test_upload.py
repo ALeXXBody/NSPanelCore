@@ -21,7 +21,6 @@ import sys
 from pathlib import Path
 
 import pytest
-from multidict import MultiDict
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "custom_components"))
@@ -29,6 +28,7 @@ sys.path.insert(0, str(REPO / "custom_components"))
 pytest.importorskip("homeassistant")
 
 from aiohttp import web  # noqa: E402
+from multidict import MultiDict  # noqa: E402
 from nspanel_core import dashboard as D  # noqa: E402
 from nspanel_core import manager as M  # noqa: E402
 from nspanel_core.models import IntegrationConfig  # noqa: E402

@@ -41,18 +41,15 @@
         $("#rooms_list").sortable({
         handle: ".sortable-handle",
         update: (event, ui) => {
-            $(".room-row").each((index, element) => {
-            // 'update' called ie. the order of elements in the DOM has changed. Update border fields and send HTMX request for new
-            var room_pages = {"rooms": [
-                // Append rooms in the order they are displayed.
-            ]}
+            // 'update' called ie. the order of elements in the DOM has changed.
+            // Collect the ids ONCE and trigger the request once — the old
+            // nested .each fired N identical POSTs per drag.
+            var room_pages = {"rooms": []};
             $(".room-row").each((index, element) => {
                 room_pages.rooms.push($(element).data('room-id'));
-            })
-            $("#htmx_form_save_rooms_order_field").val(JSON.stringify(room_pages)); // Clear any existin value
-
-            htmx.trigger(document.getElementById('htmx_form_save_rooms_order'), "reordered", {});
             });
+            $("#htmx_form_save_rooms_order_field").val(JSON.stringify(room_pages));
+            htmx.trigger(document.getElementById('htmx_form_save_rooms_order'), "reordered", {});
         }
         });
     });

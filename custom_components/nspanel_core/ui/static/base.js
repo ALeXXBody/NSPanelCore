@@ -113,6 +113,18 @@ function nspanelClientId() {
   base = base || location.origin;
   return base.replace(/\/+$/, "") + "/";
 }
+
+// Authed fetch for native-fetch callers (navbar buttons etc.): attaches the
+// HA bearer token like htmx/jQuery paths do.
+async function nspanelFetch(url, options) {
+  options = options || {};
+  var headers = Object.assign({}, options.headers || {});
+  try { await nspanelRefreshTokenIfNeeded(); } catch (err) {}
+  var tok = nspanelGetToken();
+  if (tok) headers["Authorization"] = "Bearer " + tok;
+  return fetch(url, Object.assign({}, options, { headers: headers }));
+}
+
 async function nspanelRefreshTokenIfNeeded(force) {
   var found = null;
   try { found = nspanelTokenStore(); } catch (e) { return; }

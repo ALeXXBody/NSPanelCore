@@ -66,6 +66,10 @@ class StompConnection:
         self.subscriptions: dict[str, str] = {}  # topic -> subscription id
         self.last_will: dict | None = None
         self.lock = asyncio.Lock()
+        # Gate: SUBSCRIBE/SEND are refused until a CONNECT with a valid
+        # token succeeds. The WS endpoints themselves are public (iframe
+        # cannot carry headers), so this flag is the auth boundary.
+        self.authenticated = False
 
     async def send(self, command: str, headers: dict[str, str], body: str) -> None:
         async with self.lock:
@@ -261,6 +265,7 @@ class StompServer:
             accept_version = headers.get("accept-version", "")
             versions = [v.strip() for v in accept_version.split(",") if v.strip()]
             if accept_version == "" or "1.2" in versions:
+                conn.authenticated = True
                 connected_headers = {
                     "version": "1.2",
                     "session": str(uuid.uuid4()),
@@ -284,6 +289,9 @@ class StompServer:
                 await conn.send("ERROR", {"version": "1.2"}, "Supported protocol versions are 1.2")
 
         elif command == "SUBSCRIBE":
+            if not conn.authenticated:
+                await conn.send("ERROR", {"message": "Not authenticated"}, None)
+                return
             destination = headers.get("destination", "")
             sub_id = headers.get("id", "")
             if not destination or not sub_id:
@@ -298,6 +306,9 @@ class StompServer:
             self._unsubscribe(conn, headers.get("destination"), headers.get("id"))
 
         elif command == "SEND":
+            if not conn.authenticated:
+                await conn.send("ERROR", {"message": "Not authenticated"}, None)
+                return
             destination = headers.get("destination", "")
             if not self._topic_allowed(destination):
                 await conn.send("ERROR", {"message": "Topic not allowed"}, destination)

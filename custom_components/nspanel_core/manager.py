@@ -79,6 +79,7 @@ class NSPanelCoreManager:
         self._report_listeners: list = []
         self._relay_listeners: dict = {}
         self._relay_state: dict = {}
+        self._mqtt_unsubs: list = []
         self._last_telemetry: dict[str, dict] = {}
         self._log_backlog: dict[str, list] = {}
         self._last_ota_trigger: dict[str, float] = {}
@@ -118,14 +119,17 @@ class NSPanelCoreManager:
         # Panel-facing topics. The firmware speaks JSON on hostname-based
         # topics (wifi_hostname, NOT the MAC): status reports, relay states,
         # logs and light/scene commands. There is no protobuf on the wire.
-        await mqtt.async_subscribe(self.hass, TOPIC_PANEL_STATUS, self._on_panel_status)
-        await mqtt.async_subscribe(
-            self.hass, TOPIC_PANEL_STATUS_REPORT, self._on_panel_status_report, encoding=None
-        )
-        await mqtt.async_subscribe(self.hass, TOPIC_MANAGER_COMMAND, self._on_manager_command)
-        await mqtt.async_subscribe(self.hass, "nspanel/+/r1_state", self._on_relay_state)
-        await mqtt.async_subscribe(self.hass, "nspanel/+/r2_state", self._on_relay_state)
-        await mqtt.async_subscribe(self.hass, "nspanel/+/log", self._on_panel_log)
+        for sub in (
+            (TOPIC_PANEL_STATUS, self._on_panel_status, None),
+            (TOPIC_PANEL_STATUS_REPORT, self._on_panel_status_report, None),
+            (TOPIC_MANAGER_COMMAND, self._on_manager_command, None),
+            ("nspanel/+/r1_state", self._on_relay_state, None),
+            ("nspanel/+/r2_state", self._on_relay_state, None),
+            ("nspanel/+/log", self._on_panel_log, None),
+        ):
+            topic, handler, enc = sub
+            kwargs = {} if enc is None else {"encoding": enc}
+            self._mqtt_unsubs.append(await mqtt.async_subscribe(self.hass, topic, handler, **kwargs))
 
         # Bridge UI actions (STOMP SEND from the browser, e.g. reboot and OTA
         # buttons) to MQTT. The UI cannot publish MQTT itself.
@@ -156,12 +160,28 @@ class NSPanelCoreManager:
         # Weather polling (open-meteo) — mirrors the C++/Go weather package.
         self._reschedule_weather()
         self.hass.async_create_task(self._poll_weather(None))
-        self._ota_md5 = await self.hass.async_add_executor_job(self._hash_ota_files)
+        # Hash AFTER restoring the overlay: _hash_ota_files hashes bundled
+        # paths only, so hashing first would leave the checksum cache saying
+        # bundled while /download_* serves overlay bytes — permanent OTA
+        # re-trigger loop after every restart with an active overlay.
         self._restore_firmware_overlay()
+        self._ota_md5 = await self.hass.async_add_executor_job(self.refresh_ota_cache)
         self._reschedule_firmware_check()
         _LOGGER.info("NSPanel Core manager started")
 
     async def async_stop(self) -> None:
+        for unsub in self._mqtt_unsubs:
+            try:
+                unsub()
+            except Exception:  # noqa: BLE001
+                pass
+        self._mqtt_unsubs = []
+        for unsub in self._firmware_unsubs:
+            try:
+                unsub()
+            except Exception:  # noqa: BLE001
+                pass
+        self._firmware_unsubs = []
         for unsub in self._unsub:
             unsub()
         self._unsub = []
@@ -365,29 +385,35 @@ class NSPanelCoreManager:
         path = os.path.join(base, name)
         return path if os.path.isfile(path) else None
 
-    def set_firmware_overlay(self, version: str, paths: dict[str, str]) -> None:
+    def set_firmware_overlay(self, version: str, paths: dict[str, str], md5s: dict | None = None) -> None:
         self._ota_overlay = dict(paths)
         self._ota_active_version = version
+        try:
+            self.config.settings.firmware_active_md5s = dict(md5s or {})
+        except Exception:  # noqa: BLE001
+            pass
         try:
             self.config.settings.firmware_active_version = version
         except Exception:  # noqa: BLE001
             pass
         self.hass.async_create_task(self.async_save())
 
-    def note_custom_tft(self, filename: str) -> dict:
-        """Pin a manually uploaded display file so it is served EXACTLY.
+    def note_custom_file(self, kind: str, name: str, label: str) -> dict:
+        """Pin a manually uploaded file so it is served EXACTLY.
 
         Copies the uploaded bytes over any overlay copy (overlays silently
-        shadow bundled files), re-hashes the served path, and records
-        name/md5/size/time in settings. Returns the served-file proof dict.
+        shadow bundled files — the panel would otherwise keep downloading/
+        flashing the OLD release bytes while the checksum cache claimed the
+        new hash, causing endless reflash loops), re-hashes the served path,
+        and records name/md5/size/time in settings.
+        Returns the served-file proof dict.
         """
         import hashlib as _hashlib
         import os as _os
         import shutil as _shutil
         from datetime import datetime, timezone
 
-        kind, name = "tft", filename
-        bundled = _os.path.join(_os.path.dirname(__file__), "tft", filename)
+        bundled = _os.path.join(_os.path.dirname(__file__), kind, name)
         # Overlay would shadow the upload — overwrite it with the exact bytes.
         overlay = self._ota_overlay.get(f"{kind}/{name}", "")
         if overlay and _os.path.abspath(overlay) != _os.path.abspath(bundled):
@@ -412,18 +438,22 @@ class NSPanelCoreManager:
         except (AttributeError, TypeError):
             self._ota_md5 = {f"{kind}/{name}": digest}
         s = self.config.settings
-        s.custom_tft_name = filename
+        s.custom_tft_name = name if kind == "tft" else s.custom_tft_name
         s.custom_tft_md5 = digest
         s.custom_tft_size = size
         s.custom_tft_uploaded_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        s.custom_tft_source = "manual upload"
+        s.custom_tft_source = label
         return {
-            "filename": filename,
+            "filename": name,
             "bytes": size,
             "md5": digest,
-            "source": "manual upload",
+            "source": label,
             "uploaded_at": s.custom_tft_uploaded_at,
         }
+
+    def note_custom_tft(self, filename: str) -> dict:
+        """TFT-specific pin (kept for callers/tests)."""
+        return self.note_custom_file("tft", filename, "manual upload")
 
     def served_tft_info(self) -> dict:
         """Proof of what the panels actually download, per variant."""
@@ -481,6 +511,9 @@ class NSPanelCoreManager:
             ):
                 kind, name = key.split("/", 1)
                 path = self.servable_path(kind, name)
+                if not path:
+                    out[key] = ""
+                    continue
                 h = hashlib.md5()
                 try:
                     with open(path, "rb") as f:
@@ -504,10 +537,16 @@ class NSPanelCoreManager:
         paths = {
             key: os.path.join(target, key.replace("/", "__")) for key in _fs.SERVABLE_FILES
         }
-        if _fs.validate_manifest_against(paths):
+        recorded = dict(getattr(self.config.settings, "firmware_active_md5s", {}) or {})
+        if _fs.validate_manifest_against(paths, {"files": {k: {"md5": v} for k, v in recorded.items()}}):
             self._ota_overlay = paths
             self._ota_active_version = version
-            _LOGGER.info("Restored firmware overlay %s", version)
+            _LOGGER.info("Restored firmware overlay %s (md5-verified)", version)
+        else:
+            _LOGGER.warning(
+                "Firmware overlay %s failed hash verification at boot; ignoring (bundled files served)",
+                version,
+            )
 
     async def check_firmware_updates(self, auto: bool = False) -> dict:
         """Fetch the manifest, compare with the served version. No download."""
@@ -692,6 +731,13 @@ class NSPanelCoreManager:
         segment = mac_from_topic(msg.topic, "status")
         if not segment:
             return
+        panel = self._panel_by_topic(segment)
+        if panel is None:
+            # Try the verbatim segment before giving up: mac_from_topic
+            # normalizes, but hostnames keep case/spaces on the wire.
+            panel = self._panel_by_topic(self._topic_segment(msg.topic))
+        if panel is None:
+            return
         try:
             data = json.loads(msg.payload)
         except (ValueError, TypeError):
@@ -706,9 +752,6 @@ class NSPanelCoreManager:
             # nspanel/mqttmanager/command instead. Handled for completeness —
             # works for unknown panels (this is how they first appear).
             await self._handle_register_request(data.get("mac_origin") or "", data)
-            return
-        panel = self._panel_by_topic(segment)
-        if panel is None:
             return
         self._note_panel_hostname(panel, self._topic_segment(msg.topic))
         if state == "online":
@@ -988,18 +1031,21 @@ class NSPanelCoreManager:
 
         Status reports arrive every ~30s; without this, a panel mid-download
         would be re-triggered on every report and never finish flashing.
-        Also skips panels already reporting an updating state.
+        Skips panels already reporting an updating state (their flash is in
+        flight — re-triggering mid-flash corrupts it). The cooldown stamp is
+        written AFTER evaluation so a startup-window registration (md5 cache
+        not ready) is not blacked out for the next 30 minutes.
         """
         import time as _time
 
-        if getattr(panel, "online", True) is False:
-            pass  # offline panels still get evaluated on register; cooldown below applies
+        if report.get("state") in ("updating_tft", "updating_fw", "updating_fs"):
+            return
         now = _time.monotonic()
         last = self._last_ota_trigger.get(panel.mac, 0)
         if now - last < 1800:
             return
-        self._last_ota_trigger[panel.mac] = now
         await self._maybe_trigger_firmware_ota(panel, report)
+        self._last_ota_trigger[panel.mac] = _time.monotonic()
 
     @staticmethod
     def _normalize_ota_report(data: dict) -> dict:
@@ -1366,14 +1412,25 @@ class NSPanelCoreManager:
             panel.room_id = int(body["room_id"] or 0)
         await self.async_save()
         if panel.accepted and not panel.denied:
-            # _send_panel_config already delivers register_accept + reload;
-            # a second direct publish here caused double config delivery.
+            # _send_panel_config already delivers register_accept + reload
+            # AND the online status; a second status publish here duplicated
+            # every STOMP status frame on every panel save.
             await self._send_panel_config(panel)
-            await self._publish_panel_status(panel, "online")
 
     async def remove_panel(self, panel_id: int) -> None:
+        panel = next((p for p in self.config.panels if p.id == panel_id), None)
         self.config.panels = [p for p in self.config.panels if p.id != panel_id]
+        if panel is not None:
+            # Purge per-MAC caches/listeners so removals don't leak state.
+            mac = topic_safe(panel.mac)
+            self._relay_state = {k: v for k, v in self._relay_state.items()
+                                 if not (isinstance(k, tuple) and k[0] == mac) and k != panel.mac}
+            self._log_backlog.pop(panel.mac, None)
+            self._last_telemetry.pop(panel.mac, None)
+            self._last_ota_trigger.pop(panel.mac, None)
+            self._relay_listeners = {k: v for k, v in self._relay_listeners.items() if v}
         await self.async_save()
+        self.notify_panels_changed()
 
     def export_state(self) -> dict:
         data = self.config.to_dict()
@@ -1735,7 +1792,7 @@ class NSPanelCoreManager:
                     _LOGGER.warning("Weather fetch failed: HTTP %s", resp.status)
                     return
                 data = await resp.json()
-            ICONS = {0: "sunny", 1: "partlytuner weather_day", 2: "cloudy_weather_day", 3: "overcast",
+            ICONS = {0: "sunny", 1: "partlytuner_day", 2: "cloudy_weather_day", 3: "overcast",
                      45: "fog", 48: "fog", 51: "rainy", 53: "rainy", 55: "rainy", 56: "sleet", 57: "sleet",
                      61: "rainy", 63: "rainy", 65: "rainy", 66: "sleet", 67: "sleet", 71: "snowy", 73: "snowy",
                      75: "snowy", 77: "snowy", 80: "rainy", 81: "rainy", 82: "rainy", 85: "snowy", 86: "snowy",
@@ -1856,7 +1913,7 @@ class NSPanelCoreManager:
                 if ls.get("color_mode") == "dimmer" and light.can_color_temperature:
                     light.color_temp = ls.get("color_temperature", light.color_temp)
                     svc_data["color_temp_kelvin"] = light.color_temp
-                elif ls.get("color_mode") == "color" and light.can_rgb:
+                elif ls.get("color_mode") == "rgb" and light.can_rgb:
                     light.mode = "rgb"
                     light.hue = ls.get("hue", 0)
                     light.saturation = ls.get("saturation", 0)
@@ -1895,10 +1952,15 @@ class NSPanelCoreManager:
         await self._publish("nspanel/status/date", date_str, True)
         await self._publish("nspanel/status/ampm", ampm, True)
         # Per-panel screensaver mode (ScreensaverPage subscribes to it).
+        # "global" must be resolved to the actual mode: the firmware treats
+        # the raw payload as the mode string and logs Unknown-mode errors.
+        from .dashboard import _resolve_screensaver_mode
+
         for panel in self.config.panels:
             if panel.accepted:
+                mode = _resolve_screensaver_mode(panel, settings)
                 await self._publish(
                     self._panel_cmd_topic(panel, "screensaver_mode"),
-                    str(panel.screensaver_mode),
+                    mode,
                     True,
                 )

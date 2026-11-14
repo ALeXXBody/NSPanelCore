@@ -38,7 +38,7 @@
                         <label class="label">
                             <span class="label-text justify-start w-full ml-2">Check firmware updates</span>
                         </label>
-                        <button class="btn btn-xs btn-info mr-2" onclick="fetch('/nspanel_core/firmware_check',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.latest?('Latest: '+j.latest+(j.update_available?' — update available (install it from Actions > Download + activate latest).':' (up to date)')):('Check failed: '+(j.error||'unknown')))).catch(e=>alert('Check failed'));">Check</button>
+                        <button class="btn btn-xs btn-info mr-2" onclick="nspanelFetch('/nspanel_core/firmware_check',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.latest?('Latest: '+j.latest+(j.update_available?' — update available (install it from Actions > Download + activate latest).':' (up to date)')):('Check failed: '+(j.error||'unknown')))).catch(e=>alert('Check failed'));">Check</button>
                     </div>
                 </li>
                 <li>
@@ -46,7 +46,7 @@
                         <label class="label">
                             <span class="label-text justify-start w-full ml-2">Download + activate latest firmware</span>
                         </label>
-                        <button class="btn btn-xs btn-warning mr-2" onclick="if(confirm('Download and activate the latest firmware? Panels update over MQTT OTA.'))fetch('/nspanel_core/firmware_install',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.message)).catch(e=>alert('Install failed'));">Install</button>
+                        <button class="btn btn-xs btn-warning mr-2" onclick="if(confirm('Download and activate the latest firmware? Panels update over MQTT OTA.'))nspanelFetch('/nspanel_core/firmware_install',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.message)).catch(e=>alert('Install failed'));">Install</button>
                     </div>
                 </li>
                 <li>
@@ -70,7 +70,7 @@
                         <label class="label">
                             <span class="label-text justify-start w-full ml-2">Served display files (what panels download)</span>
                         </label>
-                        <button class="btn btn-xs btn-info mr-2" onclick="fetch('/nspanel_core/firmware_status').then(r=>r.json()).then(j=>{var t=j.served_tft||{};var f=function(v){return v?(v.filename+': '+v.bytes+' bytes, md5 '+String(v.md5).slice(0,12)+'… ('+v.source+')'):'missing';};alert('EU display: '+f(t.eu)+'\nUS display: '+f(t.us));}).catch(e=>alert('Check failed'));">Show</button>
+                        <button class="btn btn-xs btn-info mr-2" onclick="nspanelFetch('/nspanel_core/firmware_status').then(r=>r.json()).then(j=>{var t=j.served_tft||{};var f=function(v){return v?(v.filename+': '+v.bytes+' bytes, md5 '+String(v.md5).slice(0,12)+'… ('+v.source+')'):'missing';};alert('EU display: '+f(t.eu)+'\nUS display: '+f(t.us));}).catch(e=>alert('Check failed'));">Show</button>
                     </div>
                 </li>
                 <li>

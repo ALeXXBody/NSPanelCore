@@ -11,6 +11,10 @@
 set -e
 VERSION="${1:?usage: ./publish.sh <version, e.g. 0.1.160>}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+# The evergreen release must exist; recreate if a cleanup removed it.
+gh release view firmware-latest > /dev/null 2>&1 || gh release create firmware-latest --title "Panel firmware (evergreen)" --notes "Latest panel firmware + TFT files. URLs are stable; panels pick up via manifest."
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 INT="$REPO_ROOT/custom_components/nspanel_core"
 NOTES="${2:-}"
 TMP=$(mktemp -d)
@@ -26,7 +30,7 @@ gh release upload firmware-latest --clobber \
   "$TMP/gui.tft" "$TMP/gui_us.tft"
 rm -rf "$TMP"
 BASE="https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest"
-python3 - "$VERSION" "$NOTES" <<'PY'
+cd "$REPO_ROOT" && python3 - "$VERSION" "$NOTES" <<'PY'
 import hashlib, json, sys
 version, notes = sys.argv[1], sys.argv[2]
 base = "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest"
@@ -70,6 +74,11 @@ for key, entry in man["files"].items():
         sys.exit(1)
     print(f"verified {key}")
 PY
+HEADER_VERSION="$(grep -oE '[0-9.]+' "$REPO_ROOT/firmware/include/nspm-bin-version.h" | head -1)"
+if [ "$HEADER_VERSION" != "$VERSION" ]; then
+  echo "FATAL: manifest version $VERSION != firmware header version $HEADER_VERSION — bump nspm-bin-version.h first." >&2
+  exit 1
+fi
 echo "$VERSION" > "$REPO_ROOT/custom_components/nspanel_core/firmware/version"
 git -C "$REPO_ROOT" add firmware/manifest.json custom_components/nspanel_core/firmware/version
 git -C "$REPO_ROOT" commit -m "Publish firmware $VERSION (no app release)"

@@ -37,4 +37,4 @@
   })
 </script>
 
-<nspanel-pressure-status id="nspanel-pressure-status-{{ nspanel.data.id }}" nspanel_id="{{ nspanel.data.id }}" state="" pressure=""></nspanel-pressure-status>
+{% if nspanel.data.has_pressure %}<nspanel-pressure-status id="nspanel-pressure-status-{{ nspanel.data.id }}" nspanel_id="{{ nspanel.data.id }}" state="" pressure=""></nspanel-pressure-status>{% endif %}

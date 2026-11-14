@@ -79,9 +79,14 @@ class RelayLight(LightEntity):
             self._state = False
         entry.async_on_unload(manager.add_relay_listener(panel, relay, self._on_state))
 
+    @property
+    def available(self) -> bool:
+        return bool(getattr(self._panel, "online", False)) and self._manager is not None
+
     def _on_state(self, state: bool) -> None:
         self._state = state
-        self.schedule_update_ha_state()
+        if self.hass is not None:
+            self.schedule_update_ha_state()
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -101,7 +106,13 @@ class RelayLight(LightEntity):
         return self._state
 
     async def async_turn_on(self, **kwargs) -> None:
+        self._state = True  # optimistic; next rN_state confirms/corrects
+        if self.hass is not None:
+            self.async_write_ha_state()
         await self._manager.set_relay(self._panel, self._relay, True)
 
     async def async_turn_off(self, **kwargs) -> None:
+        self._state = False
+        if self.hass is not None:
+            self.async_write_ha_state()
         await self._manager.set_relay(self._panel, self._relay, False)

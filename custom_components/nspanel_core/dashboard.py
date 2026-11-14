@@ -134,7 +134,7 @@ def _warm_template_cache() -> None:
             _LOGGER.exception("Failed to pre-compile template %s", name)
 
 
-def _render(template_name: str, **context) -> str:
+def _render(template_name: str, request=None, **context) -> str:
     env = _get_env()
     # Cache templates to avoid blocking I/O in the event loop
     if template_name not in _TEMPLATE_CACHE:
@@ -143,6 +143,7 @@ def _render(template_name: str, **context) -> str:
     context.setdefault("notifications", [])
     context.setdefault("version", _DASHBOARD_VERSION)
     context.setdefault("has_unread_messages", False)
+    context.setdefault("max_live_log_messages", 100)
     context.setdefault("mqtt_password", "")
     context.setdefault("home_assistant_token", "")
     context.setdefault("mqtt_server", "")
@@ -154,7 +155,12 @@ def _render(template_name: str, **context) -> str:
     context.setdefault("current_theme", "nspmwip")
     context.setdefault("theme_mode", "dark")
     context.setdefault("ingress_path", "")
-    context.setdefault("request", type("R", (), {"path": context.get("current_path", "/")})())
+    real_path = None
+    try:
+        real_path = request.path if request is not None else None
+    except Exception:  # noqa: BLE001
+        real_path = None
+    context.setdefault("request", type("R", (), {"path": real_path or context.get("current_path", "/")})())
     return template.render(**context)
 
 
@@ -179,6 +185,7 @@ def _panels_context(manager) -> list[dict]:
                 "accepted": panel.accepted,
                 "denied": panel.denied,
                 "ip_address": "",
+                "ip": (manager._last_telemetry.get(panel.mac, {}) or {}).get("ip", ""),
                 "fw_version": panel.version,
             },
         })
@@ -198,7 +205,7 @@ class MainPageView(HomeAssistantView):
             "index_htmx.html",
             nspanels=_panels_context(manager),
             manager_address=manager.config.settings.manager_address,
-            temperature_unit="celsius",
+            temperature_unit="°C",
             has_unread_messages=any(not m.read for m in manager.config.messages),
         )
         return web.Response(text=html, content_type="text/html")
@@ -213,6 +220,7 @@ class HtmxNspanelsSectionView(HomeAssistantView):
         manager = _manager(request)
         html = _render(
             "index_htmx_nspanels_section.html",
+            request=request,
             nspanels=_panels_context(manager),
         )
         return web.Response(text=html, content_type="text/html")
@@ -282,6 +290,7 @@ class PanelActionView(HomeAssistantView):
         # Index page buttons target the section wrapper: full grid replaces grid.
         html = _render(
             "index_htmx_nspanels_section.html",
+            request=request,
             nspanels=_panels_context(manager),
         )
         return web.Response(text=html, content_type="text/html")
@@ -309,6 +318,7 @@ class PlaceholderPageView(HomeAssistantView):
         }
         html = _render(
             "index_shell.html",
+            request=request,
             page_title=titles.get(page, page),
             nspanels=_panels_context(manager),
         )
@@ -324,7 +334,11 @@ class EditPanelView(HomeAssistantView):
 
     async def get(self, request, **kwargs):
         manager = _manager(request)
-        panel_id = int(request.match_info["panel_id"])
+        try:
+            panel_id = int(request.match_info["panel_id"])
+        except (KeyError, ValueError, TypeError):
+            html = _render("index_shell.html", page_title="Bad panel id", nspanels=[])
+            return web.Response(text=html, content_type="text/html")
         panel = next((p for p in manager.panels() if p.id == panel_id), None)
         if panel is None:
             html = _render("index_shell.html", page_title="Panel not found", nspanels=[])
@@ -367,6 +381,13 @@ class EditPanelView(HomeAssistantView):
         settings_ctx = dict(panel_dict)
         settings_ctx["selected_tft"] = ""
         settings_ctx["us_panel_orientation"] = panel.us_panel_orientation or ""
+        # Template renders the MQTT button inputs from *custom_* names while
+        # the model stores button*_mqtt_topic — an undefined key rendered ""
+        # and every save wiped a configured topic/payload.
+        settings_ctx["button1_custom_mqtt_topic"] = panel.button1_mqtt_topic
+        settings_ctx["button1_custom_mqtt_payload"] = panel.button1_mqtt_payload
+        settings_ctx["button2_custom_mqtt_topic"] = panel.button2_mqtt_topic
+        settings_ctx["button2_custom_mqtt_payload"] = panel.button2_mqtt_payload
         html = _render(
             "edit_nspanel.html",
             panel_info=panel_info,
@@ -375,7 +396,7 @@ class EditPanelView(HomeAssistantView):
             rooms=rooms,
             lights=lights,
             page_title=f"{panel.name} — settings",
-            temperature_unit="celsius",
+            temperature_unit="°C",
             current_temperature=0,
             current_humidity=0,
             current_pressure=0,
@@ -532,6 +553,7 @@ class GlobalScenesView(HomeAssistantView):
         ]
         html = _render(
             "global_scenes.html",
+            request=request,
             scenes=scenes_ctx,
             page_title="Global scenes",
             nspanels=_panels_context(manager),
@@ -559,6 +581,7 @@ class RelayGroupsView(HomeAssistantView):
             groups.append({"id": g.id, "name": g.name, "members": members})
         html = _render(
             "relay_groups.html",
+            request=request,
             relay_groups=groups,
             page_title="Relay/Light groups",
             nspanels=_panels_context(manager),
@@ -576,6 +599,7 @@ class WeatherTimeView(HomeAssistantView):
         s = manager.config.settings
         html = _render(
             "weather_and_time.html",
+            request=request,
             location_latitude=s.location_latitude,
             location_longitude=s.location_longitude,
             weather_update_interval=s.weather_update_interval,
@@ -632,6 +656,7 @@ class DeniedPanelsView(HomeAssistantView):
         denied = [asdict(p) for p in manager.config.panels if p.denied]
         html = _render(
             "denied_nspanels.html",
+            request=request,
             nspanels=denied,
             page_title="Denied NSPanels",
         )
@@ -649,6 +674,7 @@ class SettingsView(HomeAssistantView):
         themes = {"nspmwip": "NSPanel Core (dark)"}
         html = _render(
             "settings.html",
+            request=request,
             manager_address=s.manager_address,
             manager_port=s.manager_port,
             mqtt_server=getattr(s, "mqtt_server", ""),
@@ -1219,6 +1245,7 @@ class ComingSoonView(HomeAssistantView):
     async def get(self, request, **kwargs):
         html = _render(
             "index_shell.html",
+            request=request,
             page_title="This page is being ported",
             nspanels=[],
         )
@@ -1490,6 +1517,7 @@ class RoomsPageView(HomeAssistantView):
             rooms_ctx.append({"room": {"id": room.id, "friendly_name": room.name}, "nspanels": panels_in_room})
         html = _render(
             "rooms.html",
+            request=request,
             rooms=rooms_ctx,
             page_title="Rooms",
             nspanels=_panels_context(manager),
@@ -1504,7 +1532,10 @@ class EditRoomView(HomeAssistantView):
 
     async def get(self, request, **kwargs):
         manager = _manager(request)
-        room_id = int(request.match_info["room_id"])
+        try:
+            room_id = int(request.match_info["room_id"])
+        except (KeyError, ValueError, TypeError):
+            raise web.HTTPFound(f"{URL_BASE}/settings")
         room = next((r for r in manager.config.rooms if r.id == room_id), None)
         if room is None:
             raise web.HTTPFound(f"{URL_BASE}/settings")
@@ -1512,6 +1543,8 @@ class EditRoomView(HomeAssistantView):
             "id": room.id,
             "friendly_name": room.name,
             "name": room.name,
+            "room_temp_provider": "",
+            "room_temp_sensor": room.temp_sensor_entity,
             "nspanel_set": type("QS", (), {"all": [type("P", (), {"friendly_name": p.name, "id": p.id}) for p in manager.config.panels if p.room_id == room_id]})(),
             "entity_set": type("QS", (), {"all": [type("E", (), {"friendly_name": e.name, "id": e.id}) for e in manager.config.lights if e.room_id == room_id]})(),
         })()
@@ -1607,7 +1640,11 @@ class UpdateRoomView(HomeAssistantView):
             return web.Response(text="Bad temperature sensor entity id", status=422)
         if provider and provider not in ("homeassistant", "openhab", "manual", ""):
             return web.Response(text="Bad temperature provider", status=400)
-        room.temp_sensor_entity = sensor
+        # Only overwrite the sensor when the form actually posts the field:
+        # the settings-page rename form doesn't include it, and an
+        # unconditional assignment wiped the configured sensor on rename.
+        if "room_temp_sensor" in form:
+            room.temp_sensor_entity = sensor
         await manager.async_save()
         return _redirect_back(request, f"{URL_BASE}/settings")
 

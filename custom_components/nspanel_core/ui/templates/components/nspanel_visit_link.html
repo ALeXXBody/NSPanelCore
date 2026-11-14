@@ -5,7 +5,7 @@
     var element = document.getElementById(`nspanel-visit-link-{{ nspanel.data.id }}`);
     var data = JSON.parse(message.body);
     element.state = data.state;
-    element.address = data.ip_address;
+    element.address = data.ip || data.ip_address || "";
   })
 
   define({

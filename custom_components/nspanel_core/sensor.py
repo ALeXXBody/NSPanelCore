@@ -60,7 +60,7 @@ async def async_setup_entry(
     def _add_new():
         new_entities = []
         for panel in manager.panels():
-            if not panel.accepted:
+            if not panel.accepted or panel.denied:
                 continue
             for kind in _wanted_kinds(panel):
                 unique = f"{DOMAIN}_{topic_safe(panel.mac)}_{kind}"
@@ -131,9 +131,15 @@ class PanelSensor(SensorEntity):
         self._value = None
         entry.async_on_unload(manager.add_report_listener(self._on_report))
 
+    @property
+    def available(self) -> bool:
+        return bool(getattr(self._panel, "online", False)) and self._manager is not None
+
     def _on_report(self, mac: str, report) -> None:
         if mac != self._panel.mac:
             return
+        if self.hass is None:
+            return  # entity not yet added to hass; drop instead of raising
         raw = {
             "temperature": report.get("temperature"),
             "humidity": report.get("humidity") if report.get("has_humidity") else None,

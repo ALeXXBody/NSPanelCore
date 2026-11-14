@@ -32,6 +32,7 @@ class FakeManager:
     def __init__(self, cfg):
         self.config = cfg
         self._last_ota_trigger = {}
+        self._last_telemetry = {}
 
     def panels(self):
         return list(self.config.panels)

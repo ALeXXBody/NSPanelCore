@@ -191,6 +191,14 @@ void WebManager::respondAvailableWiFiNetworks(AsyncWebServerRequest *request) {
 }
 
 void WebManager::startOTAUpdate() {
+  // Re-entrancy guard: duplicate firmware_update (MQTT QoS1 redelivery or
+  // manager retry) used to spawn a second OTA task — two writers on the
+  // same flash = corrupt image.
+  if (WebManager::_state == WebManagerState::UPDATING_FIRMWARE ||
+      WebManager::_state == WebManagerState::UPDATING_LITTLEFS) {
+    LOG_ERROR("Firmware update already running; ignoring duplicate request.");
+    return;
+  }
   // TODO: Move function to InterfaceManager
   BaseType_t result = xTaskCreatePinnedToCore(WebManager::_taskPerformOTAUpdate, "taskPerformOTAUpdate", 10000, NULL, 1, NULL, CONFIG_ARDUINO_RUNNING_CORE);
   if (result != pdPASS) {
@@ -371,6 +379,8 @@ bool WebManager::_update(uint8_t type, const char *url) {
 
   if (!Update.end()) {
     LOG_ERROR("Update failed #:", Update.getError());
+    Update.abort();
+    WebManager::_state = WebManagerState::ONLINE;
     return false;
   }
 

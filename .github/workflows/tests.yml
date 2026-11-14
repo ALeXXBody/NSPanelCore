@@ -1,0 +1,14 @@
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest paho-mqtt
+      - run: python -m pytest tests/test_fw_contract.py tests/test_templates.py -v

@@ -37,4 +37,4 @@
   })
 </script>
 
-<nspanel-humidity-status id="nspanel-humidity-status-{{ nspanel.data.id }}" nspanel_id="{{ nspanel.data.id }}" state="" humidity=""></nspanel-humidity-status>
+{% if nspanel.data.has_humidity %}<nspanel-humidity-status id="nspanel-humidity-status-{{ nspanel.data.id }}" nspanel_id="{{ nspanel.data.id }}" state="" humidity=""></nspanel-humidity-status>{% endif %}

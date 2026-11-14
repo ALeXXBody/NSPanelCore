@@ -528,6 +528,13 @@ void NSPanel::_sendRawCommand(const char *command, int length) {
 }
 
 bool NSPanel::startOTAUpdate() {
+  // Re-entrancy guard: a duplicate tft_update (MQTT QoS1 redelivery or a
+  // manager retry) used to spawn a SECOND streaming task sharing the same
+  // static buffer and serial bus — interleaved writes = corrupt flash.
+  if (NSPanel::instance->getUpdateState()) {
+    LOG_ERROR("TFT update already running; ignoring duplicate request.");
+    return false;
+  }
   if (xTaskCreatePinnedToCore(_taskUpdateTFTConfigOTA, "taskUpdateTFTConfigOTA", 10000, NULL, 1, NULL, CONFIG_ARDUINO_RUNNING_CORE) != pdPASS) {
     LOG_ERROR("Failed to create task to update TFT.");
     return false;
@@ -1070,10 +1077,20 @@ bool NSPanel::_updateTFTOTA() {
     std::string return_string;
     uint16_t recevied_bytes = NSPanel::instance->_readDataToString(&return_string, 500, true);
     if (!return_string.empty() && return_string[0] == 0x08) {
+      // 0x08 frames carry a BINARY 4-byte LE offset — generic text heuristics
+      // (FF terminator, 0x05 sniff) corrupt it (e.g. offset bytes containing
+      // FF/05 produce fabricated offsets and silent write divergence).
+      // Read exactly 4 more bytes, bounded, then decode.
+      unsigned long _f8_start = millis();
       while (return_string.length() < 5) {
-        LOG_TRACE("Waiting for offset data byte ", return_string.length() - 1);
-        while (Serial2.available() <= 0) {
+        if (Serial2.available() <= 0) {
+          if (millis() - _f8_start > 5000) {
+            LOG_ERROR("Incomplete 0x08 offset frame (got ", return_string.length(),
+                      " of 5 bytes in 5 s) — aborting attempt, will re-init.");
+            return false;
+          }
           vTaskDelay(20 / portTICK_PERIOD_MS);
+          continue;
         }
         return_string.push_back(Serial2.read());
       }
@@ -1082,17 +1099,17 @@ bool NSPanel::_updateTFTOTA() {
       readNextOffset |= return_string[3] << 16;
       readNextOffset |= return_string[4] << 24;
       if (readNextOffset > file_size) {
-        LOG_ERROR("Panel requested offset beyond file size, aborting OTA attempt.");
+        LOG_ERROR("Panel requested offset ", readNextOffset, " beyond file size ", file_size,
+                  " — aborting attempt.");
         return false;
       }
-      if (readNextOffset > 0) {
-        nextStartWriteOffset = readNextOffset;
-        lastReadByte = readNextOffset;
-        LOG_INFO("Got 0x08 with offset, jumping to: ", nextStartWriteOffset, " please wait.");
-        continue;
-      }
-      LOG_ERROR("Panel requested offset 0 (full restart not supported), aborting OTA attempt.");
-      return false;
+      // Offset 0 is a legitimate "start over" request in the v1.2 protocol.
+      // Aborting here converted a recoverable hiccup into a half-written
+      // display (the classic System Data ERROR brick).
+      LOG_ERROR("Panel requested retransmit from offset ", readNextOffset, ".");
+      nextStartWriteOffset = readNextOffset;
+      lastReadByte = readNextOffset;
+      continue;
     }
     // 0x05, empty (silence) or anything else: chunk accepted, move on.
     nextStartWriteOffset = _sent_up_to;

@@ -252,8 +252,13 @@ bool MqttManager::_connect() {
   MqttManager::_mqttClient->connect(mqtt_device_name.c_str(), NSPMConfig::instance->mqtt_username.c_str(), NSPMConfig::instance->mqtt_password.c_str(), NSPMConfig::instance->mqtt_availability_topic.c_str(), 1, true, offline_message_buffer);
   vTaskDelay(1000 / portTICK_PERIOD_MS);
   if (MqttManager::connected()) {
-    while (!MqttManager::_mqttClient->publish(NSPMConfig::instance->mqtt_availability_topic.c_str(), online_message_buffer, true)) {
-      LOG_ERROR("Failed to send online/offline message");
+    // Bounded: a dropped socket right after connect() made this retry loop
+    // spin forever while nothing called loop() — MQTT dead until reboot.
+    for (int _pub_tries = 0; _pub_tries < 20; _pub_tries++) {
+      if (MqttManager::_mqttClient->publish(NSPMConfig::instance->mqtt_availability_topic.c_str(), online_message_buffer, true)) {
+        break;
+      }
+      LOG_ERROR("Failed to send online/offline message (attempt ", _pub_tries + 1, ")");
       vTaskDelay(250 / portTICK_PERIOD_MS);
     }
     Serial.print("Connected to MQTT server ");

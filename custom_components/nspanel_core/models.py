@@ -260,6 +260,7 @@ class GlobalSettings:
     firmware_active_version: str = ""
     firmware_latest_version: str = ""
     firmware_last_check: str = ""
+    firmware_active_md5s: dict = field(default_factory=dict)
     mqtt_wait_time: int = 0
     clock_us_style: bool = False
     date_format: str = "%d/%m"

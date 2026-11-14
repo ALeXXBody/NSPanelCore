@@ -20,7 +20,7 @@
                 <span class="icon me-1">
                     <i class="mdi mdi-lightbulb-on-10"></i>
                 </span>
-                Light: <span id="light-${nspanel_id}">${light} lux</span>
+                Light: <span id="light-${nspanel_id}">${light == "" ? "?" : light} lux</span>
             </div>
         `;
       } else {
@@ -29,7 +29,7 @@
                 <span class="icon me-1">
                     <i class="mdi mdi-lightbulb-on-10"></i>
                 </span>
-                Light: <span id="light-${nspanel_id}">${light} lux</span>
+                Light: <span id="light-${nspanel_id}">${light == "" ? "?" : light} lux</span>
             </div>
         `;
       }
