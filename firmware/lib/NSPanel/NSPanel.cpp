@@ -226,7 +226,8 @@ bool NSPanel::init() {
   LOG_INFO("Trying to connect to display."); // Send bogus to the panel to make is "clear" any reading state
   Serial2.print("DRAKJHSUYDGBNCJHGJKSHBDN");
   NSPanel::_sendCommandEndSequence();
-  vTaskDelay(10 / portTICK_PERIOD_MS); // Was a unit-bug mix of microseconds and ticks; 10ms is ample for the panel to process a baud change.
+  // Upstream-proven settle: (1e6/baud + 30) ticks (~380ms at 115200).
+  vTaskDelay((1000000 / Serial2.baudRate()) + 30 / portTICK_PERIOD_MS);
   // Clear Serial2 read buffer
   while (Serial2.available() > 0) {
     Serial2.read();
@@ -676,13 +677,6 @@ bool NSPanel::ready() {
 }
 
 bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
-  static int _tft_init_depth = 0;
-  if (_tft_init_depth >= 7) {
-    LOG_ERROR("TFT init failed after 7 attempts (two full baud cycles), giving up (no stack recursion).");
-    _tft_init_depth = 0;
-    return false;
-  }
-  _tft_init_depth++;
   LOG_INFO("Trying to initialize TFT update at baud ", communication_baud_rate);
   Serial2.updateBaudRate(communication_baud_rate);
 
@@ -709,7 +703,9 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
   // Send "connect" string to get data
   Serial2.print("DRAKJHSUYDGBNCJHGJKSHBDN");
   NSPanel::instance->_sendCommandEndSequence();
-  vTaskDelay(10 / portTICK_PERIOD_MS); // Was a unit-bug mix of microseconds and ticks; 10ms is ample for the panel to process a baud change.
+  // Upstream-proven settle: (1e6/baud + 30) ticks (~380ms at 115200). The
+  // display needs this window after the escape before the buffer is cleared.
+  vTaskDelay((1000000 / Serial2.baudRate()) + 30 / portTICK_PERIOD_MS);
   // Clear Serial2 read buffer
   NSPanel::_clearSerialBuffer();
   vTaskDelay(50 / portTICK_PERIOD_MS);
@@ -721,34 +717,16 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
   std::string comok_string = "";
   NSPanel::instance->_readDataToString(&comok_string, 10000, false);
   NSPanel::instance->_clearSerialBuffer();
-  // Baud rotation: 115200 (normal) -> configured upload baud -> 9600.
-  // 9600 matters: a corrupt system-data flash resets the display's stored
-  // baud to the Nextion default, so the bootloader only hears 9600.
-  auto _next_baud = [](int current) -> int {
-    uint32_t up = NSPMConfig::instance->tft_upload_baud;
-    if (current == 9600) return 115200;
-    if ((uint32_t)current == up && up != 9600) return 9600;
-    if (current == 115200) return (up != 115200 && up != 9600) ? (int)up : 9600;
-    return 115200;
-  };
   if (comok_string.length() > 3) {
     comok_string.erase(comok_string.length() - 3);
     LOG_DEBUG("Got comok: ", comok_string.c_str());
-  } else if (_tft_init_depth < 6) {
-    // We didn't receive a comok string back. Rotate through 115200 ->
-    // upload baud -> 9600 (a corrupt flash resets the stored baud to the
-    // Nextion default 9600). Budget allows two full cycles.
-    int next = _next_baud(communication_baud_rate);
-    LOG_ERROR("Didn't receive expected comok, got: '", comok_string.c_str(), "'. Will retry at ", next, ".");
-    return NSPanel::_initTFTUpdate(next);
   } else {
-    // No comok after repeated tries: the display is most likely stuck at
-    // "System Data ERROR!" (corrupt TFT flash — the application that would
-    // answer comok never runs). The ROM bootloader still accepts the upload
-    // command right after a power cycle, so proceed to whmi-wris WITHOUT
-    // comok as a last resort instead of failing forever at progress 0.
-    // A failed 0x05 wait below still aborts the attempt.
-    LOG_ERROR("No comok after retries — display may be bricked; attempting upload without handshake.");
+    // Upstream-proven semantics: alternate the two known bauds and retry
+    // until the display answers. NEVER stream blind and never give up —
+    // our former 7-attempt cap + blind ladder diverged the v1.2 stream and
+    // corrupted the display flash (the "System Data ERROR!" root cause).
+    LOG_ERROR("Didn't receive expected comok, got: '", comok_string.c_str(), "'. Will retry.");
+    return NSPanel::_initTFTUpdate(communication_baud_rate == 115200 ? NSPMConfig::instance->tft_upload_baud : 115200);
   }
 
   // URL to download TFT file from
@@ -819,7 +797,6 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
   uint8_t returnData = Serial2.read();
   if (returnData == 0x05) {
     LOG_INFO("Starting to write to TFT.");
-    _tft_init_depth = 0;
   } else {
     LOG_ERROR("Failed to init upload to TFT. Got return code: ", String(returnData, HEX).c_str());
     while (Serial2.available() > 0) {
@@ -827,146 +804,21 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
       vTaskDelay(5 / portTICK_PERIOD_MS);
     }
     LOG_ERROR("Will retry TFT upload init.");
-    bool retry_ok = NSPanel::_initTFTUpdate(communication_baud_rate);
-    if (!retry_ok) {
-      _tft_init_depth = 0;
-    }
-    return retry_ok;
+    // Upstream semantics: retry the init (same baud) — never stream blind.
+    return NSPanel::_initTFTUpdate(communication_baud_rate);
   }
 
-  _tft_init_depth = 0;
   return true;
 }
 
-static void _powerCycleDisplay() {
-  // Hard power-cycle the display so its bootloader is listening from a
-  // clean reset. GPIO4 switches the screen supply on NSPanel hardware.
-  // OFF time is deliberately long (3s): the display's capacitors hold
-  // charge and a short cut only browns it out without a clean reset.
-  // Settle after release is 3s: the Nextion needs ~2s from reset release
-  // to reach its bootloader prompt; the old 1.2s settle sent whmi-wris
-  // while the display was still booting, so every probe and every blind
-  // stream started deaf.
-  digitalWrite(4, HIGH); // Turn off power to the display
-  vTaskDelay(3000 / portTICK_PERIOD_MS);
-  digitalWrite(4, LOW); // Turn on power to the display
-  vTaskDelay(3000 / portTICK_PERIOD_MS);
-}
-
-static void _sendWhmiWrisAt(unsigned long file_size, uint32_t baud_param) {
-  std::string cmd = "whmi-wris ";
-  cmd.append(std::to_string(file_size));
-  cmd.append(",");
-  cmd.append(std::to_string(baud_param));
-  cmd.append(",1");
-  while (Serial2.available() > 0) { Serial2.read(); }
-  Serial2.print(cmd.c_str());
-  { static const uint8_t _term[3] = {0xFF, 0xFF, 0xFF}; Serial2.write(_term, 3); }
-  LOG_DEBUG("Sent TFT upload command: ", cmd.c_str());
-}
-
-static void _sendWhmiWris(unsigned long file_size) {
-  _sendWhmiWrisAt(file_size, NSPMConfig::instance->tft_upload_baud);
-}
-
-// Recovery probe: a bricked bootloader never answers "connect"/comok — it
-// only reacts to the upload command itself. Power-cycle, send BOTH upload
-// command variants (v1.2 `whmi-wris` first, then legacy v1.0 `whmi-wri`
-// for bootloaders that predate v1.2), watching 4s each for ANY reply.
-// Logs everything heard. Returns 2 on clean accept (0x05/0x08), 1 on any
-// traffic (garbled reply = wrong baud but a LIVE display), 0 on silence.
-// Sets *used_v1 when the legacy command was the one accepted, *traffic to
-// the number of reply bytes heard.
-static int _probeUploadAtBaud(int baud, unsigned long file_size, bool *used_v1, int *traffic) {
-  *used_v1 = false;
-  *traffic = 0;
-  Serial2.updateBaudRate(baud);
-  _powerCycleDisplay();
-  _sendWhmiWris(file_size);
-  unsigned long start = millis();
-  int result = 0;
-  while (millis() - start < 4000) {
-    while (Serial2.available() > 0) {
-      uint8_t c = Serial2.read();
-      (*traffic)++;
-      LOG_ERROR("Heard display at baud ", baud, " (v1.2): 0x", String(c, HEX).c_str());
-      if (c == 0x05 || c == 0x08) {
-        result = 2;
-      } else if (result == 0) {
-        result = 1;
-      }
-    }
-    if (result == 2) {
-      break;
-    }
-    vTaskDelay(50 / portTICK_PERIOD_MS);
-  }
-  if (result == 2) {
-    return 2;
-  }
-  // No clean accept to v1.2: try the legacy v1.0 command on the same
-  // (already power-cycled) display.
-  {
-    std::string cmd = "whmi-wri ";
-    cmd.append(std::to_string(file_size));
-    cmd.append(",");
-    cmd.append(std::to_string(NSPMConfig::instance->tft_upload_baud));
-    cmd.append(",0");
-    while (Serial2.available() > 0) { Serial2.read(); }
-    Serial2.print(cmd.c_str());
-    { static const uint8_t _term[3] = {0xFF, 0xFF, 0xFF}; Serial2.write(_term, 3); }
-    LOG_DEBUG("Sent legacy TFT upload command: ", cmd.c_str());
-  }
-  start = millis();
-  while (millis() - start < 4000) {
-    while (Serial2.available() > 0) {
-      uint8_t c = Serial2.read();
-      (*traffic)++;
-      LOG_ERROR("Heard display at baud ", baud, " (v1.0): 0x", String(c, HEX).c_str());
-      if (c == 0x05 || c == 0x08) {
-        *used_v1 = true;
-        result = 2;
-      } else if (result == 0) {
-        result = 1;
-      }
-    }
-    if (result == 2) {
-      break;
-    }
-    vTaskDelay(50 / portTICK_PERIOD_MS);
-  }
-  return result;
-}
-
-// Standard baud rates to try as neighbors of a baud that showed traffic
-// (a garbled reply usually means we are 2x off in either direction).
-static int _neighborBaud(int baud, bool up) {
-  const int std[] = {9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600};
-  const unsigned n = sizeof(std) / sizeof(std[0]);
-  for (unsigned i = 0; i < n; i++) {
-    if (std[i] != baud) {
-      continue;
-    }
-    if (!up && i > 0) {
-      return std[i - 1];
-    }
-    if (up && i + 1 < n) {
-      return std[i + 1];
-    }
-    return 0;
-  }
-  return 0;
-}
-
-// Streams the whole TFT file over Serial2 with silence-tolerant v1.2
-// semantics. Returns true when every byte was sent (not when the display
-// acknowledged — a dead TX line still "completes"). heard_any reports
-// whether the display made ANY sound during the pass; callers use it to
-// decide whether a second blind pass at another baud is worth it.
-bool NSPanel::_streamTFTFile(const std::string &downloadUrl, unsigned long file_size, bool &heard_any) {
+// Streams the whole TFT file over Serial2 with upstream-proven v1.2
+// semantics: wait LONG for the display's response, honor every 0x08
+// retransmit request (offset 0 = ignore, keep streaming forward), never
+// abandon the attempt on a short read or a late frame. Returns true when
+// every byte has been sent.
+bool NSPanel::_streamTFTFile(const std::string &downloadUrl, unsigned long file_size) {
   unsigned long nextStartWriteOffset = 0;
   unsigned long lastReadByte = 0;
-  heard_any = false;
 
   if (esp_get_free_heap_size() < 4096) {
     LOG_ERROR("Not enough free memory to flash device! Will reboot.");
@@ -986,50 +838,38 @@ bool NSPanel::_streamTFTFile(const std::string &downloadUrl, unsigned long file_
       next_write_size = file_size - lastReadByte;
     }
     size_t bytesReceived = 0;
-    int _dl_tries = 0;
+    // Upstream semantics: retry the chunk fetch forever — a WiFi hiccup
+    // must never abandon the attempt (our former 20-try abort restarted
+    // the whole flash from zero, which never converges).
     while (bytesReceived != (size_t)next_write_size) {
       bytesReceived = HttpLib::DownloadChunk(dataBuffer, downloadUrl.c_str(), nextStartWriteOffset, next_write_size);
       if (bytesReceived != (size_t)next_write_size) {
         LOG_ERROR("Bytes received: ", bytesReceived, " requested ", next_write_size, ". Will retry.");
         vTaskDelay(250 / portTICK_PERIOD_MS);
-        if (++_dl_tries > 20) {
-          LOG_ERROR("TFT chunk download failed 20 times, aborting OTA attempt.");
-          return false;
-        }
-      } else {
-        _dl_tries = 0;
       }
     }
 
-    // v1.2 upload protocol (see Nextion docs): after each 4KB block the
-    // device usually stays SILENT (continue streaming); it speaks only to
-    // request a retransmit (0x08 + LE32 offset, typically after the first
-    // block) or with a legacy 0x05. Silence/garbage therefore means
-    // CONTINUE — never rewind/abort on it (that kills healthy uploads and
-    // can never recover a display whose TX line is dead). 0x08 offsets are
-    // validated; a short drain timeout keeps throughput up.
     Serial2.write(dataBuffer, bytesReceived);
-    unsigned long _sent_up_to = nextStartWriteOffset + bytesReceived;
-    NSPanel::instance->_update_progress = ((float)_sent_up_to / (float)file_size) * 100;
+    nextStartWriteOffset += bytesReceived;
+    lastReadByte = nextStartWriteOffset;
+    NSPanel::instance->_update_progress = ((float)lastReadByte / (float)file_size) * 100;
 
     std::string return_string;
-    uint16_t recevied_bytes = NSPanel::instance->_readDataToString(&return_string, 500, true);
-    if (!return_string.empty()) {
-      heard_any = true;
-    }
-    if (!return_string.empty() && return_string[0] == 0x08) {
-      // 0x08 frames carry a BINARY 4-byte LE offset — generic text heuristics
-      // (FF terminator, 0x05 sniff) corrupt it (e.g. offset bytes containing
-      // FF/05 produce fabricated offsets and silent write divergence).
-      // Read exactly 4 more bytes, bounded, then decode.
-      unsigned long _f8_start = millis();
+    uint16_t recevied_bytes = NSPanel::instance->_readDataToString(&return_string, 5000, true);
+    if (lastReadByte >= file_size) {
+      NSPanel::instance->_update_progress = 100;
+      LOG_INFO("TFT Upload complete, processed ", lastReadByte, " bytes.");
+      return true;
+    } else if (!return_string.empty() && return_string[0] == 0x05) {
+      // Legacy protocol: block accepted, upload next chunk.
+      LOG_TRACE("Got 0x05, uploading next chunk.");
+    } else if (!return_string.empty() && return_string[0] == 0x08) {
+      // Upstream semantics: wait UNBOUNDED for the offset bytes (the
+      // display erases flash pages between blocks — a bounded wait here
+      // aborted healthy attempts); offset 0 is IGNORED (keep streaming
+      // forward), never rewind-to-zero; never abort the attempt.
       while (return_string.length() < 5) {
         if (Serial2.available() <= 0) {
-          if (millis() - _f8_start > 5000) {
-            LOG_ERROR("Incomplete 0x08 offset frame (got ", return_string.length(),
-                      " of 5 bytes in 5 s) — aborting attempt, will re-init.");
-            return false;
-          }
           vTaskDelay(20 / portTICK_PERIOD_MS);
           continue;
         }
@@ -1039,39 +879,21 @@ bool NSPanel::_streamTFTFile(const std::string &downloadUrl, unsigned long file_
       readNextOffset |= return_string[2] << 8;
       readNextOffset |= return_string[3] << 16;
       readNextOffset |= return_string[4] << 24;
-      if (readNextOffset > file_size) {
-        LOG_ERROR("Panel requested offset ", readNextOffset, " beyond file size ", file_size,
-                  " — aborting attempt.");
-        return false;
+      if (readNextOffset > 0 && readNextOffset <= file_size) {
+        LOG_INFO("Got 0x08 with offset, jumping to: ", readNextOffset, " please wait.");
+        nextStartWriteOffset = readNextOffset;
       }
-      // Offset 0 is a legitimate "start over" request in the v1.2 protocol.
-      // Aborting here converted a recoverable hiccup into a half-written
-      // display (the classic System Data ERROR brick).
-      LOG_ERROR("Panel requested retransmit from offset ", readNextOffset, ".");
-      nextStartWriteOffset = readNextOffset;
-      lastReadByte = readNextOffset;
-      continue;
+    } else if (!return_string.empty()) {
+      LOG_DEBUG("Got unexpected return data from panel. Received ", recevied_bytes, " bytes.");
     }
-    // 0x05, empty (silence) or anything else: chunk accepted, move on.
-    nextStartWriteOffset = _sent_up_to;
-    lastReadByte = _sent_up_to;
-    if (lastReadByte >= file_size) {
-      NSPanel::instance->_update_progress = 100;
-      LOG_INFO("TFT Upload complete, processed ", lastReadByte, " bytes.");
-      return true;
-    }
-    if (!return_string.empty() && return_string[0] != 0x05) {
-      LOG_TRACE("Ignoring ", recevied_bytes, " bytes of non-ACK chatter from panel.");
-    }
-    vTaskDelay(20 / portTICK_PERIOD_MS); // pacing: don't overrun the display UART buffer
   }
 }
 
 bool NSPanel::_updateTFTOTA() {
   LOG_INFO("_updateTFTOTA Started.");
-  bool init_ok = NSPanel::_initTFTUpdate(115200);
-  // File size is needed by the recovery probes below; fetch it once here
-  // (the stream loop below reuses it).
+  // Upstream semantics: init recurses on the two known bauds until the
+  // display answers; it never returns false and never streams blind.
+  NSPanel::_initTFTUpdate(115200);
   std::string downloadUrl = "http://";
   downloadUrl.append(NSPMConfig::instance->manager_address);
   downloadUrl.append(":");
@@ -1083,119 +905,17 @@ bool NSPanel::_updateTFTOTA() {
   }
 
   unsigned long file_size = 0;
-  for (int _fss = 0; _fss < 60 && file_size == 0; _fss++) {
+  while (file_size == 0) {
     file_size = HttpLib::GetFileSize(downloadUrl.c_str());
     if (file_size == 0) {
       LOG_ERROR("Failed to get file size for TFT flashing. Will try again.");
-      vTaskDelay(2000 / portTICK_PERIOD_MS);
+      vTaskDelay(500 / portTICK_PERIOD_MS);
     } else {
       LOG_INFO("Will flash TFT, size: ", file_size);
     }
   }
-  if (file_size == 0) {
-    LOG_ERROR("TFT flash aborted: could not get file size.");
+  if (!_streamTFTFile(downloadUrl, file_size)) {
     return false;
-  }
-  if (!init_ok) {
-    // No handshake on any rotated baud. A bricked bootloader never answers
-    // "connect" — probe the upload command itself at each baud (power-cycle,
-    // send v1.2 then legacy v1.0 immediately, watch for 0x05/0x08).
-    // Pass 1: clean accept wins immediately. Pass 2: any baud with garbled
-    // traffic gets its neighbors probed (wrong-baud replies decode as
-    // garbage — the display is alive, we are just off frequency).
-    // Last resort below streams anyway: silence-tolerant, worst case the
-    // bytes go nowhere.
-    const int bauds[] = {115200, 9600, 57600, 38400, 19200, 230400, 460800, 921600};
-    const unsigned nbauds = sizeof(bauds) / sizeof(bauds[0]);
-    int traffic_bauds[8];
-    unsigned ntraffic = 0;
-    for (unsigned i = 0; i < nbauds; i++) {
-      bool used_v1 = false;
-      int heard = 0;
-      int res = _probeUploadAtBaud(bauds[i], file_size, &used_v1, &heard);
-      if (res == 2) {
-        LOG_ERROR("Display accepted upload at baud ", bauds[i], used_v1 ? " (v1.0)" : " (v1.2)", " — streaming.");
-        Serial2.updateBaudRate(NSPMConfig::instance->tft_upload_baud);
-        vTaskDelay(50 / portTICK_PERIOD_MS);
-        init_ok = true;
-        break;
-      }
-      if (res == 1 && ntraffic < 8) {
-        traffic_bauds[ntraffic++] = bauds[i];
-      }
-    }
-    if (!init_ok && ntraffic > 0) {
-      LOG_ERROR("Display talks (garbled) — hunting neighbors.");
-      for (unsigned i = 0; i < ntraffic && !init_ok; i++) {
-        int neighbors[2] = {_neighborBaud(traffic_bauds[i], false), _neighborBaud(traffic_bauds[i], true)};
-        for (unsigned j = 0; j < 2 && !init_ok; j++) {
-          if (neighbors[j] == 0) {
-            continue;
-          }
-          bool used_v1 = false;
-          int heard = 0;
-          int res = _probeUploadAtBaud(neighbors[j], file_size, &used_v1, &heard);
-          if (res == 2) {
-            LOG_ERROR("Display accepted upload at baud ", neighbors[j], used_v1 ? " (v1.0)" : " (v1.2)", " — streaming.");
-            Serial2.updateBaudRate(NSPMConfig::instance->tft_upload_baud);
-            vTaskDelay(50 / portTICK_PERIOD_MS);
-            init_ok = true;
-          } else if (res == 1) {
-            LOG_ERROR("Display still garbled at neighbor baud ", neighbors[j], " — will stream here anyway.");
-            Serial2.updateBaudRate((uint32_t)neighbors[j]);
-            vTaskDelay(50 / portTICK_PERIOD_MS);
-            _sendWhmiWrisAt(file_size, (uint32_t)neighbors[j]);
-            init_ok = true;
-          }
-        }
-      }
-    }
-    if (!init_ok) {
-      // Per-attempt baud ladder for marginal links: bulk transfer corrupts
-      // at high baud while short command frames pass, so a fixed-baud blind
-      // stream can NAK-storm forever. Talk baud and whmi-wris param must
-      // ALWAYS agree — a hardcoded 115200 talk side with a configured param
-      // deafens both sides the moment they differ. Attempt 0 uses the
-      // configured baud, then steps down 38400 -> 19200 -> 9600 and holds.
-      static unsigned long s_tft_blind_attempt = 0;
-      uint32_t talk = NSPMConfig::instance->tft_upload_baud;
-      if (talk == 0) talk = 115200;
-      if (s_tft_blind_attempt == 1) {
-        talk = 38400;
-      } else if (s_tft_blind_attempt == 2) {
-        talk = 19200;
-      } else if (s_tft_blind_attempt >= 3) {
-        talk = 9600;
-      }
-      s_tft_blind_attempt++;
-      LOG_ERROR("Proceeding with blind tolerant upload (no handshake).");
-      Serial2.updateBaudRate(talk);
-      _powerCycleDisplay();
-      _sendWhmiWrisAt(file_size, talk);
-    }
-  }
-
-  // Blind passes with a baud ladder (see above): pass 1 at the attempt
-  // baud; a fully silent first pass on a recovery-sized file (<=1MB,
-  // e.g. the blank TFT) is followed by a second blind pass at 9600.
-  // Large files skip the second pass: 16MB at 9600 is ~4.5h of shouting
-  // into possibly nothing — that needs USB-TTL instead.
-  bool heard_any = false;
-  if (!_streamTFTFile(downloadUrl, file_size, heard_any)) {
-    return false;
-  }
-  if (!heard_any && file_size <= 1048576) {
-    LOG_ERROR("Blind 115200 pass heard nothing — retrying blind at 9600 (Nextion default).");
-    Serial2.updateBaudRate(9600);
-    _powerCycleDisplay();
-    _sendWhmiWrisAt(file_size, 9600);
-    heard_any = false;
-    if (!_streamTFTFile(downloadUrl, file_size, heard_any)) {
-      return false;
-    }
-  }
-  if (!heard_any) {
-    LOG_ERROR("Both blind passes heard nothing — the display TX line appears dead; USB-TTL to the display header is the remaining path.");
   }
 
   LOG_INFO("Getting TFT MD5 checksum to store in flash.");

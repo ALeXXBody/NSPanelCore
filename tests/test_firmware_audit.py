@@ -78,55 +78,49 @@ def test_init_dead_mutex_branch_gone_or_documented():
     assert "Failed to take serial write mutex, trying again in 3 seconds." not in src or True
 
 
-def test_power_cycle_settle_is_3s():
-    """The Nextion needs ~2s from reset release to its bootloader prompt.
-
-    Regression: the old 1.2s settle sent whmi-wris while the display was
-    still booting, so every probe and every blind stream started deaf.
-    """
+def test_stream_window_is_5000ms():
+    """ROOT CAUSE of the display-brick bug: the per-block response window
+    was 500ms, so the display's late 0x08 retransmit request was missed and
+    the stream diverged (garbage flash, "System Data ERROR!"). Upstream
+    waits 5000ms — restored verbatim."""
     src = _src(NSPANEL)
-    i = src.find("static void _powerCycleDisplay()")
-    assert i >= 0
-    body = src[i:i + 1200]
-    assert body.count("vTaskDelay(3000") >= 2, (
-        "power-cycle must hold reset 3s AND settle 3s after release"
-    )
+    assert "_readDataToString(&return_string, 5000, true)" in src
+    assert ", 500, true)" not in src, "500ms window must be gone"
 
 
-def test_silent_blind_pass_retries_at_9600():
-    """A corrupt flash resets the display baud to the Nextion default 9600.
-
-    Regression: the blind stream ran 115200-only, unheard by a 9600 display
-    no matter how healthy the wire. A fully silent first pass on a
-    recovery-sized file must trigger a second blind pass at 9600.
-    """
+def test_stream_never_aborts_attempt():
+    """Upstream semantics: short reads and late frames never abandon the
+    attempt — our abort paths restarted the flash from zero forever."""
     src = _src(NSPANEL)
-    assert "_streamTFTFile" in src, "streaming must live in the testable helper"
-    assert "_sendWhmiWrisAt(file_size, 9600)" in src
-    assert "1048576" in src, "second pass must be size-guarded (16MB at 9600 is hours)"
-    assert "heard_any" in src
+    assert "_dl_tries" not in src, "20-try chunk abort must be gone"
+    assert "aborting OTA attempt" not in src
+    assert "aborting attempt, will re-init" not in src
 
 
-def test_blind_talk_baud_matches_param():
-    """Talk baud and whmi-wris param must always agree.
-
-    Regression: the blind block hardcoded Serial2 to 115200 while sending
-    the configured baud as the switch param — the moment they differed
-    (e.g. 57600 configured), both sides went deaf and every attempt failed.
-    """
+def test_offset_zero_ignored_keep_streaming():
+    """0x08 with offset 0 must be IGNORED (upstream), not rewound to zero."""
     src = _src(NSPANEL)
-    i = src.find("Per-attempt baud ladder")
-    assert i >= 0, "baud ladder missing"
-    body = src[i:i + 1600]
-    assert "Serial2.updateBaudRate(talk)" in body
-    assert "_sendWhmiWrisAt(file_size, talk)" in body
-    assert "updateBaudRate(115200)" not in body.replace("communication_baud_rate", ""), \
-        "no hardcoded blind talk baud allowed"
+    i = src.find("readNextOffset")
+    body = src[i:i + 800]
+    assert "readNextOffset > 0" in body, "offset>0 gate missing"
+    # The offset assignment must come after the >0 gate, not unconditionally.
+    gate = src.find("readNextOffset > 0")
+    assign = src.find("nextStartWriteOffset = readNextOffset;")
+    assert gate >= 0 and assign > gate
 
 
-def test_blind_baud_ladder_steps_down():
-    """Attempts must step 38400 -> 19200 -> 9600 for marginal links."""
+def test_no_blind_ladder_or_probes():
+    """The blind ladder / probes are gone — upstream init retries the two
+    known bauds and never streams without a handshake."""
     src = _src(NSPANEL)
-    assert "s_tft_blind_attempt" in src
-    for baud in ("38400", "19200", "9600"):
-        assert baud in src
+    for gone in ("_probeUploadAtBaud", "_neighborBaud", "_powerCycleDisplay",
+                 "_sendWhmiWrisAt", "Proceeding with blind tolerant upload"):
+        assert gone not in src, f"{gone} must be removed"
+
+
+def test_init_retries_two_bauds_upstream_style():
+    src = _src(NSPANEL)
+    assert "communication_baud_rate == 115200 ? NSPMConfig::instance->tft_upload_baud : 115200" in src
+    assert "_tft_init_depth" not in src, "7-attempt cap must be gone"
+    # Escape settle restored to upstream expression in BOTH call sites.
+    assert src.count("(1000000 / Serial2.baudRate()) + 30 / portTICK_PERIOD_MS") == 2

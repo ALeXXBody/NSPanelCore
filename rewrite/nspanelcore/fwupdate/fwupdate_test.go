@@ -6,30 +6,6 @@ import (
 	"nspanelcore/fwupdate"
 )
 
-func TestRotationCovers9600Default(t *testing.T) {
-	// A corrupt flash resets the display baud to the Nextion default 9600:
-	// rotation must visit it. Upstream bug history: pre-0.1.164 never tried it.
-	seen := map[int]bool{}
-	b := 115200
-	for i := 0; i < 4; i++ {
-		seen[b] = true
-		b = fwupdate.NextBaud(b, 921600)
-	}
-	if !seen[115200] || !seen[921600] || !seen[9600] {
-		t.Fatalf("rotation must cover 115200/upload/9600: %v", seen)
-	}
-}
-
-func TestNeighbors(t *testing.T) {
-	down, up := fwupdate.Neighbors(115200)
-	if down != 57600 || up != 230400 {
-		t.Fatalf("got %d/%d", down, up)
-	}
-	if d, u := fwupdate.Neighbors(999); d != 0 || u != 0 {
-		t.Fatal("unknown baud must yield no neighbors")
-	}
-}
-
 func TestOffsetDecode(t *testing.T) {
 	off, ok := fwupdate.DecodeOffset([]byte{0x08, 0x00, 0x10, 0x00, 0x00}, 1<<20)
 	if !ok || off != 0x1000 {
@@ -55,37 +31,17 @@ func TestChunk(t *testing.T) {
 	}
 }
 
-func TestBlindSecondPassAt9600(t *testing.T) {
-	// A corrupt flash resets the display to the Nextion default 9600: a
-	// silent 115200 blind pass on a recovery-sized file must retry at 9600.
-	if got := fwupdate.BlindPasses(false, 408460); len(got) != 1 || got[0] != 9600 {
-		t.Fatalf("got %v", got)
+func TestWindowAndJumpRules(t *testing.T) {
+	if fwupdate.ResponseWindowMs != 5000 {
+		t.Fatal("response window must be 5000ms (upstream-proven)")
 	}
-	// Heard anything -> no second pass.
-	if got := fwupdate.BlindPasses(true, 408460); len(got) != 0 {
-		t.Fatalf("got %v", got)
+	if !fwupdate.ShouldJump(0x1000, 1<<20) {
+		t.Fatal("in-range offset must jump")
 	}
-	// 16MB at 9600 is hours: skip, needs USB-TTL.
-	if got := fwupdate.BlindPasses(false, 16<<20); len(got) != 0 {
-		t.Fatalf("got %v", got)
+	if fwupdate.ShouldJump(0, 100) {
+		t.Fatal("offset 0 must be IGNORED (keep streaming forward)")
 	}
-	if fwupdate.PowerSettleMs != 3000 {
-		t.Fatal("settle must be 3s (Nextion cold-boot)")
-	}
-}
-
-func TestBlindBaudLadder(t *testing.T) {
-	// Talk==param always; ladder steps down for marginal links (0.1.171).
-	if fwupdate.BlindPassBauds(57600, 0) != 57600 {
-		t.Fatal("attempt 0 must use configured baud")
-	}
-	if fwupdate.BlindPassBauds(57600, 1) != 38400 || fwupdate.BlindPassBauds(57600, 2) != 19200 {
-		t.Fatal("attempts must step down")
-	}
-	if fwupdate.BlindPassBauds(57600, 3) != 9600 || fwupdate.BlindPassBauds(57600, 9) != 9600 {
-		t.Fatal("ladder must hold at 9600")
-	}
-	if fwupdate.BlindPassBauds(0, 0) != 115200 {
-		t.Fatal("zero config must fall back to 115200")
+	if fwupdate.ShouldJump(1<<21, 1<<20) {
+		t.Fatal("beyond-size offset must not jump")
 	}
 }
