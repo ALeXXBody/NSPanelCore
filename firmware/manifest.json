@@ -1,22 +1,22 @@
 {
-  "version": "0.1.175",
-  "notes": "Reboot/factory-reset buttons no longer navigate away (fetch + busy overlay); doRebootNow redirects / for direct visits; no-navigation W6 guard",
+  "version": "0.1.176",
+  "notes": "Connection poller HEAD->GET (fw only serves GET /, HEAD 404 stranded the overlay); save no longer freezes the poller",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "b1856e8da2ec84514417ec7336a2ea67"
+      "md5": "3c90a2f93df7cc04521a9309fd0ebfc7"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
-      "md5": "2e1524aa87c8c10f62e340e484a4e754"
+      "md5": "30276347a9fa2832962890dd561be16a"
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "b1856e8da2ec84514417ec7336a2ea67"
+      "md5": "3c90a2f93df7cc04521a9309fd0ebfc7"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
-      "md5": "2e1524aa87c8c10f62e340e484a4e754"
+      "md5": "30276347a9fa2832962890dd561be16a"
     },
     "tft/gui.tft": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui.tft",
