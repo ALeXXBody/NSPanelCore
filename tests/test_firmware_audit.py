@@ -229,3 +229,15 @@ def test_w6_no_location_navigation():
     assert "fetch(url" in html or "fetch (url" in html.replace("fetch(url", "fetch (url"), (
         "W6 REGRESSION: confirmAction must fire fetch()"
     )
+
+
+def test_w7_poller_uses_get_not_head():
+    """P95: the 5s connection poller must use GET — the firmware only
+    registers GET /, so HEAD always 404s and the overlay could never clear."""
+    html = _web()
+    assert '"HEAD"' not in html and "'HEAD'" not in html, (
+        "W7 REGRESSION: HEAD polling is back — fw answers HEAD with 404"
+    )
+    assert 'open("GET", "/"' in html or "open('GET', '/'" in html, (
+        "W7 REGRESSION: connection poller must GET /"
+    )

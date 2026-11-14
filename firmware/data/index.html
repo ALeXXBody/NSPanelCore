@@ -92,7 +92,7 @@
     // Fire-and-forget actions (reboot / factory reset): fetch() so the
     // browser NEVER leaves this page (a full navigation used to park the
     // user on a blank /do_reboot URL while the panel rebooted).
-    // The busy overlay stays up; the 5s HEAD poller hides it on recovery.
+    // The busy overlay stays up; the 5s GET poller hides it on recovery.
     // fetch WILL reject when the panel goes down mid-reboot — expected.
     function confirmAction(msg, url, busyText) {
       if (!confirm(msg)) return false;
@@ -103,9 +103,11 @@
       try { fetch(url, {method: "GET"}).catch(function () {}); } catch (e) {}
       return false;
     }
-    // Connection monitor: HEAD / every 5s. Shows the overlay after 2
+    // Connection monitor: GET / every 5s. Shows the overlay after 2
     // consecutive failures (avoids blinking on a single slow response),
     // hides it on recovery. Paused while the WiFi modal scans.
+    // NOTE: must be GET, not HEAD — the firmware only registers GET /,
+    // so HEAD always answers 404 and the overlay could never clear.
     function connectionMonitor() {
       if (!doConnectionCheck) { setTimeout(connectionMonitor, 5000); return; }
       var request = new XMLHttpRequest();
@@ -122,14 +124,16 @@
         }
       };
       try {
-        request.open("HEAD", "/", true);
+        request.open("GET", "/", true);
         request.timeout = 4000;
         request.send();
       } catch (e) {}
       setTimeout(connectionMonitor, 5000);
     }
     function onSaveSubmit() {
-      doConnectionCheck = false;
+      // NOTE: the poller keeps running through the save-reboot on purpose:
+      // it shows the overlay while the panel is down and hides it on
+      // recovery. (Freezing it here used to strand the overlay forever.)
       var overlay = document.getElementById("conn_modal");
       var msg = document.getElementById("conn_modal_text");
       if (msg) msg.textContent = "Saving — the panel will reboot to apply the new configuration.";
