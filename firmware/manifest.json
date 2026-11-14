@@ -1,22 +1,22 @@
 {
-  "version": "0.1.169",
-  "notes": "Traffic-aware probe: any reply counts, neighbor-baud hunt, matched upload baud param",
+  "version": "0.1.170",
+  "notes": "Display recovery: 3s post-reset settle, blind 9600 second pass; UART/0x71/tick-delay fixes",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "0d40579a9b746da97eddb5b35138dfbd"
+      "md5": "c1733d06ce98761144eea3424406eaae"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
-      "md5": "bd34be744ef1278ff8347eadaa96f7cd"
+      "md5": "73249b4c15c842b64dd3bdce3ae79efa"
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "0d40579a9b746da97eddb5b35138dfbd"
+      "md5": "c1733d06ce98761144eea3424406eaae"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
-      "md5": "bd34be744ef1278ff8347eadaa96f7cd"
+      "md5": "73249b4c15c842b64dd3bdce3ae79efa"
     },
     "tft/gui.tft": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui.tft",
