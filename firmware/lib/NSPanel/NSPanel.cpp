@@ -767,21 +767,23 @@ bool NSPanel::_initTFTUpdate() {
 
   LOG_DEBUG("Will start TFT upload, TFT file size: ", file_size);
   // TODO: Detect if new protocol is not supported, in that case set flag in flash and restart and then continue flash with legacy mode.
-  // Send whmi-wri command to initiate upload
+  // Send whmi-wri command to initiate upload. The baud param ALWAYS comes
+  // from _tftBaud() — the same value Serial2 switches to below — so talk
+  // and param can never diverge (the 0.1.171 root cause).
   std::string commandString;
   if (NSPMConfig::instance->use_new_upload_protocol) {
     LOG_INFO("Starting upload using v1.2 protocol.");
     commandString = "whmi-wris ";
     commandString.append(std::to_string(file_size));
     commandString.append(",");
-    commandString.append(std::to_string(NSPMConfig::instance->tft_upload_baud));
+    commandString.append(std::to_string(_tftBaud()));
     commandString.append(",1");
   } else {
     LOG_INFO("Starting upload using v1.0 protocol.");
     commandString = "whmi-wri ";
     commandString.append(std::to_string(file_size));
     commandString.append(",");
-    commandString.append(std::to_string(NSPMConfig::instance->tft_upload_baud));
+    commandString.append(std::to_string(_tftBaud()));
     commandString.append(",1");
   }
   NSPanel::_clearSerialBuffer();
