@@ -164,8 +164,12 @@ class NSPanelCoreManager:
         # paths only, so hashing first would leave the checksum cache saying
         # bundled while /download_* serves overlay bytes — permanent OTA
         # re-trigger loop after every restart with an active overlay.
+        # NOTE: refresh_ota_cache is a COROUTINE — it must be awaited on the
+        # loop, never passed to the executor (that schedules the coroutine
+        # object itself and _ota_md5 becomes unusable → every later upload
+        # 500s with "'coroutine' object does not support item assignment").
         self._restore_firmware_overlay()
-        self._ota_md5 = await self.hass.async_add_executor_job(self.refresh_ota_cache)
+        await self.refresh_ota_cache()
         self._reschedule_firmware_check()
         _LOGGER.info("NSPanel Core manager started")
 

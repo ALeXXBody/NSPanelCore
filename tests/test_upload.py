@@ -149,3 +149,30 @@ def test_blank_tft_fixture_valid():
     assert d[0xC:0x10] == bytes.fromhex("e0014001") and d[0x14] == 0x03
     assert struct.unpack("<I", d[0x3C:0x40])[0] == len(d)
     assert len(d) < 1_000_000  # fast test vehicle, not a 16MB flash
+
+
+def test_refresh_ota_cache_yields_dict_not_coroutine():
+    """Regression: startup scheduled the async refresh in the executor, so
+    _ota_md5 became a coroutine object and every later upload 500'd with
+    "'coroutine' object does not support item assignment"."""
+    import asyncio
+
+    import nspanel_core.manager as M
+
+    class _Hass:
+        async def async_add_executor_job(self, fn, *a):
+            return fn(*a)
+
+    mgr = M.NSPanelCoreManager.__new__(M.NSPanelCoreManager)
+    mgr.config = IntegrationConfig()
+    mgr.hass = _Hass()
+    mgr._ota_overlay = {}
+    mgr._ota_active_version = ""
+
+    async def go():
+        await mgr.refresh_ota_cache()
+
+    asyncio.run(go())
+    assert isinstance(mgr._ota_md5, dict), f"_ota_md5 is {type(mgr._ota_md5)}"
+    assert mgr._ota_md5.get("tft/gui.tft"), "tft hash missing"
+    mgr._ota_md5["tft/gui.tft"] = "x"  # must not raise
