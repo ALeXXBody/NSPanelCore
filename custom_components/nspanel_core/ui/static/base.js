@@ -409,7 +409,7 @@ try {
     var filename = $("#firmware")
       .val()
       .replace(/C:\\fakepath\\/i, "");
-    $("#save_new_firmware_modal_subtext").html(
+    $("#save_new_firmware_modal_subtext").text(
       "Selected file: '" + filename + "'.",
     );
     $("#firmware_upload_submit_button").removeClass("btn-disabled");
@@ -419,7 +419,7 @@ try {
     var filename = $("#data_file")
       .val()
       .replace(/C:\\fakepath\\/i, "");
-    $("#save_new_data_file_modal_subtext").html(
+    $("#save_new_data_file_modal_subtext").text(
       "Selected file: '" + filename + "'.",
     );
     $("#data_file_upload_submit_button").removeClass("btn-disabled");
@@ -429,7 +429,7 @@ try {
     var filename = $("#tft_file")
       .val()
       .replace(/C:\\fakepath\\/i, "");
-    $("#save_new_tft_file_modal_subtext").html(
+    $("#save_new_tft_file_modal_subtext").text(
       "Selected file: '" + filename + "'.",
     );
     $("#tft_upload_submit_button").removeClass("btn-disabled");
@@ -472,7 +472,7 @@ try {
       var filename = $("#firmware")
         .val()
         .replace(/C:\\fakepath\\/i, "");
-      $("#save_new_firmware_modal_subtext").html(
+      $("#save_new_firmware_modal_subtext").text(
         "Selected file: '" + filename + "'.",
       );
       $("#firmware_upload_submit_button").removeClass("btn-disabled");
@@ -490,7 +490,7 @@ try {
       var filename = $("#data_file")
         .val()
         .replace(/C:\\fakepath\\/i, "");
-      $("#save_new_data_file_modal_subtext").html(
+      $("#save_new_data_file_modal_subtext").text(
         "Selected file: '" + filename + "'.",
       );
       $("#data_file_upload_submit_button").removeClass("btn-disabled");
@@ -508,7 +508,9 @@ try {
       var filename = $("#tft_file")
         .val()
         .replace(/C:\\fakepath\\/i, "");
-      $("#tft_file").html("Selected file: '" + filename + "'.");
+      $("#save_new_tft_file_modal_subtext").text(
+        "Selected file: '" + filename + "'.",
+      );
       $("#tft_upload_submit_button").removeClass("btn-disabled");
     }
   });
