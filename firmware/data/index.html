@@ -131,10 +131,10 @@
     // About the same as $(document).ready(....)
     document.addEventListener("DOMContentLoaded", () => {
       var log_level_select = document.getElementById("log_level");
-      var upload_buad_rate_select = document.getElementById("upload_buad_rate");
+      var upload_baud_rate_select = document.getElementById("upload_baud_rate");
 
       log_level_select.value = "%log_level%";
-      upload_buad_rate_select.value = "%tft_upload_baud%";
+      upload_baud_rate_select.value = "%tft_upload_baud%";
     });
   </script>
 </head>
@@ -458,19 +458,19 @@
         </div>
 
         <div class="mt-4">
-          <label for="upload_buad_rate" class="block mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">Upload baud rate</label>
+          <label for="upload_baud_rate" class="block mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">Upload baud rate</label>
           <div class="flex">
             <span
               class="inline-flex items-center px-3 text-sm text-gray-900 dark:text-gray-100 bg-gray-200 dark:bg-gray-700 border rounded-e-0 border-gray-300 dark:border-gray-600 rounded-s-md   ">
               <svg class="w-4 h-4 text-gray-500 dark:text-gray-400 " aria-hidden="true" fill="currentColor" viewBox="0 0 20 20"
                 xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <title>Upload buad rate</title>
+                <title>Upload baud rate</title>
                 <path
                   d="M12,16A3,3 0 0,1 9,13C9,11.88 9.61,10.9 10.5,10.39L20.21,4.77L14.68,14.35C14.18,15.33 13.17,16 12,16M12,3C13.81,3 15.5,3.5 16.97,4.32L14.87,5.53C14,5.19 13,5 12,5A8,8 0 0,0 4,13C4,15.21 4.89,17.21 6.34,18.65H6.35C6.74,19.04 6.74,19.67 6.35,20.06C5.96,20.45 5.32,20.45 4.93,20.07V20.07C3.12,18.26 2,15.76 2,13A10,10 0 0,1 12,3M22,13C22,15.76 20.88,18.26 19.07,20.07V20.07C18.68,20.45 18.05,20.45 17.66,20.06C17.27,19.67 17.27,19.04 17.66,18.65V18.65C19.11,17.2 20,15.21 20,13C20,12 19.81,11 19.46,10.1L20.67,8C21.5,9.5 22,11.18 22,13Z" />
               </svg>
             </span>
 
-            <select name="upload_buad_rate" id="upload_buad_rate" class="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm rounded-e-md focus:ring-blue-500
+            <select name="upload_baud_rate" id="upload_baud_rate" class="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm rounded-e-md focus:ring-blue-500
                 focus:border-blue-500 block w-full p-2.5   
                  ">
               <option value="2400">2400</option>

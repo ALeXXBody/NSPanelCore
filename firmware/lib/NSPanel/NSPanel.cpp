@@ -139,6 +139,19 @@ int NSPanel::getComponentIntVal(const char *componentId) {
   }
 
   if (Serial2.available() > 0 && Serial2.read() == 0x71) {
+    // The 0x71 reply is 8 bytes (0x71 + LE32 + FF FF FF). The old code read
+    // the 4 payload bytes immediately — Serial2.read() returns -1 when empty,
+    // silently corrupting the value on a slow display. Wait bounded for all 7.
+    unsigned long _payload_start = millis();
+    while (Serial2.available() < 7 && millis() - _payload_start < 500) {
+      vTaskDelay(pdMS_TO_TICKS(5));
+    }
+    if (Serial2.available() < 7) {
+      LOG_ERROR("Short 0x71 frame from display; expected 7 more bytes.");
+      this->_clearSerialBuffer();
+      xSemaphoreGive(this->_mutexReadSerialData);
+      return -254;
+    }
     value = Serial2.read();
     value += Serial2.read() << 8;
     value += Serial2.read() << 16;
@@ -368,7 +381,10 @@ void NSPanel::attachWakeCallback(void (*callback)()) {
 }
 
 void IRAM_ATTR NSPanel::_onSerialData(void) {
-  if (xSemaphoreTake(NSPanel::instance->_mutexReadSerialData, 5 * portTICK_PERIOD_MS) != pdTRUE) {
+  // NB: timeout is in TICKS (pdMS_TO_TICKS), not ms. The old code multiplied
+  // instead of dividing (hundreds of ms wait) which blocked the
+  // highest-priority UART event task and overran the 256-byte RX ring.
+  if (xSemaphoreTake(NSPanel::instance->_mutexReadSerialData, pdMS_TO_TICKS(5)) != pdTRUE) {
     // Another task is busy with the UART. The next UART event will retry.
     return;
   }
@@ -454,7 +470,8 @@ void NSPanel::_taskProcessPanelOutput(void *param) {
         // Done with item, pop it off the queue
         NSPanel::instance->_processQueue.pop();
         // Brief yield to let other tasks run between events.
-        vTaskDelay(1 / portTICK_PERIOD_MS);
+        // NB: `1 / portTICK_PERIOD_MS` is 0 ticks at 100Hz (no yield at all).
+        vTaskDelay(pdMS_TO_TICKS(1));
       }
     }
   }
@@ -490,7 +507,8 @@ void NSPanel::_sendCommand(NSPanelCommand *command) {
   if (command->expectResponse) {
     unsigned int start_wait = millis();
     while (Serial2.available() == 0) {
-      vTaskDelay(20);
+      // NB: ticks, not ms. Bare `vTaskDelay(20)` waits 200ms at 100Hz tick.
+      vTaskDelay(pdMS_TO_TICKS(20));
       if (millis() - start_wait >= command->timeout) {
         break;
       }
@@ -780,7 +798,7 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
   NSPanel::instance->_sendCommandEndSequence();
   LOG_DEBUG("Sent TFT upload command: ", commandString.c_str());
 
-  // Switch to desiered upload buad rate.
+  // Switch to desired upload baud rate.
   vTaskDelay(50 / portTICK_PERIOD_MS);
   int32_t baud_diff = NSPMConfig::instance->tft_upload_baud - Serial2.baudRate();
   if (baud_diff < 0) {
