@@ -23,7 +23,10 @@
       try { localStorage.setItem('nspanel-theme', dark ? 'dark' : 'light'); } catch (e) {}
     }
     (function () {
-      if (nspanel_is_dark()) document.documentElement.classList.add('dark');
+      // Apply resolved theme immediately (before first paint): this both
+      // adds AND removes the class, unlike a bare classList.add which could
+      // never switch back to light once 'dark' was hardcoded on <html>.
+      nspanel_apply_theme(nspanel_is_dark());
       document.addEventListener('DOMContentLoaded', function () {
         var box = document.getElementById('theme_toggle');
         if (box) box.checked = document.documentElement.classList.contains('dark');
@@ -157,13 +160,12 @@
     </div>
   </div>
 
-  <header class="brandbar">
+  <header class="brandbar slim">
     <svg class="brandmark" viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="8" width="48" height="48" rx="12" fill="none" stroke="currentColor" stroke-width="4"/><text x="32" y="45" text-anchor="middle" font-size="34" font-weight="700" fill="currentColor" font-family="system-ui,sans-serif">C</text></svg>
     <div class="brandtext">
-      <h1>NSPanel <span>Core</span></h1>
-      <p class="version">Version %version% <span class="dot" id="status_dot" title="Panel reachable"></span></p>
+      <h1>NSPanel <span>Core</span> <span class="ver">%version%</span><span class="dot" id="status_dot" title="Panel reachable"></span></h1>
     </div>
-    <label class="theme-switch" title="Dark mode">
+    <label class="theme-switch compact" title="Dark mode">
       <input type="checkbox" id="theme_toggle" onchange="toggle_theme(this.checked)">
       <span class="track" aria-hidden="true"></span>
     </label>
@@ -177,16 +179,6 @@
           <input type="text" name="wifi_hostname" id="wifi_hostname" placeholder="Device name" value="%wifi_hostname%" required maxlength="32">
         </label>
         <p class="hint">Used on first registration only (A–Z a–z 0–9 - _). Rename later from Home Assistant.</p>
-        <label class="field"><span>Log level</span>
-          <select name="log_level" id="log_level">
-            <option value="0">None</option>
-            <option value="1">Error</option>
-            <option value="2">Warning</option>
-            <option value="3">Info</option>
-            <option value="4">Debug</option>
-            <option value="5">Trace</option>
-          </select>
-        </label>
       </section>
 
       <section class="card">
@@ -220,8 +212,20 @@
         </label>
       </section>
 
-      <section class="card">
-        <h2>Display upload</h2>
+      <details class="card advanced" id="advanced_section">
+        <summary>Advanced</summary>
+        <div class="details-body">
+        <label class="field"><span>Log level</span>
+          <select name="log_level" id="log_level">
+            <option value="0">None</option>
+            <option value="1">Error</option>
+            <option value="2">Warning</option>
+            <option value="3">Info</option>
+            <option value="4">Debug</option>
+            <option value="5">Trace</option>
+          </select>
+        </label>
+        <div class="seglabel">Display upload protocol</div>
         <div class="seg" role="radiogroup" aria-label="Upload protocol">
           <label><input type="radio" name="upload_protocol" value="latest" %upload_proto_latest_checked%><span>v1.2</span></label>
           <label><input type="radio" name="upload_protocol" value="legacy" %upload_proto_legacy_checked%><span>v1.0</span></label>
@@ -243,16 +247,17 @@
           </select>
         </label>
         <p class="hint">v1.2 works on most panels; use v1.0 as fallback. If uploads fail, try 115200 or 9600.</p>
-      </section>
+        <button type="button" class="btn btn-danger btn-block" onclick="return confirmAction('Erase all settings and reboot? You will need to set up WiFi again.', '/factory_reset');">Factory reset</button>
+        </div>
+      </details>
 
-      <div class="actions">
+      <div class="actions sticky">
         <button type="submit" class="btn btn-primary">Save</button>
         <button type="button" class="btn btn-ghost" onclick="return confirmAction('Reboot the panel now?', '/do_reboot');">Reboot</button>
-        <button type="button" class="btn btn-danger" onclick="return confirmAction('Erase all settings and reboot? You will need to set up WiFi again.', '/factory_reset');">Factory reset</button>
       </div>
     </form>
   </main>
 
-  <footer>NSPanel Core · smart wall OS</footer>
+  <footer>NSPanel <span class="core">Core</span> · smart wall OS</footer>
 </body>
 </html>

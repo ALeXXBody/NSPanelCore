@@ -135,3 +135,85 @@ def test_two_phase_single_setting():
     # The switch to the upload baud happens exactly once, AFTER whmi-wris
     # is accepted, using the same value as the whmi param.
     assert "Serial2.updateBaudRate(talkBaud)" in src
+
+
+# ---- Panel web UI contract (P88/P89): the ESP-hosted setup page ----
+# These guard the exact bugs found during the redesign audit:
+#  W1  duplicate element id (popup-modal AND not_connected_modal on one div)
+#  W2  duplicate attribute (two value= on the legacy radio)
+#  W3  broken "%...%" placeholders and missing form fields (backend contract)
+#  W4  dead JS references (functions/IDs that no longer exist)
+#  W5  dead assets (reboot.js referenced a nonexistent endpoint + missing jQuery)
+
+WEB_FIELDS = [
+    "wifi_hostname", "wifi_ssid", "wifi_psk", "log_level",
+    "mqtt_server", "mqtt_port", "mqtt_username", "mqtt_psk",
+    "upload_baud_rate", "upload_protocol",
+]
+WEB_PLACEHOLDERS = [
+    "version", "wifi_hostname", "wifi_ssid", "wifi_psk",
+    "mqtt_server", "mqtt_port", "mqtt_username", "mqtt_psk",
+    "log_level", "upload_proto_latest_checked", "upload_proto_legacy_checked",
+    "tft_upload_baud",
+]
+WEB_JS_IDS = [
+    "theme_toggle", "select_wifi_modal", "available_wifi_networks",
+    "wifi_failed_to_get_networks", "wifi_no_networks_found", "wifi_wait_div",
+    "available_wifi_networks_tbody", "wifi_ssid", "wifi_psk", "log_level",
+    "upload_baud_rate", "conn_modal", "conn_modal_text", "config",
+]
+
+
+def _web() -> str:
+    return (FW / "data" / "index.html").read_text(errors="replace")
+
+
+def test_w1_no_duplicate_ids():
+    ids = re.findall(r'id="([^"]+)"', _web())
+    dupes = sorted({i for i in ids if ids.count(i) > 1})
+    assert not dupes, f"W1 REGRESSION: duplicate id attributes: {dupes}"
+
+
+def test_w2_no_duplicate_attributes():
+    for m in re.finditer(r"<(input|button|div|form|select)[^>]*>", _web()):
+        attrs = re.findall(r"([a-zA-Z-]+)=", m.group(0))
+        dups = {a for a in attrs if attrs.count(a) > 1}
+        assert not dups, f"W2 REGRESSION: duplicate attribute in {m.group(0)[:80]!r}: {dups}"
+
+
+def test_w3_backend_contract_intact():
+    html = _web()
+    missing_ph = [v for v in WEB_PLACEHOLDERS if f"%{v}%" not in html]
+    assert not missing_ph, f"W3 REGRESSION: missing template placeholders: {missing_ph}"
+    missing_f = [f for f in WEB_FIELDS if f'name="{f}"' not in html]
+    assert not missing_f, f"W3 REGRESSION: missing form fields: {missing_f}"
+    assert 'method="POST"' in html and 'action="/save_config"' in html, (
+        "W3 REGRESSION: save form must POST to /save_config"
+    )
+
+
+def test_w4_js_refs_all_resolve():
+    html = _web()
+    defined = set(re.findall(r'id="([^"]+)"', html))
+    for ref in re.findall(r'getElementById\("([^"]+)"', html):
+        assert ref in defined, f"W4 REGRESSION: JS references missing id #{ref}"
+
+
+def test_w5_no_dead_static_refs():
+    html = _web()
+    assert "reboot.js" not in html, "W5 REGRESSION: dead reboot.js reference is back"
+    assert "$(" not in html, "W5 REGRESSION: jQuery reference is back (no jQuery on panel)"
+    assert "connection_test" not in html, "W5 REGRESSION: dead /connection_test reference is back"
+    static_dir = FW / "data" / "static"
+    for m in re.finditer(r'(?:src|href)="(static/[^"]+?)(?:\?[^"]*)?"', html):
+        p = static_dir / m.group(1).split("/", 1)[1]
+        assert p.exists(), f"W5 REGRESSION: referenced static file missing: {m.group(1)}"
+
+
+def test_compact_layout_budget():
+    """The compact redesign must stay compact: total web UI under 24KB
+    (was 57KB before the rewrite)."""
+    total = sum(
+        p.stat().st_size for p in (FW / "data").rglob("*") if p.is_file()
+    )
+    assert total < 24 * 1024, f"layout budget blown: data/ is {total} bytes"
