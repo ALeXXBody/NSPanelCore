@@ -28,6 +28,12 @@
                 Waiting
             </span>
         `;
+      } else if (state == "awaiting_accept") {
+        return html`
+            <span class="flex items-end justify-end text-right italic font-light text-sm">
+                Waiting for acceptance
+            </span>
+        `;
       } else if (state == "updating_fw") {
         return html`
             <span class="flex items-end justify-end text-right italic font-light text-sm">

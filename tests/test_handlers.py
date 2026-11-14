@@ -283,3 +283,82 @@ async def test_panel_actions(mgr, panel):
     assert not any(isinstance(k, tuple) and k[0] == topic_safe(panel.mac) for k in mgr._relay_state)
     assert panel.mac not in mgr._last_telemetry
     assert panel.mac not in mgr._last_ota_trigger
+
+
+async def test_reregister_accepted_panel_stays_online():
+    """Re-register from an ACCEPTED panel (every reboot) must re-assert
+    online — never brand it awaiting_accept.
+
+    Regression: _handle_register_request published "awaiting_accept"
+    unconditionally, so each reboot showed "Unknown state awaiting_accept!"
+    (read as "not registered to a manager") until the next offline/online
+    flap. The template also lacked the branch, alarming instead of informing.
+    """
+    from nspanel_core import manager as M
+
+    cfg = IntegrationConfig()
+    cfg.rooms.append(RoomConfig(id=1, name="Living"))
+    p = PanelConfig(id=7, mac="aabbcc", name="Kitchen",
+                    wifi_hostname="Kitchen", room_id=1)
+    p.accepted = True
+    cfg.panels.append(p)
+    mgr = M.NSPanelCoreManager.__new__(M.NSPanelCoreManager)
+    mgr.config = cfg
+    mgr.stomp = None
+    mgr._last_ota_trigger = {}
+    mgr._ota_md5 = {}
+    published = []
+
+    async def fake_save():
+        pass
+
+    async def fake_publish(topic, payload, retain=False):
+        published.append((topic, payload))
+
+    async def fake_status(panel, state, *a, **k):
+        published.append(("__status__", state))
+
+    mgr.async_save = fake_save
+    mgr._publish = fake_publish
+    mgr._publish_panel_status = fake_status
+    mgr.add_message = lambda title, message: None
+
+    data = {"mac_origin": "AABBCC", "friendly_name": "Kitchen",
+            "model": "sonoff", "version": "0.1.171"}
+    await mgr._handle_register_request("aabbcc", data)
+    states = [s for t, s in published if t == "__status__"]
+    assert states, "register must publish a status"
+    assert states[-1] == "online", f"accepted re-register ended at {states[-1]!r}"
+    assert "awaiting_accept" not in states
+
+
+async def test_register_new_panel_awaits_accept():
+    """A genuinely new panel must still land on awaiting_accept."""
+    from nspanel_core import manager as M
+
+    cfg = IntegrationConfig()
+    mgr = M.NSPanelCoreManager.__new__(M.NSPanelCoreManager)
+    mgr.config = cfg
+    mgr.stomp = None
+    mgr._last_ota_trigger = {}
+    mgr._ota_md5 = {}
+    published = []
+
+    async def fake_save():
+        pass
+
+    async def fake_publish(topic, payload, retain=False):
+        pass
+
+    async def fake_status(panel, state, *a, **k):
+        published.append(state)
+
+    mgr.async_save = fake_save
+    mgr._publish = fake_publish
+    mgr._publish_panel_status = fake_status
+    mgr.add_message = lambda title, message: None
+
+    await mgr._handle_register_request(
+        "ddeeff", {"friendly_name": "NewPanel", "model": "sonoff"})
+    assert published[-1] == "awaiting_accept"
+    assert any(p.mac == "ddeeff" for p in cfg.panels)

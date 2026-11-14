@@ -871,7 +871,16 @@ class NSPanelCoreManager:
                 f"NSPanel '{friendly}' ({mac}) wants to join. Accept or deny it on the NSPanels page.",
             )
 
-        await self._publish_panel_status(panel, "awaiting_accept")
+        # Status reflects reality, not the event: a re-register from a known
+        # panel (every reboot) must re-assert its real state. The old code
+        # published "awaiting_accept" unconditionally, so each reboot of an
+        # ACCEPTED panel branded it awaiting in the UI (which has no branch
+        # for it and alarmed "Unknown state awaiting_accept!") until the next
+        # offline/online flap — reading as "not registered to a manager".
+        if created or (not panel.accepted or panel.denied):
+            await self._publish_panel_status(panel, "awaiting_accept")
+        else:
+            await self._publish_panel_status(panel, "online")
 
         # Store registration metadata (same fields the C++ bridge kept).
         # The manager is the authority on the panel name for accepted panels:
