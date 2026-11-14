@@ -70,6 +70,7 @@ private:
   /// @return The number of bytes downloaded
   static bool _initTFTUpdate(int communication_baud_rate);
   static bool _updateTFTOTA();
+  static bool _streamTFTFile(const std::string &downloadUrl, unsigned long file_size, bool &heard_any);
   std::queue<std::vector<char>> _processQueue;
   TaskHandle_t _taskHandleProcessPanelOutput;
   static void _taskProcessPanelOutput(void *param);

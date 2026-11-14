@@ -22,6 +22,27 @@ func NextBaud(current, up int) int {
 	return 115200
 }
 
+// BlindPasses mirrors the _updateTFTOTA recovery sequence: 115200 first,
+// then 9600 (Nextion default after a corrupt flash) when the first pass
+// heard nothing — capped to recovery-sized files (<=1MB): 16MB at 9600
+// baud is ~4.5h and needs USB-TTL instead.
+func BlindPasses(firstHeardAny bool, fileSize uint32) []int {
+	if firstHeardAny {
+		return []int{}
+	}
+	const maxRecovery = 1048576
+	if fileSize <= maxRecovery {
+		return []int{9600}
+	}
+	return []int{}
+}
+
+// PowerSettleMs mirrors _powerCycleDisplay: 3s off (drain caps) + 3s settle
+// (Nextion cold-boot to bootloader). The old 1.2s settle shouted whmi-wris
+// at a display that was still booting.
+const PowerOffMs = 3000
+const PowerSettleMs = 3000
+
 // Neighbors mirrors _neighborBaud hunting (garbled reply = 2x off).
 func Neighbors(baud int) (down, up int) {
 	std := []int{9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600}

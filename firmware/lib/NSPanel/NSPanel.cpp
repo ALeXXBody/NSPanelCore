@@ -843,10 +843,14 @@ static void _powerCycleDisplay() {
   // clean reset. GPIO4 switches the screen supply on NSPanel hardware.
   // OFF time is deliberately long (3s): the display's capacitors hold
   // charge and a short cut only browns it out without a clean reset.
+  // Settle after release is 3s: the Nextion needs ~2s from reset release
+  // to reach its bootloader prompt; the old 1.2s settle sent whmi-wris
+  // while the display was still booting, so every probe and every blind
+  // stream started deaf.
   digitalWrite(4, HIGH); // Turn off power to the display
   vTaskDelay(3000 / portTICK_PERIOD_MS);
   digitalWrite(4, LOW); // Turn on power to the display
-  vTaskDelay(1200 / portTICK_PERIOD_MS);
+  vTaskDelay(3000 / portTICK_PERIOD_MS);
 }
 
 static void _sendWhmiWrisAt(unsigned long file_size, uint32_t baud_param) {
@@ -954,6 +958,115 @@ static int _neighborBaud(int baud, bool up) {
   return 0;
 }
 
+// Streams the whole TFT file over Serial2 with silence-tolerant v1.2
+// semantics. Returns true when every byte was sent (not when the display
+// acknowledged — a dead TX line still "completes"). heard_any reports
+// whether the display made ANY sound during the pass; callers use it to
+// decide whether a second blind pass at another baud is worth it.
+bool NSPanel::_streamTFTFile(const std::string &downloadUrl, unsigned long file_size, bool &heard_any) {
+  unsigned long nextStartWriteOffset = 0;
+  unsigned long lastReadByte = 0;
+  heard_any = false;
+
+  if (esp_get_free_heap_size() < 4096) {
+    LOG_ERROR("Not enough free memory to flash device! Will reboot.");
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    ESP.restart();
+  }
+
+  static uint8_t dataBuffer[4096];
+
+  // Loop until break when all firmware has finished uploading (data available in stream == 0)
+  while (true) {
+    // Calculate next chunk size
+    int next_write_size;
+    if (file_size - lastReadByte > 4096) {
+      next_write_size = 4096;
+    } else {
+      next_write_size = file_size - lastReadByte;
+    }
+    size_t bytesReceived = 0;
+    int _dl_tries = 0;
+    while (bytesReceived != (size_t)next_write_size) {
+      bytesReceived = HttpLib::DownloadChunk(dataBuffer, downloadUrl.c_str(), nextStartWriteOffset, next_write_size);
+      if (bytesReceived != (size_t)next_write_size) {
+        LOG_ERROR("Bytes received: ", bytesReceived, " requested ", next_write_size, ". Will retry.");
+        vTaskDelay(250 / portTICK_PERIOD_MS);
+        if (++_dl_tries > 20) {
+          LOG_ERROR("TFT chunk download failed 20 times, aborting OTA attempt.");
+          return false;
+        }
+      } else {
+        _dl_tries = 0;
+      }
+    }
+
+    // v1.2 upload protocol (see Nextion docs): after each 4KB block the
+    // device usually stays SILENT (continue streaming); it speaks only to
+    // request a retransmit (0x08 + LE32 offset, typically after the first
+    // block) or with a legacy 0x05. Silence/garbage therefore means
+    // CONTINUE — never rewind/abort on it (that kills healthy uploads and
+    // can never recover a display whose TX line is dead). 0x08 offsets are
+    // validated; a short drain timeout keeps throughput up.
+    Serial2.write(dataBuffer, bytesReceived);
+    unsigned long _sent_up_to = nextStartWriteOffset + bytesReceived;
+    NSPanel::instance->_update_progress = ((float)_sent_up_to / (float)file_size) * 100;
+
+    std::string return_string;
+    uint16_t recevied_bytes = NSPanel::instance->_readDataToString(&return_string, 500, true);
+    if (!return_string.empty()) {
+      heard_any = true;
+    }
+    if (!return_string.empty() && return_string[0] == 0x08) {
+      // 0x08 frames carry a BINARY 4-byte LE offset — generic text heuristics
+      // (FF terminator, 0x05 sniff) corrupt it (e.g. offset bytes containing
+      // FF/05 produce fabricated offsets and silent write divergence).
+      // Read exactly 4 more bytes, bounded, then decode.
+      unsigned long _f8_start = millis();
+      while (return_string.length() < 5) {
+        if (Serial2.available() <= 0) {
+          if (millis() - _f8_start > 5000) {
+            LOG_ERROR("Incomplete 0x08 offset frame (got ", return_string.length(),
+                      " of 5 bytes in 5 s) — aborting attempt, will re-init.");
+            return false;
+          }
+          vTaskDelay(20 / portTICK_PERIOD_MS);
+          continue;
+        }
+        return_string.push_back(Serial2.read());
+      }
+      uint32_t readNextOffset = return_string[1];
+      readNextOffset |= return_string[2] << 8;
+      readNextOffset |= return_string[3] << 16;
+      readNextOffset |= return_string[4] << 24;
+      if (readNextOffset > file_size) {
+        LOG_ERROR("Panel requested offset ", readNextOffset, " beyond file size ", file_size,
+                  " — aborting attempt.");
+        return false;
+      }
+      // Offset 0 is a legitimate "start over" request in the v1.2 protocol.
+      // Aborting here converted a recoverable hiccup into a half-written
+      // display (the classic System Data ERROR brick).
+      LOG_ERROR("Panel requested retransmit from offset ", readNextOffset, ".");
+      nextStartWriteOffset = readNextOffset;
+      lastReadByte = readNextOffset;
+      continue;
+    }
+    // 0x05, empty (silence) or anything else: chunk accepted, move on.
+    nextStartWriteOffset = _sent_up_to;
+    lastReadByte = _sent_up_to;
+    if (lastReadByte >= file_size) {
+      NSPanel::instance->_update_progress = 100;
+      LOG_INFO("TFT Upload complete, processed ", lastReadByte, " bytes.");
+      return true;
+    }
+    if (!return_string.empty() && return_string[0] != 0x05) {
+      LOG_TRACE("Ignoring ", recevied_bytes, " bytes of non-ACK chatter from panel.");
+    }
+    vTaskDelay(20 / portTICK_PERIOD_MS); // pacing: don't overrun the display UART buffer
+  }
+}
+
 bool NSPanel::_updateTFTOTA() {
   LOG_INFO("_updateTFTOTA Started.");
   bool init_ok = NSPanel::_initTFTUpdate(115200);
@@ -1044,103 +1157,29 @@ bool NSPanel::_updateTFTOTA() {
       _sendWhmiWris(file_size);
     }
   }
-  unsigned long startWaitingForOKForNextChunk = 0;
-  unsigned long nextStartWriteOffset = 0;
-  unsigned long lastReadByte = 0;
 
-  if (esp_get_free_heap_size() < 4096) {
-    LOG_ERROR("Not enough free memory to flash device! Will reboot.");
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
-    ESP.restart();
+  // Blind pass 1 at 115200. A corrupt flash resets the display's stored
+  // baud to the Nextion default 9600 — a 115200 stream is then unheard no
+  // matter how healthy the wire is. So a fully silent first pass on a
+  // recovery-sized file (<=1MB, e.g. the blank TFT) is followed by a second
+  // blind pass at 9600. Large files skip the second pass: 16MB at 9600 is
+  // ~4.5h of shouting into possibly nothing — that needs USB-TTL instead.
+  bool heard_any = false;
+  if (!_streamTFTFile(downloadUrl, file_size, heard_any)) {
+    return false;
   }
-
-  static uint8_t dataBuffer[4096];
-
-  // Loop until break when all firmware has finished uploading (data available in stream == 0)
-  while (true) {
-    // Calculate next chunk size
-    int next_write_size;
-    if (file_size - lastReadByte > 4096) {
-      next_write_size = 4096;
-    } else {
-      next_write_size = file_size - lastReadByte;
+  if (!heard_any && file_size <= 1048576) {
+    LOG_ERROR("Blind 115200 pass heard nothing — retrying blind at 9600 (Nextion default).");
+    Serial2.updateBaudRate(9600);
+    _powerCycleDisplay();
+    _sendWhmiWrisAt(file_size, 9600);
+    heard_any = false;
+    if (!_streamTFTFile(downloadUrl, file_size, heard_any)) {
+      return false;
     }
-    size_t bytesReceived = 0;
-    int _dl_tries = 0;
-    while (bytesReceived != next_write_size) {
-      bytesReceived = HttpLib::DownloadChunk(dataBuffer, downloadUrl.c_str(), nextStartWriteOffset, next_write_size);
-      if (bytesReceived != next_write_size) {
-        LOG_ERROR("Bytes received: ", bytesReceived, " requested ", next_write_size, ". Will retry.");
-        vTaskDelay(250 / portTICK_PERIOD_MS);
-        if (++_dl_tries > 20) {
-          LOG_ERROR("TFT chunk download failed 20 times, aborting OTA attempt.");
-          return false;
-        }
-      } else {
-        _dl_tries = 0;
-      }
-    }
-
-    // v1.2 upload protocol (see Nextion docs): after each 4KB block the
-    // device usually stays SILENT (continue streaming); it speaks only to
-    // request a retransmit (0x08 + LE32 offset, typically after the first
-    // block) or with a legacy 0x05. Silence/garbage therefore means
-    // CONTINUE — never rewind/abort on it (that kills healthy uploads and
-    // can never recover a display whose TX line is dead). 0x08 offsets are
-    // validated; a short drain timeout keeps throughput up.
-    Serial2.write(dataBuffer, bytesReceived);
-    unsigned long _sent_up_to = nextStartWriteOffset + bytesReceived;
-    NSPanel::instance->_update_progress = ((float)_sent_up_to / (float)file_size) * 100;
-
-    std::string return_string;
-    uint16_t recevied_bytes = NSPanel::instance->_readDataToString(&return_string, 500, true);
-    if (!return_string.empty() && return_string[0] == 0x08) {
-      // 0x08 frames carry a BINARY 4-byte LE offset — generic text heuristics
-      // (FF terminator, 0x05 sniff) corrupt it (e.g. offset bytes containing
-      // FF/05 produce fabricated offsets and silent write divergence).
-      // Read exactly 4 more bytes, bounded, then decode.
-      unsigned long _f8_start = millis();
-      while (return_string.length() < 5) {
-        if (Serial2.available() <= 0) {
-          if (millis() - _f8_start > 5000) {
-            LOG_ERROR("Incomplete 0x08 offset frame (got ", return_string.length(),
-                      " of 5 bytes in 5 s) — aborting attempt, will re-init.");
-            return false;
-          }
-          vTaskDelay(20 / portTICK_PERIOD_MS);
-          continue;
-        }
-        return_string.push_back(Serial2.read());
-      }
-      uint32_t readNextOffset = return_string[1];
-      readNextOffset |= return_string[2] << 8;
-      readNextOffset |= return_string[3] << 16;
-      readNextOffset |= return_string[4] << 24;
-      if (readNextOffset > file_size) {
-        LOG_ERROR("Panel requested offset ", readNextOffset, " beyond file size ", file_size,
-                  " — aborting attempt.");
-        return false;
-      }
-      // Offset 0 is a legitimate "start over" request in the v1.2 protocol.
-      // Aborting here converted a recoverable hiccup into a half-written
-      // display (the classic System Data ERROR brick).
-      LOG_ERROR("Panel requested retransmit from offset ", readNextOffset, ".");
-      nextStartWriteOffset = readNextOffset;
-      lastReadByte = readNextOffset;
-      continue;
-    }
-    // 0x05, empty (silence) or anything else: chunk accepted, move on.
-    nextStartWriteOffset = _sent_up_to;
-    lastReadByte = _sent_up_to;
-    if (lastReadByte >= file_size) {
-      NSPanel::instance->_update_progress = 100;
-      LOG_INFO("TFT Upload complete, processed ", lastReadByte, " bytes.");
-      break;
-    }
-    if (!return_string.empty() && return_string[0] != 0x05) {
-      LOG_TRACE("Ignoring ", recevied_bytes, " bytes of non-ACK chatter from panel.");
-    }
-    vTaskDelay(20 / portTICK_PERIOD_MS); // pacing: don't overrun the display UART buffer
+  }
+  if (!heard_any) {
+    LOG_ERROR("Both blind passes heard nothing — the display TX line appears dead; USB-TTL to the display header is the remaining path.");
   }
 
   LOG_INFO("Getting TFT MD5 checksum to store in flash.");

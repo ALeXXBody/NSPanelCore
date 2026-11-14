@@ -54,3 +54,22 @@ func TestChunk(t *testing.T) {
 		t.Fatal("chunk accounting broken")
 	}
 }
+
+func TestBlindSecondPassAt9600(t *testing.T) {
+	// A corrupt flash resets the display to the Nextion default 9600: a
+	// silent 115200 blind pass on a recovery-sized file must retry at 9600.
+	if got := fwupdate.BlindPasses(false, 408460); len(got) != 1 || got[0] != 9600 {
+		t.Fatalf("got %v", got)
+	}
+	// Heard anything -> no second pass.
+	if got := fwupdate.BlindPasses(true, 408460); len(got) != 0 {
+		t.Fatalf("got %v", got)
+	}
+	// 16MB at 9600 is hours: skip, needs USB-TTL.
+	if got := fwupdate.BlindPasses(false, 16<<20); len(got) != 0 {
+		t.Fatalf("got %v", got)
+	}
+	if fwupdate.PowerSettleMs != 3000 {
+		t.Fatal("settle must be 3s (Nextion cold-boot)")
+	}
+}
