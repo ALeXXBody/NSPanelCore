@@ -1,22 +1,22 @@
 {
-  "version": "0.1.174",
-  "notes": "Two-phase display baud (fixed-115200 handshake, configured rate post-accept) + rewritten compact dark panel setup page (no-scroll, collapsible Advanced, sticky Save, theme-toggle fix)",
+  "version": "0.1.175",
+  "notes": "Reboot/factory-reset buttons no longer navigate away (fetch + busy overlay); doRebootNow redirects / for direct visits; no-navigation W6 guard",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "c8b30b5e74be066c68b6081c4cb46e4a"
+      "md5": "b1856e8da2ec84514417ec7336a2ea67"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
-      "md5": "c084700090c27ed3439728e264c7dadb"
+      "md5": "2e1524aa87c8c10f62e340e484a4e754"
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "c8b30b5e74be066c68b6081c4cb46e4a"
+      "md5": "b1856e8da2ec84514417ec7336a2ea67"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
-      "md5": "c084700090c27ed3439728e264c7dadb"
+      "md5": "2e1524aa87c8c10f62e340e484a4e754"
     },
     "tft/gui.tft": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui.tft",
