@@ -497,3 +497,77 @@ async def test_denied_page_renders(mgr, panel):
     assert r.status == 200
     assert "Test" in r.text and "aabbcc" in r.text
     assert "Allow again" in r.text
+
+
+class _FakeStomp:
+    def __init__(self):
+        self.topics = {}
+        self.retained = {}
+
+    def update_topic(self, topic, value):
+        self.topics[topic] = value
+
+    def set_retained(self, topic, flag):
+        self.retained[topic] = flag
+
+
+class _FakeMsg:
+    def __init__(self, topic, payload):
+        self.topic = topic
+        self.payload = payload
+
+
+def _log_manager(cfg):
+    import asyncio
+
+    from nspanel_core import manager as M
+
+    p = PanelConfig(id=7, mac="aabbcc", name="Kitchen",
+                    wifi_hostname="Kitchen", room_id=1)
+    p.accepted = True
+    cfg.panels.append(p)
+    mgr = M.NSPanelCoreManager.__new__(M.NSPanelCoreManager)
+    mgr.config = cfg
+    mgr.stomp = _FakeStomp()
+    mgr._log_backlog = {}
+    return mgr, p
+
+
+async def test_panel_log_lines_get_arrival_timestamp():
+    """P91: firmware sends no timestamp — _on_panel_log must stamp arrival
+    time HA-side so the settings log page shows when, not blank."""
+    import json
+
+    from nspanel_core import manager as M  # noqa: F401
+
+    cfg = IntegrationConfig()
+    cfg.rooms.append(RoomConfig(id=1, name="Living"))
+    mgr, p = _log_manager(cfg)
+    await mgr._on_panel_log(_FakeMsg(
+        "nspanel/Kitchen/log",
+        "E4:65:B8:49:A1:00;ERROR; main.cpp:372 f(.setup) Failed to initiate NSPanel.",
+    ))
+    assert len(mgr._log_backlog["aabbcc"]) == 1
+    entry = mgr._log_backlog["aabbcc"][0]
+    assert entry.get("time"), "log entry must carry an arrival timestamp"
+    import re
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$",
+                    entry["time"]), f"bad timestamp format: {entry['time']!r}"
+    live = json.loads(mgr.stomp.topics["nspanel/aabbcc/log"])
+    assert live["time"] == entry["time"], "live topic must carry the same stamp"
+
+
+async def test_panel_log_keeps_firmware_timestamp():
+    """A firmware-provided time must never be overwritten by the stamp."""
+    import json
+
+    cfg = IntegrationConfig()
+    cfg.rooms.append(RoomConfig(id=1, name="Living"))
+    mgr, p = _log_manager(cfg)
+    await mgr._on_panel_log(_FakeMsg(
+        "nspanel/Kitchen/log",
+        json.dumps({"time": "2026-01-01T00:00:00+00:00",
+                    "level": "INFO", "message": "hi"}),
+    ))
+    entry = mgr._log_backlog["aabbcc"][0]
+    assert entry["time"] == "2026-01-01T00:00:00+00:00"

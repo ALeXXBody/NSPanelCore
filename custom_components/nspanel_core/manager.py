@@ -1798,6 +1798,12 @@ class NSPanelCoreManager:
                 entry = {"time": "", "level": "INFO", "message": text}
         except (ValueError, TypeError):
             entry = {"time": "", "level": "INFO", "message": text}
+        if not entry.get("time"):
+            # P91: the firmware sends no timestamp — stamp arrival time
+            # HA-side (the ESP has no wall clock) so the settings log page
+            # shows when each line arrived instead of a blank cell.
+            from datetime import datetime, timezone
+            entry["time"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
         backlog = self._log_backlog.setdefault(panel.mac, [])
         backlog.append(entry)
         del backlog[:-50]
