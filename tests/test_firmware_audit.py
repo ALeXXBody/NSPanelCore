@@ -105,3 +105,28 @@ def test_silent_blind_pass_retries_at_9600():
     assert "_sendWhmiWrisAt(file_size, 9600)" in src
     assert "1048576" in src, "second pass must be size-guarded (16MB at 9600 is hours)"
     assert "heard_any" in src
+
+
+def test_blind_talk_baud_matches_param():
+    """Talk baud and whmi-wris param must always agree.
+
+    Regression: the blind block hardcoded Serial2 to 115200 while sending
+    the configured baud as the switch param — the moment they differed
+    (e.g. 57600 configured), both sides went deaf and every attempt failed.
+    """
+    src = _src(NSPANEL)
+    i = src.find("Per-attempt baud ladder")
+    assert i >= 0, "baud ladder missing"
+    body = src[i:i + 1600]
+    assert "Serial2.updateBaudRate(talk)" in body
+    assert "_sendWhmiWrisAt(file_size, talk)" in body
+    assert "updateBaudRate(115200)" not in body.replace("communication_baud_rate", ""), \
+        "no hardcoded blind talk baud allowed"
+
+
+def test_blind_baud_ladder_steps_down():
+    """Attempts must step 38400 -> 19200 -> 9600 for marginal links."""
+    src = _src(NSPANEL)
+    assert "s_tft_blind_attempt" in src
+    for baud in ("38400", "19200", "9600"):
+        assert baud in src

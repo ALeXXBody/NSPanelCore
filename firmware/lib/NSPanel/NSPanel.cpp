@@ -1151,19 +1151,35 @@ bool NSPanel::_updateTFTOTA() {
       }
     }
     if (!init_ok) {
-      LOG_ERROR("Proceeding with blind tolerant upload at 115200 (no handshake).");
-      Serial2.updateBaudRate(115200);
+      // Per-attempt baud ladder for marginal links: bulk transfer corrupts
+      // at high baud while short command frames pass, so a fixed-baud blind
+      // stream can NAK-storm forever. Talk baud and whmi-wris param must
+      // ALWAYS agree — a hardcoded 115200 talk side with a configured param
+      // deafens both sides the moment they differ. Attempt 0 uses the
+      // configured baud, then steps down 38400 -> 19200 -> 9600 and holds.
+      static unsigned long s_tft_blind_attempt = 0;
+      uint32_t talk = NSPMConfig::instance->tft_upload_baud;
+      if (talk == 0) talk = 115200;
+      if (s_tft_blind_attempt == 1) {
+        talk = 38400;
+      } else if (s_tft_blind_attempt == 2) {
+        talk = 19200;
+      } else if (s_tft_blind_attempt >= 3) {
+        talk = 9600;
+      }
+      s_tft_blind_attempt++;
+      LOG_ERROR("Proceeding with blind tolerant upload (no handshake).");
+      Serial2.updateBaudRate(talk);
       _powerCycleDisplay();
-      _sendWhmiWris(file_size);
+      _sendWhmiWrisAt(file_size, talk);
     }
   }
 
-  // Blind pass 1 at 115200. A corrupt flash resets the display's stored
-  // baud to the Nextion default 9600 — a 115200 stream is then unheard no
-  // matter how healthy the wire is. So a fully silent first pass on a
-  // recovery-sized file (<=1MB, e.g. the blank TFT) is followed by a second
-  // blind pass at 9600. Large files skip the second pass: 16MB at 9600 is
-  // ~4.5h of shouting into possibly nothing — that needs USB-TTL instead.
+  // Blind passes with a baud ladder (see above): pass 1 at the attempt
+  // baud; a fully silent first pass on a recovery-sized file (<=1MB,
+  // e.g. the blank TFT) is followed by a second blind pass at 9600.
+  // Large files skip the second pass: 16MB at 9600 is ~4.5h of shouting
+  // into possibly nothing — that needs USB-TTL instead.
   bool heard_any = false;
   if (!_streamTFTFile(downloadUrl, file_size, heard_any)) {
     return false;
