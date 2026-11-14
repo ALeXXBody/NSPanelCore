@@ -135,7 +135,9 @@ void WebManager::factoryReset(AsyncWebServerRequest *request) {
 }
 
 void WebManager::doRebootNow(AsyncWebServerRequest *request) {
-  request->send(200);
+  // Redirect (like factoryReset) so a direct visit never parks the browser
+  // on a blank /do_reboot URL. The settings page itself uses fetch().
+  request->redirect("/");
   vTaskDelay(500 / portTICK_PERIOD_MS);
   ESP.restart();
 }

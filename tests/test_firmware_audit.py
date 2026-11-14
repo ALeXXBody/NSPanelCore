@@ -217,3 +217,15 @@ def test_compact_layout_budget():
         p.stat().st_size for p in (FW / "data").rglob("*") if p.is_file()
     )
     assert total < 24 * 1024, f"layout budget blown: data/ is {total} bytes"
+
+
+def test_w6_no_location_navigation():
+    """P93: action buttons must use fetch(), never location.href navigation
+    (navigating to /do_reboot parked the browser on a blank dead page)."""
+    html = _web()
+    assert "window.location.href" not in html, (
+        "W6 REGRESSION: full-page navigation is back — actions must fetch()"
+    )
+    assert "fetch(url" in html or "fetch (url" in html.replace("fetch(url", "fetch (url"), (
+        "W6 REGRESSION: confirmAction must fire fetch()"
+    )

@@ -89,8 +89,18 @@
       psk.focus();
       doConnectionCheck = true;
     }
-    function confirmAction(msg, url) {
-      if (confirm(msg)) { window.location.href = url; }
+    // Fire-and-forget actions (reboot / factory reset): fetch() so the
+    // browser NEVER leaves this page (a full navigation used to park the
+    // user on a blank /do_reboot URL while the panel rebooted).
+    // The busy overlay stays up; the 5s HEAD poller hides it on recovery.
+    // fetch WILL reject when the panel goes down mid-reboot — expected.
+    function confirmAction(msg, url, busyText) {
+      if (!confirm(msg)) return false;
+      var overlay = document.getElementById("conn_modal");
+      var text = document.getElementById("conn_modal_text");
+      if (text && busyText) text.textContent = busyText;
+      if (overlay) overlay.classList.remove("hidden");
+      try { fetch(url, {method: "GET"}).catch(function () {}); } catch (e) {}
       return false;
     }
     // Connection monitor: HEAD / every 5s. Shows the overlay after 2
@@ -247,13 +257,13 @@
           </select>
         </label>
         <p class="hint">v1.2 works on most panels; use v1.0 as fallback. If uploads fail, try 115200 or 9600.</p>
-        <button type="button" class="btn btn-danger btn-block" onclick="return confirmAction('Erase all settings and reboot? You will need to set up WiFi again.', '/factory_reset');">Factory reset</button>
+        <button type="button" class="btn btn-danger btn-block" onclick="return confirmAction('Erase all settings and reboot? You will need to set up WiFi again.', '/factory_reset', 'Erasing — the panel will restart into setup mode. Reconnect to its WiFi to configure again.');">Factory reset</button>
         </div>
       </details>
 
       <div class="actions sticky">
         <button type="submit" class="btn btn-primary">Save</button>
-        <button type="button" class="btn btn-ghost" onclick="return confirmAction('Reboot the panel now?', '/do_reboot');">Reboot</button>
+        <button type="button" class="btn btn-ghost" onclick="return confirmAction('Reboot the panel now?', '/do_reboot', 'Rebooting — this page will reconnect automatically.');">Reboot</button>
       </div>
     </form>
   </main>
