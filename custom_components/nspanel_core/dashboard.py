@@ -266,8 +266,10 @@ class PanelActionView(HomeAssistantView):
                 await manager._publish_panel_status(panel, "offline")
                 manager.notify_panels_changed()
             elif action == "delete":
-                manager.config.panels.remove(panel)
-                await manager.async_save()
+                # Route through remove_panel so per-MAC caches/listeners are
+                # purged too — inline removal leaked relay state, telemetry,
+                # OTA stamps and listeners for the deleted panel.
+                await manager.remove_panel(panel.id)
                 await manager._publish_panel_status(panel, "offline")
                 manager.notify_panels_changed()
             elif action in ("update_firmware", "update_tft"):
@@ -1061,6 +1063,14 @@ class SaveFirmwareView(OtaUploadView):
         await manager.hass.async_add_executor_job(
             manager.invalidate_ota_cache, "firmware", f"{model}/firmware.bin", dest
         )
+        # Pin the exact uploaded bytes over any overlay shadow copy and
+        # record proof — without this the panel keeps downloading the old
+        # release bytes while nothing records what was uploaded.
+        proof = await manager.hass.async_add_executor_job(
+            manager.note_custom_file, "firmware", f"{model}/firmware.bin", "manual upload"
+        )
+        _LOGGER.info("Custom firmware pinned for serving: %s", proof["md5"])
+        await manager.async_save()
         return _redirect(request, f"{URL_BASE}/settings")
 
 
@@ -1081,6 +1091,13 @@ class SaveDataFileView(OtaUploadView):
         await manager.hass.async_add_executor_job(
             manager.invalidate_ota_cache, "firmware", f"{model}/data_file.bin", dest
         )
+        # Same pinning as firmware uploads (see SaveFirmwareView): without
+        # this an overlay silently shadows the upload and no proof exists.
+        proof = await manager.hass.async_add_executor_job(
+            manager.note_custom_file, "firmware", f"{model}/data_file.bin", "manual upload"
+        )
+        _LOGGER.info("Custom data file pinned for serving: %s", proof["md5"])
+        await manager.async_save()
         return _redirect(request, f"{URL_BASE}/settings")
 
 
@@ -1140,6 +1157,9 @@ class FirmwareStatusView(HomeAssistantView):
                 "auto_check_hours": 6,
                 "served_tft": await manager.hass.async_add_executor_job(
                     manager.served_tft_info
+                ),
+                "served_firmware": await manager.hass.async_add_executor_job(
+                    manager.served_firmware_info
                 ),
             }
         )

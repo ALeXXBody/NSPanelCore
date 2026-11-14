@@ -442,17 +442,35 @@ class NSPanelCoreManager:
         except (AttributeError, TypeError):
             self._ota_md5 = {f"{kind}/{name}": digest}
         s = self.config.settings
-        s.custom_tft_name = name if kind == "tft" else s.custom_tft_name
-        s.custom_tft_md5 = digest
-        s.custom_tft_size = size
-        s.custom_tft_uploaded_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        s.custom_tft_source = label
+        # Record proof PER KIND. The old code wrote every upload into the
+        # TFT fields: an ESP firmware upload overwrote custom_tft_md5 with
+        # the firmware digest, silently voiding the TFT "manual upload"
+        # proof while recording nothing about the firmware itself.
+        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        if kind == "tft":
+            s.custom_tft_name = name
+            s.custom_tft_md5 = digest
+            s.custom_tft_size = size
+            s.custom_tft_uploaded_at = stamp
+            s.custom_tft_source = label
+        elif kind == "firmware" and name.endswith("firmware.bin"):
+            s.custom_fw_name = name
+            s.custom_fw_md5 = digest
+            s.custom_fw_size = size
+            s.custom_fw_uploaded_at = stamp
+            s.custom_fw_source = label
+        elif kind == "firmware" and name.endswith("data_file.bin"):
+            s.custom_data_name = name
+            s.custom_data_md5 = digest
+            s.custom_data_size = size
+            s.custom_data_uploaded_at = stamp
+            s.custom_data_source = label
         return {
             "filename": name,
             "bytes": size,
             "md5": digest,
             "source": label,
-            "uploaded_at": s.custom_tft_uploaded_at,
+            "uploaded_at": stamp,
         }
 
     def note_custom_tft(self, filename: str) -> dict:
@@ -497,6 +515,56 @@ class NSPanelCoreManager:
                     else:
                         info["source"] = "bundled with integration"
             out["eu" if filename == "gui.tft" else "us"] = info
+        return out
+
+    def served_firmware_info(self) -> dict:
+        """Proof of what the panels actually download for ESP firmware and
+        data files, per model — the counterpart to served_tft_info. Before
+        this, firmware/data uploads recorded no proof anywhere (and clobbered
+        the TFT proof), so the Actions readout could not show what an ESP
+        flash would actually install.
+        """
+        import hashlib as _hashlib
+        import os as _os
+
+        out = {}
+        for model, fname, prefix in (
+            ("sonoff", "firmware/sonoff/firmware.bin", "custom_fw"),
+            ("sonoff-data", "firmware/sonoff/data_file.bin", "custom_data"),
+            ("custom", "firmware/custom/firmware.bin", "custom_fw"),
+            ("custom-data", "firmware/custom/data_file.bin", "custom_data"),
+        ):
+            kind, name = fname.split("/", 1)
+            path = self.servable_path(kind, name)
+            overlay_path = self._ota_overlay.get(fname, "")
+            info = {"filename": name, "bytes": 0, "md5": "", "source": "missing"}
+            if path and _os.path.isfile(path):
+                h = _hashlib.md5()
+                size = 0
+                try:
+                    with open(path, "rb") as f:
+                        for chunk in iter(lambda: f.read(65536), b""):
+                            h.update(chunk)
+                            size += len(chunk)
+                    info["bytes"] = size
+                    info["md5"] = h.hexdigest()
+                except OSError:
+                    pass
+                if info["md5"]:
+                    s = self.config.settings
+                    rec_name = getattr(s, f"{prefix}_name", "")
+                    rec_md5 = getattr(s, f"{prefix}_md5", "")
+                    rec_at = getattr(s, f"{prefix}_uploaded_at", "")
+                    if rec_name == name and rec_md5 and rec_md5 == info["md5"]:
+                        info["source"] = (
+                            f"manual upload ({rec_at})"
+                            + (" — pinned over overlay" if overlay_path and _os.path.isfile(overlay_path) else "")
+                        )
+                    elif overlay_path and _os.path.abspath(path) == _os.path.abspath(overlay_path):
+                        info["source"] = f"GitHub release (firmware {self._ota_active_version or 'bundled'})"
+                    else:
+                        info["source"] = "bundled with integration"
+            out[model] = info
         return out
 
     async def refresh_ota_cache(self) -> None:

@@ -58,6 +58,22 @@ class FakeManager:
     def notify_panels_changed(self):
         pass
 
+    async def remove_panel(self, panel_id):
+        # Mirror manager.remove_panel: drop the panel AND purge per-MAC
+        # caches so the delete route cannot leak relay/telemetry/OTA state.
+        from nspanel_core.const import topic_safe
+        panel = next((p for p in self.config.panels if p.id == panel_id), None)
+        self.config.panels = [p for p in self.config.panels if p.id != panel_id]
+        if panel is not None:
+            mac = topic_safe(panel.mac)
+            self._relay_state = getattr(self, "_relay_state", {})
+            self._relay_state = {k: v for k, v in self._relay_state.items()
+                                 if not (isinstance(k, tuple) and k[0] == mac)}
+            self._last_telemetry.pop(panel.mac, None)
+            self._last_ota_trigger.pop(panel.mac, None)
+        await self.async_save()
+        self.notify_panels_changed()
+
 
 class FakeHass:
     def __init__(self, mgr):
@@ -256,5 +272,14 @@ async def test_panel_actions(mgr, panel):
     r = await act._act(_req(None, {"panel_id": "7", "action": "update_firmware"}, manager=mgr))
     assert r.status == 409
     panel.accepted = True
+    # Seed per-MAC caches, then delete: the route must purge them via
+    # remove_panel (inline removal leaked relay/telemetry/OTA state).
+    from nspanel_core.const import topic_safe
+    mgr._relay_state = {(topic_safe(panel.mac), 1): True, "stale-topic": True}
+    mgr._last_telemetry[panel.mac] = {"rssi": -70}
+    mgr._last_ota_trigger[panel.mac] = 123.0
     r = await act._act(_req(None, {"panel_id": "7", "action": "delete"}, manager=mgr))
     assert r.status == 200 and len(mgr.config.panels) == 0
+    assert not any(isinstance(k, tuple) and k[0] == topic_safe(panel.mac) for k in mgr._relay_state)
+    assert panel.mac not in mgr._last_telemetry
+    assert panel.mac not in mgr._last_ota_trigger

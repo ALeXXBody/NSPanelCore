@@ -176,3 +176,53 @@ def test_refresh_ota_cache_yields_dict_not_coroutine():
     assert isinstance(mgr._ota_md5, dict), f"_ota_md5 is {type(mgr._ota_md5)}"
     assert mgr._ota_md5.get("tft/gui.tft"), "tft hash missing"
     mgr._ota_md5["tft/gui.tft"] = "x"  # must not raise
+
+
+def test_firmware_upload_records_own_proof_and_spares_tft(tmp_path):
+    """Firmware uploads must record custom_fw_* WITHOUT clobbering the TFT proof.
+
+    Regression: note_custom_file wrote every upload into custom_tft_* — an
+    ESP upload overwrote custom_tft_md5 with the firmware digest (voiding the
+    TFT manual-upload proof) while recording nothing about the firmware.
+    """
+    mgr = _mgr()
+    mgr.hass = _Hass()
+    # Establish a TFT proof first.
+    mgr.note_custom_tft("gui.tft")
+    tft_md5 = mgr.config.settings.custom_tft_md5
+    assert tft_md5, "TFT proof must exist first"
+    # Fake an uploaded firmware binary inside the bundled tree shape.
+    fw_dir = tmp_path / "firmware" / "sonoff"
+    fw_dir.mkdir(parents=True)
+    fw_bytes = os.urandom(4096)
+    (fw_dir / "firmware.bin").write_bytes(fw_bytes)
+    import nspanel_core.manager as _M
+    real_file = _M.__file__
+    # Point note_custom_file at the tmp tree by overlaying bundled path:
+    # simplest is to call with explicit paths via the ota overlay.
+    bundled = str(fw_dir / "firmware.bin")
+    overlay = str(tmp_path / "overlay_fw.bin")
+    Path(overlay).write_bytes(b"STALE-RELEASE-FW")
+    mgr._ota_overlay = {"firmware/sonoff/firmware.bin": overlay}
+    # Monkeypatch dirname so bundled resolves to our tmp file.
+    import os as _os
+    orig_dirname = _os.path.dirname
+    try:
+        _os.path.dirname = lambda p: str(tmp_path) if p == real_file else orig_dirname(p)
+        proof = mgr.note_custom_file("firmware", "sonoff/firmware.bin", "manual upload")
+    finally:
+        _os.path.dirname = orig_dirname
+    assert proof["md5"] == hashlib.md5(fw_bytes).hexdigest()
+    s = mgr.config.settings
+    assert s.custom_fw_md5 == proof["md5"], "firmware proof must be recorded"
+    assert s.custom_tft_md5 == tft_md5, "TFT proof must survive firmware uploads"
+    assert Path(overlay).read_bytes() == fw_bytes, "overlay must be pinned"
+
+
+def test_served_firmware_info_reports_manual_upload(tmp_path):
+    """firmware_status must show ESP proof (was TFT-only — uploads invisible)."""
+    mgr = _mgr()
+    mgr.hass = _Hass()
+    info = mgr.served_firmware_info()
+    assert set(info) == {"sonoff", "sonoff-data", "custom", "custom-data"}
+    assert info["sonoff"]["filename"] == "sonoff/firmware.bin"

@@ -70,7 +70,7 @@
                         <label class="label">
                             <span class="label-text justify-start w-full ml-2">Served display files (what panels download)</span>
                         </label>
-                        <button class="btn btn-xs btn-info mr-2" onclick="nspanelFetch('/nspanel_core/firmware_status').then(r=>r.json()).then(j=>{var t=j.served_tft||{};var f=function(v){return v?(v.filename+': '+v.bytes+' bytes, md5 '+String(v.md5).slice(0,12)+'… ('+v.source+')'):'missing';};alert('EU display: '+f(t.eu)+'\nUS display: '+f(t.us));}).catch(e=>alert('Check failed'));">Show</button>
+                        <button class="btn btn-xs btn-info mr-2" onclick="nspanelFetch('/nspanel_core/firmware_status').then(r=>r.json()).then(j=>{var t=j.served_tft||{};var f=function(v){return v?(v.filename+': '+v.bytes+' bytes, md5 '+String(v.md5).slice(0,12)+'… ('+v.source+')'):'missing';};var w=j.served_firmware||{};var g=function(v){return v?(v.filename+': '+v.bytes+' bytes, md5 '+String(v.md5).slice(0,12)+'… ('+v.source+')'):'missing';};alert('EU display: '+f(t.eu)+'\nUS display: '+f(t.us)+'\nESP sonoff fw: '+g(w.sonoff)+'\nESP sonoff data: '+g(w['sonoff-data'])+'\nESP custom fw: '+g(w.custom)+'\nESP custom data: '+g(w['custom-data']));}).catch(e=>alert('Check failed'));">Show</button>
                     </div>
                 </li>
                 <li>

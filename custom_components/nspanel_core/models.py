@@ -280,6 +280,19 @@ class GlobalSettings:
     custom_tft_size: int = 0
     custom_tft_uploaded_at: str = ""
     custom_tft_source: str = ""
+    # Same proof for ESP firmware / data-file uploads (the TFT-only fields
+    # used to be clobbered by ANY upload — a firmware upload overwrote the
+    # TFT proof with the firmware digest, hiding what panels download).
+    custom_fw_name: str = ""
+    custom_fw_md5: str = ""
+    custom_fw_size: int = 0
+    custom_fw_uploaded_at: str = ""
+    custom_fw_source: str = ""
+    custom_data_name: str = ""
+    custom_data_md5: str = ""
+    custom_data_size: int = 0
+    custom_data_uploaded_at: str = ""
+    custom_data_source: str = ""
     screensaver_mode: str = "with_background"
     location_latitude: str = ""
     location_longitude: str = ""
