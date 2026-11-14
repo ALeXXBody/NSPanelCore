@@ -481,3 +481,19 @@ async def test_denied_panel_not_resurrected_on_main_grid():
     # Main grid context excludes denied rows.
     ctx = D._panels_context(mgr)
     assert ctx == [], "denied panels must not render on the main grid"
+
+
+async def test_denied_page_renders(mgr, panel):
+    """The Denied page must render 200 with denied rows AND ignored MACs.
+
+    Regression: the v1.3.48 edit dropped the local asdict import — every
+    visit 500'd, making the whole deny/delete flow unusable (user-reported).
+    """
+    panel.denied = True
+    panel.accepted = False
+    mgr.config.settings.ignored_macs = ["aabbcc"]
+    view = D.DeniedPanelsView()
+    r = await view.get(_req(None, manager=mgr))
+    assert r.status == 200
+    assert "Test" in r.text and "aabbcc" in r.text
+    assert "Allow again" in r.text

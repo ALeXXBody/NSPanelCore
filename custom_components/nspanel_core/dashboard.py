@@ -659,6 +659,8 @@ class DeniedPanelsView(HomeAssistantView):
 
     async def get(self, request, **kwargs):
         manager = _manager(request)
+        from dataclasses import asdict
+
         denied = [asdict(p) for p in manager.config.panels if p.denied]
         html = _render(
             "denied_nspanels.html",
