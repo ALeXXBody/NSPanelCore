@@ -842,6 +842,12 @@ class NSPanelCoreManager:
         if not mac:
             _LOGGER.warning("Ignoring register request with empty MAC")
             return
+        if self.is_ignored_mac(mac):
+            # Deleted on purpose: the panel re-registers every 3s — without
+            # this check every delete resurrects the row instantly (the
+            # "unable to delete a panel" bug).
+            _LOGGER.debug("Ignoring register from deleted panel %s", mac)
+            return
         panel = self._panel_by_mac(mac)
         created = panel is None
         if created:
@@ -877,7 +883,10 @@ class NSPanelCoreManager:
         # ACCEPTED panel branded it awaiting in the UI (which has no branch
         # for it and alarmed "Unknown state awaiting_accept!") until the next
         # offline/online flap — reading as "not registered to a manager".
-        if created or (not panel.accepted or panel.denied):
+        if panel.denied:
+            # Denied rows live on the Denied page; no main-grid status churn.
+            pass
+        elif created or not panel.accepted:
             await self._publish_panel_status(panel, "awaiting_accept")
         else:
             await self._publish_panel_status(panel, "online")
@@ -887,8 +896,9 @@ class NSPanelCoreManager:
         # after a config wipe the firmware reports the compiled default
         # ("NSPanelCore") as friendly_name — adopting it would clobber the
         # user's curated name and move all command topics. Only adopt the
-        # device name for panels that haven't been accepted yet.
-        if not panel.accepted:
+        # device name for panels that haven't been accepted yet (denied rows
+        # keep whatever name they had — a blocked panel shouldn't rename).
+        if not panel.accepted and not panel.denied:
             panel.name = data.get("friendly_name") or panel.name
         elif data.get("friendly_name") and data.get("friendly_name") != panel.name:
             _LOGGER.warning(
@@ -1502,16 +1512,38 @@ class NSPanelCoreManager:
         panel = next((p for p in self.config.panels if p.id == panel_id), None)
         self.config.panels = [p for p in self.config.panels if p.id != panel_id]
         if panel is not None:
-            # Purge per-MAC caches/listeners so removals don't leak state.
+            # Remember the MAC so its 3s re-register cannot resurrect the row.
             mac = topic_safe(panel.mac)
-            self._relay_state = {k: v for k, v in self._relay_state.items()
-                                 if not (isinstance(k, tuple) and k[0] == mac) and k != panel.mac}
-            self._log_backlog.pop(panel.mac, None)
-            self._last_telemetry.pop(panel.mac, None)
-            self._last_ota_trigger.pop(panel.mac, None)
-            self._relay_listeners = {k: v for k, v in self._relay_listeners.items() if v}
+            if mac and mac not in self.config.settings.ignored_macs:
+                self.config.settings.ignored_macs.append(mac)
+            self.purge_panel_caches(panel)
         await self.async_save()
         self.notify_panels_changed()
+
+    def purge_panel_caches(self, panel: PanelConfig) -> None:
+        """Drop per-MAC caches/listeners so removals don't leak state."""
+        mac = topic_safe(panel.mac)
+        self._relay_state = {k: v for k, v in self._relay_state.items()
+                             if not (isinstance(k, tuple) and k[0] == mac) and k != panel.mac}
+        self._log_backlog.pop(panel.mac, None)
+        self._last_telemetry.pop(panel.mac, None)
+        self._last_ota_trigger.pop(panel.mac, None)
+        self._relay_listeners = {k: v for k, v in self._relay_listeners.items() if v}
+
+    def allow_mac(self, mac: str) -> bool:
+        """Stop ignoring a deleted panel's MAC (Denied page "Allow again")."""
+        want = topic_safe(mac)
+        before = len(self.config.settings.ignored_macs)
+        self.config.settings.ignored_macs = [
+            m for m in self.config.settings.ignored_macs if topic_safe(m) != want
+        ]
+        if len(self.config.settings.ignored_macs) != before:
+            self.notify_panels_changed()
+            return True
+        return False
+
+    def is_ignored_mac(self, mac: str) -> bool:
+        return topic_safe(mac) in self.config.settings.ignored_macs
 
     def export_state(self) -> dict:
         data = self.config.to_dict()

@@ -362,3 +362,122 @@ async def test_register_new_panel_awaits_accept():
         "ddeeff", {"friendly_name": "NewPanel", "model": "sonoff"})
     assert published[-1] == "awaiting_accept"
     assert any(p.mac == "ddeeff" for p in cfg.panels)
+
+
+async def test_delete_online_panel_stays_deleted():
+    """Delete must survive the panel's 3s re-register.
+
+    Regression: hard delete + fresh register resurrected the row instantly
+    ("unable to delete a panel"). Delete now removes the row AND remembers
+    the MAC; later registers from that MAC are ignored entirely.
+    """
+    import asyncio
+
+    from nspanel_core import manager as M
+
+    cfg = IntegrationConfig()
+    cfg.rooms.append(RoomConfig(id=1, name="Living"))
+    p = PanelConfig(id=7, mac="aabbcc", name="Kitchen",
+                    wifi_hostname="Kitchen", room_id=1)
+    p.accepted = True
+    cfg.panels.append(p)
+    mgr = M.NSPanelCoreManager.__new__(M.NSPanelCoreManager)
+    mgr.config = cfg
+    mgr.stomp = None
+    mgr._last_ota_trigger = {}
+    mgr._ota_md5 = {}
+    mgr._relay_state = {}
+    mgr._log_backlog = {}
+    mgr._last_telemetry = {"aabbcc": {"rssi": -60}}
+    mgr._relay_listeners = {}
+    mgr._new_panel_listeners = []
+
+    async def fake_save():
+        pass
+
+    async def fake_publish(*a, **k):
+        pass
+
+    async def fake_status(panel, state, *a, **k):
+        pass
+
+    mgr.async_save = fake_save
+    mgr._publish = fake_publish
+    mgr._publish_panel_status = fake_status
+    mgr.add_message = lambda title, message: None
+
+    # Delete via the UI route.
+    act = D.PanelActionView()
+    r = await act._act(_req(None, {"panel_id": "7", "action": "delete"}, manager=mgr))
+    assert r.status == 200
+    assert not mgr.config.panels, "row must be gone"
+    assert mgr.is_ignored_mac("aabbcc"), "MAC must be remembered"
+    assert "aabbcc" not in mgr._last_telemetry, "caches must be purged"
+
+    # The panel's next register must NOT resurrect it.
+    await mgr._handle_register_request(
+        "aabbcc", {"friendly_name": "Kitchen", "model": "sonoff"})
+    assert not mgr.config.panels, "register of a deleted MAC must be ignored"
+
+    # Allow again -> register creates a fresh row.
+    assert mgr.allow_mac("aabbcc")
+    assert not mgr.is_ignored_mac("aabbcc")
+    await mgr._handle_register_request(
+        "aabbcc", {"friendly_name": "Kitchen", "model": "sonoff"})
+    assert len(mgr.config.panels) == 1
+    assert not mgr.config.panels[0].accepted
+
+
+async def test_denied_panel_not_resurrected_on_main_grid():
+    """Denied rows must not render on the main grid and must not be renamed
+    or status-churned by their re-registers."""
+    import asyncio
+
+    from nspanel_core import manager as M
+
+    cfg = IntegrationConfig()
+    cfg.rooms.append(RoomConfig(id=1, name="Living"))
+    p = PanelConfig(id=7, mac="aabbcc", name="Kitchen",
+                    wifi_hostname="Kitchen", room_id=1)
+    p.accepted = True
+    cfg.panels.append(p)
+    mgr = M.NSPanelCoreManager.__new__(M.NSPanelCoreManager)
+    mgr.config = cfg
+    mgr.stomp = None
+    mgr._last_ota_trigger = {}
+    mgr._ota_md5 = {}
+    mgr._relay_state = {}
+    mgr._log_backlog = {}
+    mgr._last_telemetry = {}
+    mgr._relay_listeners = {}
+    mgr._new_panel_listeners = []
+
+    async def fake_save():
+        pass
+
+    async def fake_publish(*a, **k):
+        pass
+
+    statuses = []
+
+    async def fake_status(panel, state, *a, **k):
+        statuses.append(state)
+
+    mgr.async_save = fake_save
+    mgr._publish = fake_publish
+    mgr._publish_panel_status = fake_status
+    mgr.add_message = lambda title, message: None
+
+    # User denies the panel (existing deny action).
+    p.denied = True
+    p.accepted = False
+    await mgr._handle_register_request(
+        "aabbcc", {"friendly_name": "RenamedByPanel", "model": "sonoff"})
+    assert p.name == "Kitchen", "denied row must keep its name"
+    assert not [s for s in statuses if s == "awaiting_accept"], (
+        "denied register must not publish awaiting_accept")
+    assert p.denied, "denied state must persist across registers"
+
+    # Main grid context excludes denied rows.
+    ctx = D._panels_context(mgr)
+    assert ctx == [], "denied panels must not render on the main grid"

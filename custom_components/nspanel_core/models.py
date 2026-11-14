@@ -280,7 +280,10 @@ class GlobalSettings:
     custom_tft_size: int = 0
     custom_tft_uploaded_at: str = ""
     custom_tft_source: str = ""
-    # Same proof for ESP firmware / data-file uploads (the TFT-only fields
+    # MACs whose register requests are ignored entirely. Panels re-register
+    # every 3s, so a hard-deleted row is instantly resurrected otherwise.
+    # Delete = remove + remember here; "Allow again" (Denied page) clears it.
+    ignored_macs: list = field(default_factory=list)    # Same proof for ESP firmware / data-file uploads (the TFT-only fields
     # used to be clobbered by ANY upload — a firmware upload overwrote the
     # TFT proof with the firmware digest, hiding what panels download).
     custom_fw_name: str = ""

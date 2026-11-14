@@ -177,6 +177,10 @@ def _manager(request) -> Any:
 def _panels_context(manager) -> list[dict]:
     out = []
     for panel in manager.panels():
+        if panel.denied:
+            # Denied rows live on the Denied NSPanels page only — they must
+            # not render as normal cards on the main grid.
+            continue
         out.append({
             "data": {
                 "id": panel.id,
@@ -660,9 +664,33 @@ class DeniedPanelsView(HomeAssistantView):
             "denied_nspanels.html",
             request=request,
             nspanels=denied,
+            ignored=manager.config.settings.ignored_macs,
             page_title="Denied NSPanels",
         )
         return web.Response(text=html, content_type="text/html")
+
+
+class AllowIgnoredMacView(HomeAssistantView):
+    """Undo a delete: stop ignoring a deleted panel's MAC.
+
+    Delete remembers the MAC (panels re-register every 3s and would
+    otherwise resurrect the row instantly). This endpoint clears that
+    memory so the panel can register again.
+    """
+
+    url = f"{URL_BASE}/api/ignored_mac/{{mac}}"
+    name = "nspanel_core:api:ignored_mac"
+    requires_auth = True
+
+    async def delete(self, request, **kwargs):
+        manager = _manager(request)
+        mac = str(request.match_info.get("mac", ""))
+        if not mac:
+            return web.Response(text="Bad MAC", status=400)
+        if not manager.allow_mac(mac):
+            return web.Response(text="MAC was not ignored", status=404)
+        await manager.async_save()
+        return _redirect_back(request, f"{URL_BASE}/denied_nspanels")
 
 
 class SettingsView(HomeAssistantView):
@@ -1844,6 +1872,7 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         RelayGroupsView,
         WeatherTimeView,
         DeniedPanelsView,
+        AllowIgnoredMacView,
         SettingsView,
         ManagerSettingsView,
         PlaceholderPageView,
