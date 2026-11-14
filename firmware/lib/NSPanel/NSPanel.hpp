@@ -68,7 +68,7 @@ private:
   /// @param offset Offset to request data from (bytes)
   /// @param size Maximum download chunk size
   /// @return The number of bytes downloaded
-  static bool _initTFTUpdate(int communication_baud_rate);
+  static bool _initTFTUpdate();
   static bool _updateTFTOTA();
   static bool _streamTFTFile(const std::string &downloadUrl, unsigned long file_size);
   std::queue<std::vector<char>> _processQueue;

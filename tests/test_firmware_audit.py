@@ -110,17 +110,25 @@ def test_offset_zero_ignored_keep_streaming():
 
 
 def test_no_blind_ladder_or_probes():
-    """The blind ladder / probes are gone — upstream init retries the two
-    known bauds and never streams without a handshake."""
+    """The blind ladder / probes are gone — init retries the same baud and
+    never streams without a handshake."""
     src = _src(NSPANEL)
     for gone in ("_probeUploadAtBaud", "_neighborBaud", "_powerCycleDisplay",
-                 "_sendWhmiWrisAt", "Proceeding with blind tolerant upload"):
+                 "_sendWhmiWrisAt", "Proceeding with blind tolerant upload",
+                 "s_tft_blind_attempt", "_next_baud", "_tft_init_depth"):
         assert gone not in src, f"{gone} must be removed"
 
 
-def test_init_retries_two_bauds_upstream_style():
+def test_single_baud_rule():
+    """ONE configured baud drives everything (user-proven: the upstream
+    flash that revived this panel ran both phases at one rate). init(),
+    handshake, whmi param and streaming must all resolve through the same
+    _tftBaud() helper — no second baud anywhere, no talk!=param path."""
     src = _src(NSPANEL)
-    assert "communication_baud_rate == 115200 ? NSPMConfig::instance->tft_upload_baud : 115200" in src
-    assert "_tft_init_depth" not in src, "7-attempt cap must be gone"
-    # Escape settle restored to upstream expression in BOTH call sites.
-    assert src.count("(1000000 / Serial2.baudRate()) + 30 / portTICK_PERIOD_MS") == 2
+    assert "static uint32_t _tftBaud()" in src
+    # init() opens the port at the configured baud, not a hardcoded one.
+    assert "Serial2.begin(_tftBaud(), SERIAL_8N1, 17, 16)" in src
+    # No separate communication baud anywhere in the flash path.
+    assert "communication_baud_rate" not in src
+    # Handshake retries the SAME baud (power-cycle + retry), no alternation.
+    assert src.count("return NSPanel::_initTFTUpdate();") >= 2

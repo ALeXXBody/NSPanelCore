@@ -1,8 +1,18 @@
 // Package fwupdate locks the firmware TFT-upload protocol rules in
-// host-runnable form (the C++ itself only runs on ESP32):
-// baud rotation order, neighbor hunting, 0x08 LE32 offset validation,
-// chunk accounting. Mirrors NSPanel::_initTFTUpdate/_updateTFTOTA.
+// host-runnable form (the C++ itself only runs on ESP32): single-baud rule,
+// 0x08 LE32 offset validation, chunk accounting. Mirrors
+// NSPanel::_initTFTUpdate/_updateTFTOTA.
 package fwupdate
+
+// SingleBaud mirrors _tftBaud(): ONE configured baud drives handshake,
+// whmi-wris param and streaming alike — talk==param by construction.
+// Zero/unset falls back to 115200, the NSPMConfig default.
+func SingleBaud(configured uint32) uint32 {
+	if configured == 0 {
+		return 115200
+	}
+	return configured
+}
 
 // DecodeOffset mirrors the 0x08 frame decode: first byte 0x08 + 4 LE bytes.
 // Returns offset, ok. Offsets beyond fileSize must abort the attempt.

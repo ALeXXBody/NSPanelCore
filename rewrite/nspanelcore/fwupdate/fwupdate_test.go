@@ -11,9 +11,10 @@ func TestOffsetDecode(t *testing.T) {
 	if !ok || off != 0x1000 {
 		t.Fatalf("got %d %v", off, ok)
 	}
-	// Offset 0 is a legitimate start-over, not an abort.
+	// Offset 0 decodes fine here; the jump DECISION lives in ShouldJump,
+	// which ignores it (keep streaming forward, never rewind to zero).
 	if _, ok := fwupdate.DecodeOffset([]byte{0x08, 0, 0, 0, 0}, 100); !ok {
-		t.Fatal("offset 0 must be accepted")
+		t.Fatal("offset 0 must decode (jump decision is ShouldJump's job)")
 	}
 	// Beyond file size aborts.
 	if _, ok := fwupdate.DecodeOffset([]byte{0x08, 0xFF, 0xFF, 0xFF, 0xFF}, 100); ok {
@@ -43,5 +44,16 @@ func TestWindowAndJumpRules(t *testing.T) {
 	}
 	if fwupdate.ShouldJump(1<<21, 1<<20) {
 		t.Fatal("beyond-size offset must not jump")
+	}
+}
+
+func TestSingleBaudRule(t *testing.T) {
+	// One configured baud drives handshake, whmi param and streaming.
+	// Talk==param by construction — the 0.1.171 divergence class cannot exist.
+	if fwupdate.SingleBaud(921600) != 921600 {
+		t.Fatal("configured baud must pass through")
+	}
+	if fwupdate.SingleBaud(0) != 115200 {
+		t.Fatal("unset baud must fall back to 115200")
 	}
 }

@@ -170,6 +170,10 @@ void NSPanel::restart() {
   this->_sendCommandWithoutResponse("rest");
 }
 
+// Forward declaration: single source of truth for the one configured baud
+// (defined below, used by init() above it).
+static uint32_t _tftBaud();
+
 bool NSPanel::init() {
   NSPanel::instance = this;
   this->_mutexReadSerialData = xSemaphoreCreateMutex();
@@ -182,7 +186,9 @@ bool NSPanel::init() {
 
   Serial2.setTxBufferSize(256);
   Serial2.setRxBufferSize(256);
-  Serial2.begin(115200, SERIAL_8N1, 17, 16);
+  // Single-baud rule: the configured baud drives normal communication too,
+  // not just uploads (same helper as the flash path — one rule, one place).
+  Serial2.begin(_tftBaud(), SERIAL_8N1, 17, 16);
   // Clear Serial2 read buffer
   // this->_clearSerialBuffer();
 
@@ -676,9 +682,20 @@ bool NSPanel::ready() {
   return this->_display_ready;
 }
 
-bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
-  LOG_INFO("Trying to initialize TFT update at baud ", communication_baud_rate);
-  Serial2.updateBaudRate(communication_baud_rate);
+// Single-baud rule (user-proven: the upstream flash that revived this
+// panel ran both phases at 921600). One configured baud drives handshake,
+// whmi-wris param and streaming alike — talk==param by construction, so the
+// 0.1.171 divergence class (hardcoded talk vs configured param) cannot
+// recur. Falls back to 115200, the NSPMConfig default.
+static uint32_t _tftBaud() {
+  uint32_t b = NSPMConfig::instance->tft_upload_baud;
+  return b ? b : 115200;
+}
+
+bool NSPanel::_initTFTUpdate() {
+  uint32_t baud = _tftBaud();
+  LOG_INFO("Trying to initialize TFT update at baud ", baud);
+  Serial2.updateBaudRate(baud);
 
   NSPanel::instance->_writeCommandsToSerial = false;
   NSPanel::instance->_update_progress = 0;
@@ -721,12 +738,11 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
     comok_string.erase(comok_string.length() - 3);
     LOG_DEBUG("Got comok: ", comok_string.c_str());
   } else {
-    // Upstream-proven semantics: alternate the two known bauds and retry
-    // until the display answers. NEVER stream blind and never give up —
-    // our former 7-attempt cap + blind ladder diverged the v1.2 stream and
-    // corrupted the display flash (the "System Data ERROR!" root cause).
+    // Same baud, power-cycle, retry until the display answers. Upstream
+    // semantics (never stream blind, never give up); single baud means the
+    // retry needs no alternation logic at all.
     LOG_ERROR("Didn't receive expected comok, got: '", comok_string.c_str(), "'. Will retry.");
-    return NSPanel::_initTFTUpdate(communication_baud_rate == 115200 ? NSPMConfig::instance->tft_upload_baud : 115200);
+    return NSPanel::_initTFTUpdate();
   }
 
   // URL to download TFT file from
@@ -776,16 +792,9 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
   NSPanel::instance->_sendCommandEndSequence();
   LOG_DEBUG("Sent TFT upload command: ", commandString.c_str());
 
-  // Switch to desired upload baud rate.
-  vTaskDelay(50 / portTICK_PERIOD_MS);
-  int32_t baud_diff = NSPMConfig::instance->tft_upload_baud - Serial2.baudRate();
-  if (baud_diff < 0) {
-    baud_diff = baud_diff / -1;
-  }
-  if (baud_diff >= 10) {
-    LOG_INFO("Switching flash baud rate on Serial2 from ", Serial2.baudRate(), " to ", NSPMConfig::instance->tft_upload_baud);
-    Serial2.updateBaudRate(NSPMConfig::instance->tft_upload_baud);
-  }
+  // No baud switch here by design: Serial2 already runs at the single
+  // configured baud and the whmi-wris param carries the same value, so
+  // talk==param holds structurally (the 0.1.171 mismatch is impossible).
 
   // Wait until Nextion returns okay to transmit tft
   LOG_DEBUG("Waiting for panel reponse (max 10 seconds).");
@@ -804,8 +813,8 @@ bool NSPanel::_initTFTUpdate(int communication_baud_rate) {
       vTaskDelay(5 / portTICK_PERIOD_MS);
     }
     LOG_ERROR("Will retry TFT upload init.");
-    // Upstream semantics: retry the init (same baud) — never stream blind.
-    return NSPanel::_initTFTUpdate(communication_baud_rate);
+    // Same-baud retry — never stream blind.
+    return NSPanel::_initTFTUpdate();
   }
 
   return true;
@@ -891,9 +900,9 @@ bool NSPanel::_streamTFTFile(const std::string &downloadUrl, unsigned long file_
 
 bool NSPanel::_updateTFTOTA() {
   LOG_INFO("_updateTFTOTA Started.");
-  // Upstream semantics: init recurses on the two known bauds until the
-  // display answers; it never returns false and never streams blind.
-  NSPanel::_initTFTUpdate(115200);
+  // Init negotiates the single configured baud until the display answers;
+  // it never returns false and never streams blind.
+  NSPanel::_initTFTUpdate();
   std::string downloadUrl = "http://";
   downloadUrl.append(NSPMConfig::instance->manager_address);
   downloadUrl.append(":");
