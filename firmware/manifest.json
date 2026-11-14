@@ -1,22 +1,22 @@
 {
-  "version": "0.1.171",
-  "notes": "Fix blind-upload baud mismatch (talk 115200 vs configured param deafened both sides); per-attempt baud ladder 38400/19200/9600 for marginal links",
+  "version": "0.1.172",
+  "notes": "Repair TFT flash: restore upstream-proven v1.2 semantics (5000ms response window, honor 0x08 retransmit with offset-0 ignored, never abort attempt, no blind ladder). Root cause of System Data ERROR was our 500ms window diverging the stream.",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "755df9622f31e12f059787a51d6ceb65"
+      "md5": "a1a982fd072b569cdef2b2d6a178c5da"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
-      "md5": "73249b4c15c842b64dd3bdce3ae79efa"
+      "md5": "6d6fd40d7401606d5c6b5dd1aed92552"
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "755df9622f31e12f059787a51d6ceb65"
+      "md5": "a1a982fd072b569cdef2b2d6a178c5da"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
-      "md5": "73249b4c15c842b64dd3bdce3ae79efa"
+      "md5": "6d6fd40d7401606d5c6b5dd1aed92552"
     },
     "tft/gui.tft": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui.tft",
