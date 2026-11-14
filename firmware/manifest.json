@@ -1,6 +1,6 @@
 {
   "version": "0.1.176",
-  "notes": "Connection poller HEAD->GET (fw only serves GET /, HEAD 404 stranded the overlay); save no longer freezes the poller",
+  "notes": "TFT rebuilt with nxwright 0.4.3 from extracted source (listing-identical to Editor build, one brace-placement fix); firmware 0.1.176 binaries unchanged",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
@@ -20,7 +20,7 @@
     },
     "tft/gui.tft": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui.tft",
-      "md5": "233cbc923f9021a42ddfdbc35c8cfca8"
+      "md5": "39ae7a18016a1440f13850469c214d22"
     },
     "tft/gui_us.tft": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui_us.tft",
