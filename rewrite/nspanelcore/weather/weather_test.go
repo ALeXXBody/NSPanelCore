@@ -22,6 +22,20 @@ func TestFmtTemp(t *testing.T) {
 	}
 }
 
+// Regression: Python round() is banker's (half to even); the first Go port
+// used half-away, so exact x.5 temps were off by one vs the manager.
+func TestBankersRoundingParity(t *testing.T) {
+	if weather.FmtTemp(2.5, false) != "2°C" {
+		t.Fatalf("2.5 must round to even 2, got %q", weather.FmtTemp(2.5, false))
+	}
+	if weather.FmtTemp(3.5, false) != "4°C" {
+		t.Fatalf("3.5 must round to even 4, got %q", weather.FmtTemp(3.5, false))
+	}
+	if weather.FmtWind(2.5, "kmh") != "2 km/h" || weather.FmtWind(3.5, "kmh") != "4 km/h" {
+		t.Fatal("wind banker's rounding broken")
+	}
+}
+
 func TestFmtWind(t *testing.T) {
 	if weather.FmtWind(12.34, "ms") != "12.3 m/s" {
 		t.Fatal("ms broken")

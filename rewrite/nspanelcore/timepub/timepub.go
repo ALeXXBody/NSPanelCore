@@ -57,6 +57,14 @@ func strftime(fmt string, t time.Time) string {
 			out += t.Format("Jan")
 		case 'B':
 			out += t.Format("January")
+		case 'e':
+			out += t.Format("2")
+		case 'k':
+			out += t.Format("15")
+		case 'l':
+			out += t.Format("3")
+		case 'j':
+			out += t.Format("002")
 		case '%':
 			out += "%"
 		default:

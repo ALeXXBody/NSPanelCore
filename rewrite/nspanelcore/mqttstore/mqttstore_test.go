@@ -41,3 +41,16 @@ func TestRetainedReplay(t *testing.T) {
 		t.Fatal("deleted value must be gone")
 	}
 }
+
+func TestHashLevelMatchParity(t *testing.T) {
+	// Per MQTT: "a/#" matches "a" itself and everything below.
+	if !mqttstore.Match("a/#", "a") {
+		t.Fatal("a/# must match a")
+	}
+	if !mqttstore.Match("#", "a") {
+		t.Fatal("# must match single level")
+	}
+	if mqttstore.Match("a/+/c", "a/b") {
+		t.Fatal("+ must require its level")
+	}
+}

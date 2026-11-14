@@ -95,3 +95,26 @@ func TestBase64(t *testing.T) {
 		t.Fatal("base64 wrong")
 	}
 }
+
+func TestNegativeVarintParity(t *testing.T) {
+	// Python encode_varint(-1) masks to 64-bit: 10 bytes, round-trips via
+	// two's complement. The Go port must do the same, not clamp or panic.
+	enc := pcode.EncodeVarintField(1, -1)
+	if len(enc) != 11 { // 1 tag byte + 10 varint bytes
+		t.Fatalf("negative varint must be 1 tag + 10 bytes, got %d", len(enc))
+	}
+	r := pcode.NewReader(enc)
+	fn, wt, err := r.ReadTag()
+	if err != nil || fn != 1 || wt != 0 {
+		t.Fatalf("tag: %d/%d %v", fn, wt, err)
+	}
+	v, err := r.ReadVarint()
+	if err != nil || int64(v) != -1 {
+		t.Fatalf("round-trip: %v %v", v, err)
+	}
+	// Packed with a negative must also survive.
+	packed := pcode.EncodePackedInt32Field(2, []int32{-1, 2})
+	if len(packed) == 0 {
+		t.Fatal("packed negative must encode")
+	}
+}

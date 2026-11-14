@@ -156,6 +156,30 @@ func (p *Panel) Normalize() {
 	if p.Version == "" {
 		p.Version = "UNKNOWN"
 	}
+	if p.TemperatureUnit == "" {
+		p.TemperatureUnit = "celsius"
+	}
+	if p.ScreensaverActivationTimeout == 0 {
+		p.ScreensaverActivationTimeout = 15
+	}
+	if p.MinButtonPushTime == 0 {
+		p.MinButtonPushTime = 50
+	}
+	if p.ButtonLongPressTime == 0 {
+		p.ButtonLongPressTime = 400
+	}
+	if p.SpecialModeTriggerTime == 0 {
+		p.SpecialModeTriggerTime = 350
+	}
+	if p.SpecialModeReleaseTime == 0 {
+		p.SpecialModeReleaseTime = 600
+	}
+	if p.ScreenDimLevel == 0 {
+		p.ScreenDimLevel = 100
+	}
+	if p.ScreensaverDimLevel == 0 {
+		p.ScreensaverDimLevel = 20
+	}
 	if p.Rooms == nil {
 		p.Rooms = []int{}
 	}
@@ -343,14 +367,67 @@ func Unmarshal(data []byte) (*Integration, error) {
 			cfg.NextID[k] = v
 		}
 	}
-	// Light defaults that matter: controlled_from_main_page defaults true in
-	// practice; Python default is True so a missing key decodes False — fix up
-	// only when the whole light came from an old file? No: keep verbatim.
-	// Panel normalization (screensaver fallback etc.).
-	for i := range cfg.Panels {
-		cfg.Panels[i].Normalize()
-	}
+	cfg.ApplyDefaults()
 	return cfg, nil
+}
+
+// ApplyDefaults fills the unambiguous Python dataclass defaults that JSON
+// unmarshal leaves as zero values. Only fields where the zero value is never
+// a valid user value are touched (LightType "", Mode "", PageType 0,
+// StepSize 0, ManagerPort 0, kelvin bounds 0, TemperatureUnit "") —
+// ControlledFromMainPage and booleans are left verbatim because false is a
+// real user choice and old payloads always carry the key anyway.
+func (c *Integration) ApplyDefaults() {
+	if c.Settings.ManagerPort == 0 {
+		c.Settings.ManagerPort = 8000
+	}
+	if c.Settings.ColorTempMin == 0 {
+		c.Settings.ColorTempMin = 2700
+	}
+	if c.Settings.ColorTempMax == 0 {
+		c.Settings.ColorTempMax = 6500
+	}
+	if c.Settings.WeatherUpdateInterval == 0 {
+		c.Settings.WeatherUpdateInterval = 30
+	}
+	if c.Settings.FirmwareAutoCheckHours == 0 {
+		c.Settings.FirmwareAutoCheckHours = 24
+	}
+	for i := range c.Lights {
+		if c.Lights[i].LightType == "" {
+			c.Lights[i].LightType = "table"
+		}
+		if c.Lights[i].Mode == "" {
+			c.Lights[i].Mode = "default"
+		}
+	}
+	for i := range c.Thermostats {
+		if c.Thermostats[i].StepSize == 0 {
+			c.Thermostats[i].StepSize = 0.5
+		}
+		if c.Thermostats[i].Options == nil {
+			c.Thermostats[i].Options = []map[string]any{}
+		}
+	}
+	for i := range c.Pages {
+		if c.Pages[i].PageType == 0 {
+			c.Pages[i].PageType = 4
+		}
+	}
+	for i := range c.Scenes {
+		if c.Scenes[i].LightStates == nil {
+			c.Scenes[i].LightStates = []map[string]any{}
+		}
+	}
+	for i := range c.RelayGroups {
+		if c.RelayGroups[i].Bindings == nil {
+			c.RelayGroups[i].Bindings = []RelayBinding{}
+		}
+	}
+	// Panel normalization (screensaver fallback etc.).
+	for i := range c.Panels {
+		c.Panels[i].Normalize()
+	}
 }
 
 // Marshal mirrors to_dict.

@@ -70,3 +70,13 @@ func TestSafeTopic(t *testing.T) {
 		}
 	}
 }
+
+func TestWhitespaceOnlyYieldsPanel(t *testing.T) {
+	// Python: panel_mqtt_base("   ") strips to "" -> "panel".
+	if got := topics.PanelBase("   "); got != "panel" {
+		t.Fatalf("got %q", got)
+	}
+	if got := topics.Base("   "); got != "nspanel/panel" {
+		t.Fatalf("got %q", got)
+	}
+}

@@ -6,6 +6,7 @@ package command
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 )
 
@@ -93,10 +94,29 @@ func toInt(v any) int {
 	switch n := v.(type) {
 	case float64:
 		return int(n)
+	case float32:
+		return int(n)
 	case int:
 		return n
 	case int64:
 		return int(n)
+	case json.Number:
+		if i, err := n.Int64(); err == nil {
+			return int(i)
+		}
+		if f, err := strconv.ParseFloat(string(n), 64); err == nil {
+			return int(f)
+		}
+		return 0
+	case string:
+		s := strings.TrimSpace(n)
+		if i, err := strconv.Atoi(s); err == nil {
+			return i
+		}
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return int(f) // mirrors Python int(float(s))
+		}
+		return 0
 	default:
 		return 0
 	}

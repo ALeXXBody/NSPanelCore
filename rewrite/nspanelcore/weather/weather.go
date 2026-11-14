@@ -42,10 +42,33 @@ func FmtTemp(v float64, fahrenheit bool) string {
 }
 
 func round(v float64) float64 {
+	// Mirror Python round(): banker's rounding (half to even), NOT
+	// half-away-from-zero. Display temps at exact x.5 would otherwise be
+	// off by one vs the Python manager.
 	if v < 0 {
-		return float64(int(v - 0.5))
+		return -roundHalfEven(-v)
 	}
-	return float64(int(v + 0.5))
+	return roundHalfEven(v)
+}
+
+func roundHalfEven(v float64) float64 {
+	i, frac := split(v)
+	if frac < 0.5 || frac > 0.5 {
+		if frac < 0.5 {
+			return i
+		}
+		return i + 1
+	}
+	// Exactly .5: round to even.
+	if int(i)%2 == 0 {
+		return i
+	}
+	return i + 1
+}
+
+func split(v float64) (float64, float64) {
+	i := float64(int(v))
+	return i, v - i
 }
 
 // FmtWind mirrors fmt_wind.

@@ -32,6 +32,18 @@ func TestParseScenes(t *testing.T) {
 	}
 }
 
+// Regression: panel ints sometimes arrive as strings; Python int(x) parses
+// them, the first Go port dropped them to 0 and black-holed the command.
+func TestStringIntsParity(t *testing.T) {
+	c := command.ParseManager(`{"method":"set","attribute":"brightness","brightness":"42","entity_ids":["3","x",4]}`)
+	if c.Kind != "set" || c.Value != 42 {
+		t.Fatalf("string value must parse: %+v", c)
+	}
+	if len(c.EntityIDs) != 3 || c.EntityIDs[0] != 3 || c.EntityIDs[1] != 0 || c.EntityIDs[2] != 4 {
+		t.Fatalf("string entity_ids must parse (bad -> 0, skipped later): %+v", c.EntityIDs)
+	}
+}
+
 func TestStompSend(t *testing.T) {
 	known := func(s string) bool { return s == "KitchenPanel" }
 	_, _, ok := command.StompSend("nspanel/Nope/command", "reboot", known)

@@ -48,6 +48,40 @@ func TestLoadRealStorageShape(t *testing.T) {
 	}
 }
 
+// Regression: JSON unmarshal leaves Python non-zero defaults as zero values.
+// Unambiguous ones ("" / 0 that are never valid user values) must default.
+func TestUnambiguousDefaultsParity(t *testing.T) {
+	cfg, err := config.Unmarshal([]byte(`{
+		"settings":{},
+		"lights":[{"id":1,"name":"L","ha_entity":"light.x","room_id":1,"page_id":1,"page_slot":1}],
+		"thermostats":[{"id":1,"name":"T","ha_entity":"climate.x","room_id":1,"page_id":1,"page_slot":1}],
+		"pages":[{"id":1}],
+		"panels":[{"id":1,"mac":"aa","name":"K"}]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Settings.ManagerPort != 8000 {
+		t.Fatalf("port: %d", cfg.Settings.ManagerPort)
+	}
+	if cfg.Settings.ColorTempMin != 2700 || cfg.Settings.ColorTempMax != 6500 {
+		t.Fatal("kelvin bounds not defaulted")
+	}
+	if cfg.Lights[0].LightType != "table" || cfg.Lights[0].Mode != "default" {
+		t.Fatalf("%+v", cfg.Lights[0])
+	}
+	if cfg.Thermostats[0].StepSize != 0.5 {
+		t.Fatalf("step: %v", cfg.Thermostats[0].StepSize)
+	}
+	if cfg.Pages[0].PageType != 4 {
+		t.Fatalf("page_type: %d", cfg.Pages[0].PageType)
+	}
+	if cfg.Panels[0].TemperatureUnit != "celsius" || cfg.Panels[0].ScreenDimLevel != 100 ||
+		cfg.Panels[0].MinButtonPushTime != 50 || cfg.Panels[0].ScreensaverMode != "with_background" {
+		t.Fatalf("%+v", cfg.Panels[0])
+	}
+}
+
 func TestPythonFixtureParity(t *testing.T) {
 	// Byte-parity spot check against a real Python to_dict payload shape.
 	raw, err := os.ReadFile("../../..//tests/fixtures/config_sample.json")

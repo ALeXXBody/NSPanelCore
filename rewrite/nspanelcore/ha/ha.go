@@ -6,7 +6,8 @@ package ha
 
 import (
 	"encoding/json"
-	"fmt"
+	"strconv"
+	"strings"
 )
 
 // LightCommand mirrors the lc dict built in _on_manager_command.
@@ -21,9 +22,103 @@ type LightCommand struct {
 	Saturation          int
 }
 
+// Light mirrors the live command-relevant fields of LightConfig.
+// (Separate from entities.Light to avoid an import cycle; same semantics.)
+type Light struct {
+	State      bool
+	Brightness int // 0-100
+	ColorTemp  int // kelvin
+	Hue        int
+	Saturation int
+	Mode       string // "default" | "rgb"
+	CanDim     bool
+	CanCT      bool
+	CanRGB     bool
+}
+
+// ApplyLightCommand mirrors _apply_light_command exactly, including the
+// service keys HA actually receives: brightness_pct (0-100, NOT 0-255
+// brightness) and color_temp_kelvin (NOT kelvin). Returns the service
+// ("turn_on"/"turn_off") and service_data (without entity_id; the caller
+// adds it). toggle nil = no override; cmd nil = state-only re-assert.
+func ApplyLightCommand(l *Light, cmd *LightCommand, toggle *bool, minK int) (string, map[string]any) {
+	service := ""
+	if toggle != nil {
+		l.State = *toggle
+		if *toggle {
+			service = "turn_on"
+		} else {
+			service = "turn_off"
+		}
+	} else if cmd != nil {
+		if cmd.HasBrightness {
+			b := cmd.Brightness
+			if b < 0 {
+				b = 0
+			}
+			if b > 100 {
+				b = 100
+			}
+			l.Brightness = b
+		}
+		if cmd.HasColorTemperature {
+			l.Mode = "default"
+			l.ColorTemp = cmd.ColorTemperature
+		}
+		if cmd.HasHue || cmd.HasSaturation {
+			l.Mode = "rgb"
+			if cmd.HasHue {
+				l.Hue = cmd.Hue
+			} else {
+				l.Hue = 0
+			}
+			if cmd.HasSaturation {
+				l.Saturation = cmd.Saturation
+			} else {
+				l.Saturation = 0
+			}
+		}
+		if cmd.HasBrightness {
+			l.State = l.Brightness > 0
+		}
+		if l.State {
+			service = "turn_on"
+		} else {
+			service = "turn_off"
+		}
+	} else {
+		if l.State {
+			service = "turn_on"
+		} else {
+			service = "turn_off"
+		}
+	}
+
+	data := map[string]any{}
+	if service == "turn_on" {
+		if l.CanDim && l.Brightness != 0 {
+			data["brightness_pct"] = l.Brightness
+		}
+		if l.Mode == "default" && l.CanCT {
+			k := l.ColorTemp
+			if k == 0 {
+				k = minK
+			}
+			data["color_temp_kelvin"] = k
+		} else if l.Mode == "rgb" && l.CanRGB {
+			data["hs_color"] = []int{l.Hue, l.Saturation}
+		}
+	}
+	return service, data
+}
+
 // TurnOnPayload builds light.turn_on service data. Brightness converts
 // panel 0-100 to HA 0-255; kelvin is clamped to [minK,maxK]; hs members
 // pass through only when set.
+//
+// NOTE: the live manager path (_apply_light_command) sends brightness_pct
+// + color_temp_kelvin via hass.services; this helper exists for the raw
+// turn_on shape and is NOT the panel-command path — see ApplyLightCommand.
 func TurnOnPayload(entityID string, cmd LightCommand, minK, maxK int) map[string]any {
 	data := map[string]any{"entity_id": entityID}
 	if cmd.HasBrightness {
@@ -124,4 +219,25 @@ func ClampKelvin(k, minK, maxK int) int {
 	return k
 }
 
-var _ = fmt.Sprint
+// toInt mirrors Python int(x) truncation for floats and numeric strings.
+func toInt(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	case string:
+		s := strings.TrimSpace(n)
+		if i, err := strconv.Atoi(s); err == nil {
+			return i
+		}
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return int(f)
+		}
+		return 0
+	default:
+		return 0
+	}
+}
