@@ -73,3 +73,19 @@ func TestBlindSecondPassAt9600(t *testing.T) {
 		t.Fatal("settle must be 3s (Nextion cold-boot)")
 	}
 }
+
+func TestBlindBaudLadder(t *testing.T) {
+	// Talk==param always; ladder steps down for marginal links (0.1.171).
+	if fwupdate.BlindPassBauds(57600, 0) != 57600 {
+		t.Fatal("attempt 0 must use configured baud")
+	}
+	if fwupdate.BlindPassBauds(57600, 1) != 38400 || fwupdate.BlindPassBauds(57600, 2) != 19200 {
+		t.Fatal("attempts must step down")
+	}
+	if fwupdate.BlindPassBauds(57600, 3) != 9600 || fwupdate.BlindPassBauds(57600, 9) != 9600 {
+		t.Fatal("ladder must hold at 9600")
+	}
+	if fwupdate.BlindPassBauds(0, 0) != 115200 {
+		t.Fatal("zero config must fall back to 115200")
+	}
+}

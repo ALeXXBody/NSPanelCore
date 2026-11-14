@@ -22,7 +22,27 @@ func NextBaud(current, up int) int {
 	return 115200
 }
 
-// BlindPasses mirrors the _updateTFTOTA recovery sequence: 115200 first,
+// BlindPassBauds returns the talk baud for blind attempt n: attempt 0 uses
+// the configured baud, then steps down for marginal links. Talk baud and
+// the whmi-wris baud param must ALWAYS be equal — a hardcoded talk side
+// with a different param deafens both sides (0.1.171 root-cause fix).
+func BlindPassBauds(configured int, attempt int) int {
+	if configured <= 0 {
+		configured = 115200
+	}
+	switch {
+	case attempt <= 0:
+		return configured
+	case attempt == 1:
+		return 38400
+	case attempt == 2:
+		return 19200
+	default:
+		return 9600
+	}
+}
+
+// BlindPasses mirrors the silent-small-file second pass at 9600.
 // then 9600 (Nextion default after a corrupt flash) when the first pass
 // heard nothing — capped to recovery-sized files (<=1MB): 16MB at 9600
 // baud is ~4.5h and needs USB-TTL instead.
