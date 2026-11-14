@@ -226,3 +226,49 @@ def test_served_firmware_info_reports_manual_upload(tmp_path):
     info = mgr.served_firmware_info()
     assert set(info) == {"sonoff", "sonoff-data", "custom", "custom-data"}
     assert info["sonoff"]["filename"] == "sonoff/firmware.bin"
+
+
+def test_no_top_level_package_import():
+    """Production HA has no top-level nspanel_core module (it lives under
+    custom_components). A bare ``import nspanel_core`` works in dev (sys.path)
+    and 500s in production — as it did on every firmware_install while a
+    custom TFT was pinned. Forbid the pattern repo-wide.
+    """
+    import re
+    bad = []
+    for py in (REPO / "custom_components").rglob("*.py"):
+        for i, line in enumerate(py.read_text(errors="replace").splitlines(), 1):
+            if re.match(r"\s*import nspanel_core(\s|$)", line) or re.match(
+                r"\s*from nspanel_core import", line
+            ):
+                bad.append(f"{py}:{i}: {line.strip()}")
+    assert not bad, "dev-only top-level imports:\n" + "\n".join(bad)
+
+
+def test_maybe_repin_custom_tft(tmp_path):
+    """Re-pin must work without any top-level import, and only on match."""
+    import hashlib
+    from nspanel_core import firmware_store as FS
+    from nspanel_core.models import IntegrationConfig
+
+    class FakeMgr:
+        def __init__(self):
+            self.config = IntegrationConfig()
+            self.pinned = []
+
+        def note_custom_tft(self, filename):
+            self.pinned.append(filename)
+            return {"filename": filename, "md5": "x"}
+
+    mgr = FakeMgr()
+    # No custom TFT recorded -> no-op.
+    assert FS.maybe_repin_custom_tft(mgr) == ""
+    # Recorded TFT whose bundled bytes still match -> re-pins.
+    real_gui = Path(FS.__file__).parent / "tft" / "gui.tft"
+    mgr.config.settings.custom_tft_name = "gui.tft"
+    mgr.config.settings.custom_tft_md5 = hashlib.md5(real_gui.read_bytes()).hexdigest()
+    assert FS.maybe_repin_custom_tft(mgr) == "gui.tft"
+    assert mgr.pinned == ["gui.tft"]
+    # Hash drift (bundled replaced by a release) -> no re-pin, no crash.
+    mgr.config.settings.custom_tft_md5 = "0" * 32
+    assert FS.maybe_repin_custom_tft(mgr) == ""

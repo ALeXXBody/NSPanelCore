@@ -167,29 +167,44 @@ async def download_and_activate(hass, manager, manifest: dict) -> tuple[bool, st
     # recorded hash: the fresh overlay dir contains RELEASE TFTs and would
     # otherwise silently overwrite the user's custom display file (and the
     # panels' auto-TFT would push the release file over it).
-    s = getattr(manager.config, "settings", None)
-    if s is not None and getattr(s, "custom_tft_name", ""):
-        import hashlib as _hashlib
-
-        import nspanel_core  # local import avoids cycles
-
-        bundled = os.path.join(os.path.dirname(nspanel_core.__file__), "tft", s.custom_tft_name)
-        h = _hashlib.md5()
-        try:
-            with open(bundled, "rb") as f:
-                for chunk in iter(lambda: f.read(65536), b""):
-                    h.update(chunk)
-            if h.hexdigest() == s.custom_tft_md5:
-                proof = manager.note_custom_tft(s.custom_tft_name)
-                _LOGGER.info("Re-pinned custom %s after activating %s: %s", s.custom_tft_name, version, proof["md5"])
-            else:
-                _LOGGER.warning(
-                    "Custom %s no longer matches its recorded hash; not re-pinning",
-                    s.custom_tft_name,
-                )
-        except OSError:
-            pass
+    repinned = maybe_repin_custom_tft(manager)
+    if repinned:
+        _LOGGER.info("Re-pinned custom %s after activating %s", repinned, version)
     return True, f"firmware {version} active"
+
+
+def maybe_repin_custom_tft(manager) -> str:
+    """Re-pin the manually uploaded TFT over a fresh overlay, if it matches.
+
+    Split out of download_and_activate for testability. NOTE: this module
+    lives INSIDE the integration package, so the bundled dir is simply
+    dirname(__file__) — a top-level ``import nspanel_core`` worked in dev
+    (sys.path) but raised ModuleNotFoundError in production HA (the package
+    is custom_components.nspanel_core), 500ing every firmware_install while
+    a custom TFT was pinned. Never import the top-level package name here.
+    Returns the re-pinned filename, or "" when nothing was re-pinned.
+    """
+    import hashlib as _hashlib
+
+    s = getattr(manager.config, "settings", None)
+    if s is None or not getattr(s, "custom_tft_name", ""):
+        return ""
+    bundled = os.path.join(os.path.dirname(__file__), "tft", s.custom_tft_name)
+    h = _hashlib.md5()
+    try:
+        with open(bundled, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        if h.hexdigest() == s.custom_tft_md5:
+            proof = manager.note_custom_tft(s.custom_tft_name)
+            return proof["filename"]
+        _LOGGER.warning(
+            "Custom %s no longer matches its recorded hash; not re-pinning",
+            s.custom_tft_name,
+        )
+    except OSError:
+        pass
+    return ""
 
 
 def validate_manifest_against(paths: dict[str, str], manifest: dict | None = None) -> bool:
