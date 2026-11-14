@@ -96,9 +96,11 @@ func main() {
 
 	// 2. Subscribe the BROKER (server-side) to the topic filter. This only
 	// adds a subscription — it publishes nothing to any topic.
+	// Raw broker frames use the frontend mechanism: a message-type
+	// mqtt/subscribe whose forwards arrive tagged with our id. (The
+	// call_service variant subscribes the broker but never forwards to WS.)
 	if err := send(conn, map[string]any{
-		"id": 1, "type": "call_service", "domain": "mqtt", "service": "subscribe",
-		"service_data": map[string]any{"topic": *topic},
+		"id": 10, "type": "mqtt/subscribe", "topic": *topic,
 	}); err != nil {
 		log.Fatalf("mqtt subscribe: %v", err)
 	}
