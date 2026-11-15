@@ -254,3 +254,68 @@ def test_absurd_offset_restarts_clean():
     assert "consecutiveFailures" in src, (
         "retry bound missing: absurd-jump loop must give up loudly, not churn forever"
     )
+
+
+def test_ap_fallback_always_reachable():
+    """P116 audit: the setup AP must come up IMMEDIATELY on STA failure and
+    stay up while the STA retries — never gated behind a timer, never torn
+    down to chase the configured network, never an endless reboot loop.
+    (The old code: AP only after 3 min, then scan→ESP.restart()→reboot
+    forever with a wrong PSK — the panel was unreachable for ~4 of every
+    5 minutes and the user saw no AP at all.)"""
+    src = _src(pathlib.Path(FW) / "src" / "main.cpp")
+    assert "WIFI_AP_STA" in src, "AP+STA concurrent mode missing"
+    assert "Found configured WiFi. Will restart" not in src, (
+        "scan-then-restart loop is back: reboots forever with a wrong PSK"
+    )
+    assert "millis() - lastWiFiconnected < 180 * 1000" not in src, (
+        "3-minute AP gate is back: AP must come up immediately on failure"
+    )
+    assert 'softAP("NSPanelCore"' in src, "setup AP missing"
+    assert "dropAPOnceSTAConnected" in src and "ensureAP" in src, (
+        "AP lifecycle helpers missing"
+    )
+
+
+def test_ap_fallback_state_machine_sequence():
+    """P116 regression: the AP lifecycle must follow the designed sequence
+    from the ACTUAL source, in order —
+      boot fail -> ensureAP (AP+STA up, web server up)
+      user fixes config via AP page -> reboot -> STA connects
+      -> dropAPOnceSTAConnected BEFORE mqtt start
+      -> if STA drops later -> ensureAP again (restore, not gate).
+    Pins the exact call order so the wiring cannot silently regress."""
+    src = _src(pathlib.Path(FW) / "src" / "main.cpp")
+
+    # 1. ensureAP() must: set AP+STA mode, start softAP, then init webMan.
+    m = re.search(r"static void ensureAP\(\) \{(.*?)\n\}", src, re.S)
+    assert m, "ensureAP() missing"
+    body = m.group(1)
+    assert "WiFi.mode(WIFI_AP_STA)" in body
+    assert body.index("WiFi.softAP(") < body.index("webMan.init("), (
+        "web server must start AFTER the AP is up"
+    )
+    assert "ESP.restart" not in body, "ensureAP must never reboot the panel"
+
+    # 2. dropAP must run BEFORE webMan/mqtt init on STA connect (IP switch).
+    m2 = re.search(
+        r"if \(WiFi\.isConnected\(\)\) \{\n\s*dropAPOnceSTAConnected\(\);", src)
+    assert m2, "dropAPOnceSTAConnected must be the first action on connect"
+    after = src[m2.end():m2.end() + 800]
+    assert "webMan.init" in after and "mqttManager.start" in after, (
+        "web/mqtt init must follow the AP drop"
+    )
+
+    # 3. The retry loop must call ensureAP on EVERY failure pass (restore).
+    retry = re.search(r"if \(!WiFi\.isConnected\(\)\) \{(.*?)dropAPOnceSTAConnected", src, re.S)
+    assert retry, "retry block missing"
+    assert retry.group(1).count("ensureAP()") >= 1, (
+        "AP must be restored on every failed pass"
+    )
+
+    # 4. No-config path must park in a bounded delay loop (task alive),
+    #    with the AP up — not in an eternal portMAX_DELAY inside a scan fn.
+    m3 = re.search(r"No WiFi SSID configured: the setup AP runs forever\.(.*?)\n  \}", src, re.S)
+    assert m3, "no-config AP path missing"
+    assert "ensureAP()" in m3.group(1)
+    assert "vTaskDelay(1000 / portTICK_PERIOD_MS)" in m3.group(1)

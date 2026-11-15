@@ -182,61 +182,39 @@ void onWiFiEvent(WiFiEvent_t event) {
   }
 }
 
-void startAndManageWiFiAccessPoint() {
-  for (;;) {
-    Serial.println("Setting Wifi mode to AP.");
-    WiFi.mode(WIFI_AP);
-    IPAddress local_ip(192, 168, 1, 1);
-    IPAddress subnet(255, 255, 255, 0);
+// AP fallback state (owned by the WiFi task only).
+static bool _apActive = false;
 
-    Serial.println("Starting AP!");
-    if (WiFi.softAP("NSPanelCore", NULL)) {
-      Serial.println("Soft-AP started.");
-      if (WiFi.softAPConfig(local_ip, local_ip, subnet)) {
-        Serial.println("Soft-AP configuration applied.");
-
-        Serial.println("WiFi SSID: NSPanelCore");
-        Serial.println("No WiFi password.");
-        Serial.print("WiFi IP Address: 192.168.1.1");
-
-        vTaskDelay(500 / portTICK_PERIOD_MS);
-        webMan.init(NSPanelCoreFirmwareVersion);
-        // Wait indefinitely
-        if (!NSPMConfig::instance->wifi_ssid.empty()) {
-          for (;;) {
-            vTaskDelay(60000 / portTICK_PERIOD_MS); // Scan for the configured network every 60 seconds.
-            Serial.println("Scanning for configured wifi.");
-
-            int n = WiFi.scanComplete();
-            if (n == -2) {
-              WiFi.scanNetworks(true);
-            } else if (n) {
-              for (int i = 0; i < n; ++i) {
-                if (!WiFi.SSID(i).isEmpty()) {
-                  if (WiFi.SSID(i).equals(config.wifi_ssid.c_str())) {
-                    Serial.println("Found configured WiFi. Will restart and try to connect.");
-                    vTaskDelay(250 / portTICK_PERIOD_MS);
-                    ESP.restart(); // The configured network was discovered. Reboot.
-                  }
-                }
-              }
-            }
-            WiFi.scanDelete();
-          }
-        } else {
-          // Wait indefinitely
-          for (;;) {
-            vTaskDelay(portMAX_DELAY);
-          }
-        }
-      } else {
-        LOG_ERROR("Failed to start Soft-AP!");
-      }
-    } else {
-      LOG_ERROR("Failed to apply Soft-AP configuration!");
-    }
-    vTaskDelay(10000 / portTICK_PERIOD_MS);
+// Bring the setup AP up in AP+STA mode. Called the moment STA fails (and
+// again whenever the STA drops later). The AP STAYS UP while the STA
+// retries in the background, so the panel is always reachable at
+// http://192.168.1.1 when its configured network is unreachable.
+static void ensureAP() {
+  if (_apActive) {
+    return;
   }
+  IPAddress local_ip(192, 168, 1, 1);
+  IPAddress subnet(255, 255, 255, 0);
+  WiFi.mode(WIFI_AP_STA);
+  if (WiFi.softAP("NSPanelCore", NULL) && WiFi.softAPConfig(local_ip, local_ip, subnet)) {
+    Serial.println("Soft-AP started: SSID 'NSPanelCore', http://192.168.1.1");
+    _apActive = true;
+    webMan.init(NSPanelCoreFirmwareVersion);
+  } else {
+    LOG_ERROR("Failed to start Soft-AP!");
+  }
+}
+
+// Drop the setup AP once the STA has joined the configured network.
+// Restored automatically by ensureAP() if the STA drops again later.
+static void dropAPOnceSTAConnected() {
+  if (!_apActive || !WiFi.isConnected()) {
+    return;
+  }
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
+  _apActive = false;
+  Serial.println("WiFi connected - setup AP stopped.");
 }
 
 void taskManageWifiAndMqtt(void *param) {
@@ -249,11 +227,14 @@ void taskManageWifiAndMqtt(void *param) {
 
   if (!NSPMConfig::instance->wifi_ssid.empty()) {
     for (;;) {
-      if (!WiFi.isConnected() && millis() - lastWiFiconnected < 180 * 1000) {
+      if (!WiFi.isConnected()) {
         LOG_ERROR("WiFi not connected!");
         Serial.println("WiFi not connected!");
+        // AP comes up IMMEDIATELY in AP+STA mode and stays up while the
+        // STA retries in the background — the panel is always reachable
+        // at http://192.168.1.1 when its configured network is unreachable.
+        ensureAP();
         WiFi.setHostname(config.wifi_hostname.c_str());
-        WiFi.mode(WIFI_STA);
         for (uint8_t wifi_connect_tries = 0; wifi_connect_tries < 10 && !WiFi.isConnected(); wifi_connect_tries++) {
           Serial.print("Connecting to WiFi ");
           Serial.println(config.wifi_ssid.c_str());
@@ -267,6 +248,7 @@ void taskManageWifiAndMqtt(void *param) {
         }
 
         if (WiFi.isConnected()) {
+          dropAPOnceSTAConnected();
           Serial.println("Connected to WiFi!");
           LOG_INFO("Connected to WiFi ", config.wifi_ssid.c_str());
           Serial.print("Connected to WiFi ");
@@ -279,9 +261,6 @@ void taskManageWifiAndMqtt(void *param) {
           webMan.init(NSPanelCoreFirmwareVersion);
           mqttManager.start();
         }
-      } else if (!config.wifi_ssid.empty() && !WiFi.isConnected() && millis() - lastWiFiconnected >= 180 * 1000) {
-        // Three minutes or more has passed since last successfull WiFi connection. Start the AP by breaking the loop.
-        startAndManageWiFiAccessPoint();
       }
       if (WiFi.isConnected() && MqttManager::connected()) {
         if (!InterfaceManager::hasRegisteredToManager) {
@@ -341,8 +320,11 @@ void taskManageWifiAndMqtt(void *param) {
       vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
   } else {
-    // No WiFi SSID configured.
-    startAndManageWiFiAccessPoint();
+    // No WiFi SSID configured: the setup AP runs forever.
+    ensureAP();
+    for (;;) {
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
   }
 }
 
