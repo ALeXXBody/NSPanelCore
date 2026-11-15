@@ -1,2 +1,2 @@
-ba9b90599bf47abf0f3229b68b431989  merged-firmware.bin (FULL OURS: IDF5.5 bootloader + 0.1.185 app + fs, flash at 0x0)
-d25b0f82cd270b7f915078adf6e60ecf  hybrid.bin (upstream bootloader + 0.1.185 app + fs, flash at 0x0)
+16a974691a8c65225cd9e7f4ce5dcfb3  merged-firmware.bin (FULL OURS: IDF5.5 bootloader + 0.1.186 app + fs, flash at 0x0)
+d337fb576853106279233edfbb43d41c  hybrid.bin (upstream bootloader + 0.1.186 app + fs, flash at 0x0)

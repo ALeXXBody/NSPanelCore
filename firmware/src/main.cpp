@@ -185,6 +185,14 @@ void onWiFiEvent(WiFiEvent_t event) {
 // AP fallback state (owned by the WiFi task only).
 static bool _apActive = false;
 
+// OTA watchdog state (owned by the WiFi task loop). P133: if an update
+// task ever stalls with frozen progress, the loop below force-reboots.
+// Mid-write reboots are recovery-safe: firmware writes target the
+// INACTIVE ota partition (otadata untouched -> old app boots), and data
+// writes only risk the config fs, which re-initializes on boot.
+static uint8_t _last_ota_progress_pct = 255;
+static uint32_t _last_ota_progress_ms = 0;
+
 // Bring the setup AP up in AP+STA mode. Called the moment STA fails (and
 // again whenever the STA drops later). The AP STAYS UP while the STA
 // retries in the background, so the panel is always reachable at
@@ -230,6 +238,22 @@ void taskManageWifiAndMqtt(void *param) {
 
   if (!NSPMConfig::instance->wifi_ssid.empty()) {
     for (;;) {
+      // P133 seatbelt: an OTA task that stalls with frozen progress gets
+      // force-rebooted instead of wedging the panel into a dead state.
+      if (WebManager::getState() == WebManagerState::UPDATING_FIRMWARE ||
+          WebManager::getState() == WebManagerState::UPDATING_LITTLEFS) {
+        uint8_t ota_pct = WebManager::getUpdateProgress();
+        if (ota_pct != _last_ota_progress_pct) {
+          _last_ota_progress_pct = ota_pct;
+          _last_ota_progress_ms = millis();
+        } else if (_last_ota_progress_pct != 255 && millis() - _last_ota_progress_ms > 120000) {
+          LOG_ERROR("OTA progress frozen for 120s — forcing reboot to recover.");
+          Serial.println("OTA stalled — rebooting.");
+          ESP.restart();
+        }
+      } else {
+        _last_ota_progress_pct = 255;
+      }
       if (!WiFi.isConnected()) {
         LOG_ERROR("WiFi not connected!");
         Serial.println("WiFi not connected!");

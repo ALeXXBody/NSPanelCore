@@ -425,3 +425,16 @@ def test_app_never_serves_stale_firmware():
     assert "_initial_firmware_check" in src, (
         "startup must schedule an early firmware check"
     )
+
+
+def test_ota_watchdog_recovers_stalled_updates():
+    """P133: last-resort seatbelt — a stalled OTA task (frozen progress
+    >120s) must be force-rebooted by the WiFi-task loop instead of wedging
+    the panel. Mid-write reboots are recovery-safe (inactive app partition
+    / re-creatable config fs)."""
+    src = _src(FW / "src" / "main.cpp")
+    assert "OTA progress frozen for 120s" in src, "OTA watchdog missing"
+    assert "OTA stalled — rebooting." in src, "watchdog must force a reboot"
+    i = src.index("OTA progress frozen for 120s")
+    loop_i = src.rindex("for (;;)", 0, i)
+    assert loop_i < i, "watchdog must live inside the WiFi task loop"
