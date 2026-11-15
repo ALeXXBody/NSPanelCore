@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <title>NSPanel Core — panel recovery</title>
+  <style>
+    body { margin: 0 auto; max-width: 560px; padding: 24px 16px 40px;
+      font: 14px/1.5 system-ui, sans-serif; background: #0d1016; color: #c8cbce; }
+    h1 { font-size: 20px; } h1 span { color: #39c8e8; }
+    .card { background: #141a24; border: 1px solid #232c3b; border-radius: 10px;
+      padding: 14px; margin: 0 0 12px; }
+    ol { margin: 8px 0; padding-left: 20px; } li { margin: 6px 0; }
+    code { background: #0d1016; padding: 1px 5px; border-radius: 4px; }
+    a { color: #39c8e8; }
+    .note { color: #8b93a1; font-size: 13px; }
+  </style>
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</head>
+<body>
+  <h1>NSPanel <span>Core</span> — panel recovery</h1>
+  <div class="card">
+    <ol>
+      <li>Unplug the panel (mains OFF), open it, connect a USB-to-TTL adapter (3.3V): GND→GND, TX→RX, RX→TX.</li>
+      <li>Put the ESP32 into download mode (hold BOOT, tap RESET).</li>
+      <li>Use Chrome or Edge on a computer (needs WebSerial). Click install, pick the USB serial port.</li>
+    </ol>
+    <p class="note">After ANY install: release BOOT, power from mains, reset, wait 60 seconds.</p>
+  </div>
+
+  <div class="card">
+    <strong>Option A — hybrid (recommended first):</strong> the bootloader proven to boot this panel + our firmware 0.1.178 + a clean config filesystem.
+    <p><esp-web-install-button manifest="./manifest_hybrid.json"></esp-web-install-button></p>
+    <p class="note">If it boots: panel appears as setup AP <em>NSPanelCore</em> — open http://192.168.1.1 and configure WiFi + MQTT.</p>
+  </div>
+
+  <div class="card">
+    <strong>Option B — upstream NSPanel Manager (proven full image):</strong> the stock image this panel demonstrably boots.
+    <p><esp-web-install-button manifest="./manifest_upstream_full.json"></esp-web-install-button></p>
+    <p class="note">Panel runs upstream software with its own setup flow.</p>
+  </div>
+
+  <div class="card">
+    <strong>Option C — surgical (our app only, keeps current bootloader):</strong> writes only our app + config filesystem, no erase.
+    <p><esp-web-install-button manifest="./manifest_surgical.json"></esp-web-install-button></p>
+    <p class="note">Only useful after Option A has proven the bootloader works.</p>
+  </div>
+</body>
+</html>
