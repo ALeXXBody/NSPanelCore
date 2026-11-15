@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <title>NSPanel Core — panel recovery</title>
+  <style>
+    body { margin: 0 auto; max-width: 560px; padding: 24px 16px 40px;
+      font: 14px/1.5 system-ui, sans-serif; background: #0d1016; color: #c8cbce; }
+    h1 { font-size: 20px; } h1 span { color: #39c8e8; }
+    .card { background: #141a24; border: 1px solid #232c3b; border-radius: 10px;
+      padding: 14px; margin: 0 0 12px; }
+    ol { margin: 8px 0; padding-left: 20px; } li { margin: 6px 0; }
+    code { background: #0d1016; padding: 1px 5px; border-radius: 4px; }
+    a { color: #39c8e8; }
+    .note { color: #8b93a1; font-size: 13px; }
+  </style>
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</head>
+<body>
+  <h1>NSPanel <span>Core</span> — panel recovery</h1>
+  <div class="card">
+    <ol>
+      <li>Unplug the panel (mains OFF), open it, connect a USB-to-TTL adapter (3.3V): GND→GND, TX→RX, RX→TX.</li>
+      <li>Put the ESP32-C6 into download mode (hold BOOT, tap RESET).</li>
+      <li>Use Chrome or Edge on a computer (needs WebSerial). Click install, pick the USB serial port, confirm the erase when asked.</li>
+    </ol>
+    <p><esp-web-install-button manifest="./manifest.json"></esp-web-install-button></p>
+    <p class="note">No software to install, no commands to type. This writes bootloader, partition table, firmware 0.1.177 and the blank setup page.</p>
+  </div>
+  <div class="card">
+    <strong>Display still shows System Data ERROR afterwards?</strong>
+    Flash the display separately: download <a href="./blank.tft">blank.tft</a>
+    (proven blank screen), then push it to the panel over WiFi from the
+    integration's firmware page once the panel is back online.
+  </div>
+</body>
+</html>

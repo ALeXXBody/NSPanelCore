@@ -1,0 +1,16 @@
+{
+  "name": "NSPanel Core panel recovery",
+  "version": "0.1.177",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-C6",
+      "parts": [
+        { "path": "bootloader.bin", "offset": 0 },
+        { "path": "partitions.bin", "offset": 32768 },
+        { "path": "firmware.bin", "offset": 65536 },
+        { "path": "littlefs.bin", "offset": 225280 }
+      ]
+    }
+  ]
+}
