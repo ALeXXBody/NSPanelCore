@@ -1,10 +1,10 @@
 {
-  "version": "0.1.185",
-  "notes": "Proper fix: firmware and filesystem OTA split across reboots \u2014 after flashing firmware the panel reboots BEFORE any fs work, so the fs update always runs under the newest code (old code running the fs step was the death path); plus 0.1.183 safety rails (fs unmount before write, remount after, bounded retries).",
+  "version": "0.1.186",
+  "notes": "Last-resort seatbelt: an OTA watchdog force-reboots the panel if an update task ever stalls with frozen progress for 120s \u2014 the 'dead panel' failure mode becomes an automatic recovery (mid-write reboots are safe: firmware writes target the inactive partition, config fs re-initializes on boot).",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "f96c0641f6c6148579ee158e4d962cef"
+      "md5": "cea6feee3a673a7fe74d33b6c5487c51"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "f96c0641f6c6148579ee158e4d962cef"
+      "md5": "cea6feee3a673a7fe74d33b6c5487c51"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
