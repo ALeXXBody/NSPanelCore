@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="dark light" />
-  <title>NSPanel Core — KitchenPanel</title>
-  <link rel="stylesheet" href="main.css?v=175" />
+  <title>NSPanel Core — DemoPanel</title>
+  <link rel="stylesheet" href="main.css?v=177" />
   <script>
     // Theme: saved choice wins, otherwise dark (panel UI is dark-first).
     function nspanel_is_dark() {
@@ -92,7 +92,7 @@
     // Fire-and-forget actions (reboot / factory reset): fetch() so the
     // browser NEVER leaves this page (a full navigation used to park the
     // user on a blank /do_reboot URL while the panel rebooted).
-    // The busy overlay stays up; the 5s HEAD poller hides it on recovery.
+    // The busy overlay stays up; the 5s GET poller hides it on recovery.
     // fetch WILL reject when the panel goes down mid-reboot — expected.
     function confirmAction(msg, url, busyText) {
       if (!confirm(msg)) return false;
@@ -103,9 +103,11 @@
       try { fetch(url, {method: "GET"}).catch(function () {}); } catch (e) {}
       return false;
     }
-    // Connection monitor: HEAD / every 5s. Shows the overlay after 2
+    // Connection monitor: GET / every 5s. Shows the overlay after 2
     // consecutive failures (avoids blinking on a single slow response),
     // hides it on recovery. Paused while the WiFi modal scans.
+    // NOTE: must be GET, not HEAD — the firmware only registers GET /,
+    // so HEAD always answers 404 and the overlay could never clear.
     function connectionMonitor() {
       if (!doConnectionCheck) { setTimeout(connectionMonitor, 5000); return; }
       var request = new XMLHttpRequest();
@@ -122,14 +124,16 @@
         }
       };
       try {
-        request.open("HEAD", "/", true);
+        request.open("GET", "/", true);
         request.timeout = 4000;
         request.send();
       } catch (e) {}
       setTimeout(connectionMonitor, 5000);
     }
     function onSaveSubmit() {
-      doConnectionCheck = false;
+      // NOTE: the poller keeps running through the save-reboot on purpose:
+      // it shows the overlay while the panel is down and hides it on
+      // recovery. (Freezing it here used to strand the overlay forever.)
       var overlay = document.getElementById("conn_modal");
       var msg = document.getElementById("conn_modal_text");
       if (msg) msg.textContent = "Saving — the panel will reboot to apply the new configuration.";
@@ -173,7 +177,7 @@
   <header class="brandbar slim">
     <svg class="brandmark" viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="8" width="48" height="48" rx="12" fill="none" stroke="currentColor" stroke-width="4"/><text x="32" y="45" text-anchor="middle" font-size="34" font-weight="700" fill="currentColor" font-family="system-ui,sans-serif">C</text></svg>
     <div class="brandtext">
-      <h1>NSPanel <span>Core</span> <span class="ver">0.1.175</span><span class="dot" id="status_dot" title="Panel reachable"></span></h1>
+      <h1>NSPanel <span>Core</span> <span class="ver">0.1.177</span><span class="dot" id="status_dot" title="Panel reachable"></span></h1>
     </div>
     <label class="theme-switch compact" title="Dark mode">
       <input type="checkbox" id="theme_toggle" onchange="toggle_theme(this.checked)">
@@ -186,7 +190,7 @@
       <section class="card">
         <h2>Device</h2>
         <label class="field"><span>Name</span>
-          <input type="text" name="wifi_hostname" id="wifi_hostname" placeholder="Device name" value="KitchenPanel" required maxlength="32">
+          <input type="text" name="wifi_hostname" id="wifi_hostname" placeholder="Device name" value="DemoPanel" required maxlength="32">
         </label>
         <p class="hint">Used on first registration only (A–Z a–z 0–9 - _). Rename later from Home Assistant.</p>
       </section>
@@ -195,7 +199,7 @@
         <h2>WiFi</h2>
         <label class="field"><span>SSID</span>
           <div class="row">
-            <input type="text" name="wifi_ssid" id="wifi_ssid" placeholder="SSID" value="IoT_Network" required>
+            <input type="text" name="wifi_ssid" id="wifi_ssid" placeholder="SSID" value="Home_Network" required>
             <button type="button" class="btn btn-ghost" onclick="showWifiSelectModal();">Scan</button>
           </div>
         </label>
@@ -207,18 +211,18 @@
       <section class="card">
         <h2>MQTT</h2>
         <label class="field"><span>Server</span>
-          <input type="text" name="mqtt_server" id="mqtt_server" placeholder="MQTT Server" value="192.168.50.20" required>
+          <input type="text" name="mqtt_server" id="mqtt_server" placeholder="MQTT Server" value="192.168.1.20" required>
         </label>
         <div class="grid2">
           <label class="field"><span>Port</span>
             <input type="number" name="mqtt_port" id="mqtt_port" placeholder="1883" value="1883" required>
           </label>
           <label class="field"><span>Username</span>
-            <input type="text" name="mqtt_username" id="mqtt_username" placeholder="Username" value="ALeXX">
+            <input type="text" name="mqtt_username" id="mqtt_username" placeholder="Username" value="demo">
           </label>
         </div>
         <label class="field"><span>Password</span>
-          <input type="password" name="mqtt_psk" id="mqtt_psk" placeholder="Password" value="mqttpass">
+          <input type="password" name="mqtt_psk" id="mqtt_psk" placeholder="Password" value="demopass">
         </label>
       </section>
 
