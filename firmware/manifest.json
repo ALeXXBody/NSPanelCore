@@ -1,22 +1,22 @@
 {
-  "version": "0.1.176",
-  "notes": "Restore Editor-built rebrand TFT for A/B test vs nxwright build (picture-encoding suspect)",
+  "version": "0.1.177",
+  "notes": "Absurd-0x08-offset guard: offsets beyond bytes-sent clean-restart (max 10) instead of writing Frankenstein images at fake 100% (P104 root cause of all System Data ERRORs)",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "3c90a2f93df7cc04521a9309fd0ebfc7"
+      "md5": "64801a0facd50cfe26cf82ffad429d42"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
-      "md5": "30276347a9fa2832962890dd561be16a"
+      "md5": "12285ae4028cae932994a635a506e22b"
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "3c90a2f93df7cc04521a9309fd0ebfc7"
+      "md5": "64801a0facd50cfe26cf82ffad429d42"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
-      "md5": "30276347a9fa2832962890dd561be16a"
+      "md5": "12285ae4028cae932994a635a506e22b"
     },
     "tft/gui.tft": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui.tft",
