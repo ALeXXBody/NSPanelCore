@@ -1,4 +1,5 @@
 #include "NSPMConfig.h"
+#include <Arduino.h>
 #include "freertos/portmacro.h"
 #include <ArduinoJson.h>
 #include <HomePage.hpp>

@@ -1,1 +1,2 @@
-0184ec9702e5b278f48bb5320d02b9af  firmware/usb_recovery/merged-firmware.bin
+68e32c0801cfb29bc8bb63c528bd4a2d  merged-firmware.bin (FULL OURS: IDF5.5 bootloader + 0.1.180 app + fs, flash at 0x0)
+d62198712858be13fd6f2c739f175edb  hybrid.bin (upstream bootloader + 0.1.180 app + fs, flash at 0x0)

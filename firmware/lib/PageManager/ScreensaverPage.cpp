@@ -1,4 +1,5 @@
 #include "ArduinoJson/Array/JsonArray.hpp"
+#include <Arduino.h>
 #include "freertos/portmacro.h"
 #include <ArduinoJson.h>
 #include <InterfaceConfig.hpp>
