@@ -4,3 +4,4 @@
 76f6995668887be88392e251bdeea004  littlefs.bin
 97e6363b4d310ce4bc4c46e9a885ae3a  MD5SUMS
 0d2338d1ab80d47bc30edf94c63cb716  partitions.csv
+fa7717c3f7367b94cea38c78383c96f8  firmware/usb_recovery/merged-firmware.bin

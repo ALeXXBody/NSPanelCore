@@ -16,11 +16,14 @@ dark too. Nothing here is experimental — every file below is checksummed
 3. Hold BOOT, tap RESET (or power on) to enter download mode.
 4. On the PC: `pip install esptool`, then from this folder:
 ```
-esptool.py --chip esp32c6 --port /dev/ttyUSB0 --baud 921600 write_flash \
-  0x0 bootloader.bin \
-  0x8000 partitions.csv \
-  0x10000 firmware.bin \
-  0x370000 littlefs.bin
+esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 921600 write_flash \
+  0x0 merged-firmware.bin
+
+(single file, includes bootloader + partition table + firmware 0.1.177 +
+ setup page — erase first if the chip was flashed before:
+ `esptool.py --chip esp32 --port /dev/ttyUSB0 erase_flash`.
+ Or use the browser installer (Chrome/Edge, no software needed):
+ https://alexxbody.github.io/NSPanelCore/install/ )
 ```
 (Windows: replace /dev/ttyUSB0 with COMx.)
 5. Reset the board. The panel web UI comes back at its configured IP
