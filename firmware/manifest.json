@@ -1,10 +1,10 @@
 {
-  "version": "0.1.180",
-  "notes": "Rebuilt on Arduino core 3.x / ESP-IDF 5.5 so app and bootloader are the same generation (old IDF 4.4 app under the IDF 5.5 bootloader was unstable on weak power). Recovery kit: full-ours image with bootloader included.",
+  "version": "0.1.181",
+  "notes": "Setup-page WiFi scan fix: endpoint re-triggers scanning on every empty/failed state (old code dead-ended on 0 results \u2014 no networks ever shown on IDF 5.5); first scan starts at AP bring-up.",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "2e671c2222450e2861b6ea0f78c80722"
+      "md5": "78c139ae6d2a8dbbc48251fcf425157f"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "2e671c2222450e2861b6ea0f78c80722"
+      "md5": "78c139ae6d2a8dbbc48251fcf425157f"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
