@@ -1,6 +1,6 @@
 {
-  "version": "0.1.178",
-  "notes": "AP fallback fixed: setup AP comes up immediately on WiFi failure (AP+STA), stays up while retrying, dropped on connect, restored on drop; removed 3-min gate + scan-restart reboot loop",
+  "version": "0.1.179",
+  "notes": "Boot display handshake without power-cycle first (USB-power safe); display power-cycle only as fallback after failed gentle handshake",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
