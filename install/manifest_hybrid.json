@@ -1,6 +1,6 @@
 {
-  "name": "NSPanel Core recovery (hybrid: proven bootloader + our 0.1.179 app)",
-  "version": "0.1.179-hybrid",
+  "name": "NSPanel Core recovery (hybrid: upstream bootloader + our 0.1.180 app)",
+  "version": "0.1.180-hybrid",
   "new_install_prompt_erase": true,
   "builds": [
     {

@@ -30,21 +30,21 @@
   </div>
 
   <div class="card">
-    <strong>Option A — hybrid (recommended first):</strong> the bootloader proven to boot this panel + our firmware 0.1.179 + a clean config filesystem.
-    <p><esp-web-install-button manifest="./manifest_hybrid.json"></esp-web-install-button></p>
-    <p class="note">If it boots: panel appears as setup AP <em>NSPanelCore</em> — open http://192.168.1.1 and configure WiFi + MQTT.</p>
+    <strong>Option A — full NSPanel Core (recommended): bootloader + firmware + config, all 0.1.180 on ESP-IDF 5.5.</strong>
+    <p><esp-web-install-button manifest="./manifest_full.json"></esp-web-install-button></p>
+    <p class="note">Everything ours, bootloader included — app and bootloader are now the same toolchain generation (the old mismatch was the fault). If it boots: setup AP <em>NSPanelCore</em> appears — configure WiFi + MQTT at http://192.168.1.1.</p>
   </div>
 
   <div class="card">
-    <strong>Option B — upstream NSPanel Manager (proven full image):</strong> the stock image this panel demonstrably boots.
+    <strong>Option B — hybrid fallback:</strong> upstream's proven bootloader + our 0.1.180 firmware + clean config.
+    <p><esp-web-install-button manifest="./manifest_hybrid.json"></esp-web-install-button></p>
+    <p class="note">Use if Option A shows any bootloader trouble. Same firmware, borrowed bootloader.</p>
+  </div>
+
+  <div class="card">
+    <strong>Option C — upstream NSPanel Manager (last resort):</strong> the stock image.
     <p><esp-web-install-button manifest="./manifest_upstream_full.json"></esp-web-install-button></p>
     <p class="note">Panel runs upstream software with its own setup flow.</p>
-  </div>
-
-  <div class="card">
-    <strong>Option C — surgical (our app only, keeps current bootloader):</strong> writes only our app + config filesystem, no erase.
-    <p><esp-web-install-button manifest="./manifest_surgical.json"></esp-web-install-button></p>
-    <p class="note">Only useful after Option A has proven the bootloader works.</p>
   </div>
 </body>
 </html>
