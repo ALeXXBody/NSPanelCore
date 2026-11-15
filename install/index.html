@@ -15,7 +15,6 @@
     code { background: #0d1016; padding: 1px 5px; border-radius: 4px; }
     a { color: #39c8e8; }
     .note { color: #8b93a1; font-size: 13px; }
-    .btn { background:#39c8e8; color:#06222b; padding:10px 14px; border-radius:8px; font-weight:600; display:inline-block; }
   </style>
   <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 </head>
@@ -27,28 +26,25 @@
       <li>Put the ESP32 into download mode (hold BOOT, tap RESET).</li>
       <li>Use Chrome or Edge on a computer (needs WebSerial). Click install, pick the USB serial port.</li>
     </ol>
+    <p class="note">After ANY install: release BOOT, power from mains, reset, wait 60 seconds.</p>
   </div>
 
   <div class="card">
-    <strong>Option 2 (try FIRST — surgical):</strong> writes only the app and the config filesystem. The chip's own bootloader and partition table are left untouched.
-    <p><esp-web-install-button manifest="./manifest_surgical.json"></esp-web-install-button></p>
-    <p class="note">Firmware 0.1.178 with the panel's own config preloaded (hostname NSPMPanel-49A100, WiFi IoT, MQTT 192.168.50.20).</p>
+    <strong>Option A — hybrid (recommended first):</strong> the bootloader proven to boot this panel + our firmware 0.1.178 + a clean config filesystem.
+    <p><esp-web-install-button manifest="./manifest_hybrid.json"></esp-web-install-button></p>
+    <p class="note">If it boots: panel appears as setup AP <em>NSPanelCore</em> — open http://192.168.1.1 and configure WiFi + MQTT.</p>
   </div>
 
   <div class="card">
-    <strong>Option 1 (full — our bootloader too):</strong> writes bootloader, partition table, firmware 0.1.178 and the config filesystem. Erases the whole chip first.
-    <p><esp-web-install-button manifest="./manifest_full.json"></esp-web-install-button></p>
-  </div>
-
-  <div class="card">
-    <strong>Option 3 (full — upstream NSPanel Manager, for comparison):</strong> the stock upstream image (bootloader, partition table, app 0.3.967, stock data file). Use this if Option 1 fails but you want to test whether the panel hardware boots upstream.
+    <strong>Option B — upstream NSPanel Manager (proven full image):</strong> the stock image this panel demonstrably boots.
     <p><esp-web-install-button manifest="./manifest_upstream_full.json"></esp-web-install-button></p>
-    <p class="note">After this one the panel runs upstream NSPanel Manager — its own setup flow (AP + web page) applies, not ours.</p>
+    <p class="note">Panel runs upstream software with its own setup flow.</p>
   </div>
 
-  <div class="card note">
-    After ANY install: release BOOT, power from mains, reset, wait 60s.
-    Then check your WiFi list for the panel's AP, and your router for the panel.
+  <div class="card">
+    <strong>Option C — surgical (our app only, keeps current bootloader):</strong> writes only our app + config filesystem, no erase.
+    <p><esp-web-install-button manifest="./manifest_surgical.json"></esp-web-install-button></p>
+    <p class="note">Only useful after Option A has proven the bootloader works.</p>
   </div>
 </body>
 </html>
