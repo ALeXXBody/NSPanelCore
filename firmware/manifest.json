@@ -1,10 +1,10 @@
 {
-  "version": "0.1.183",
-  "notes": "Fix panel death during fs OTA: data partition is now unmounted from LittleFS BEFORE Update.begin (the mounted fs deadlocked Update.end() \u2014 panel froze at 'Updating FS 100%' and died); filesystem remounted after the write; all OTA retries and config-save loops bounded (3 attempts, save 10) so the task can never hang forever.",
+  "version": "0.1.185",
+  "notes": "Proper fix: firmware and filesystem OTA split across reboots \u2014 after flashing firmware the panel reboots BEFORE any fs work, so the fs update always runs under the newest code (old code running the fs step was the death path); plus 0.1.183 safety rails (fs unmount before write, remount after, bounded retries).",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "b827290fad9d9ed0e2435d6c8b68142e"
+      "md5": "f96c0641f6c6148579ee158e4d962cef"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "b827290fad9d9ed0e2435d6c8b68142e"
+      "md5": "f96c0641f6c6148579ee158e4d962cef"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
