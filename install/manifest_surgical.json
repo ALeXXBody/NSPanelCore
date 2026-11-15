@@ -1,0 +1,14 @@
+{
+  "name": "NSPanel Core recovery (surgical: app+config only, keeps bootloader)",
+  "version": "0.1.178",
+  "new_install_prompt_erase": false,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        { "path": "fw_0178.bin", "offset": 65536 },
+        { "path": "fs_preseeded.bin", "offset": 3604480 }
+      ]
+    }
+  ]
+}

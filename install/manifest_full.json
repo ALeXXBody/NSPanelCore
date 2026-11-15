@@ -1,0 +1,28 @@
+{
+  "name": "NSPanel Core recovery (full - our bootloader)",
+  "version": "0.1.178",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        {
+          "path": "bootloader_ours.bin",
+          "offset": 4096
+        },
+        {
+          "path": "partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "fw_0178.bin",
+          "offset": 65536
+        },
+        {
+          "path": "fs_preseeded.bin",
+          "offset": 3604480
+        }
+      ]
+    }
+  ]
+}
