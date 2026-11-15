@@ -1,22 +1,22 @@
 {
-  "version": "0.1.181",
-  "notes": "Setup-page WiFi scan fix: endpoint re-triggers scanning on every empty/failed state (old code dead-ended on 0 results \u2014 no networks ever shown on IDF 5.5); first scan starts at AP bring-up.",
+  "version": "0.1.182",
+  "notes": "Setup page layout fix: MQTT Port and Username rows now render as standard aligned field rows (they were wrapped in a 2-col container that stacked the labels). Web UI shipped inside the config filesystem.",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "78c139ae6d2a8dbbc48251fcf425157f"
+      "md5": "c885e477ae7a3e0e45975eb50b27bbab"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
-      "md5": "7a6015302c7655c8d4b5f8dd5a6b09a5"
+      "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "78c139ae6d2a8dbbc48251fcf425157f"
+      "md5": "c885e477ae7a3e0e45975eb50b27bbab"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
-      "md5": "7a6015302c7655c8d4b5f8dd5a6b09a5"
+      "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "tft/gui.tft": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui.tft",
