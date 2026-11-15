@@ -7,7 +7,7 @@ dark too. Nothing here is experimental — every file below is checksummed
 
 ## What you need
 - USB-to-TTL serial adapter (3.3V) + 4 dupont wires + a PC with Python
-- Philips screwdriver, FAT32 microSD card (any size), mains OFF while open
+- Philips screwdriver, mains OFF while open
 - This folder (download it whole from the repo)
 
 ## A. ESP back to life (USB flash, 5 min)
@@ -26,15 +26,16 @@ esptool.py --chip esp32c6 --port /dev/ttyUSB0 --baud 921600 write_flash \
 5. Reset the board. The panel web UI comes back at its configured IP
    (or its setup AP if WiFi settings were wiped).
 
-## B. Display back to life (SD card, 5 min)
-1. Copy ONLY `blank.tft` onto the FAT32 microSD card.
-2. Mains OFF. Insert the card into the display's SD slot, power on.
-3. The display flashes itself and shows the QR screen. Power off, remove card.
-4. From here the integration can push any TFT over WiFi again — but per
-   RULE R5 nothing gets flashed without your explicit per-file approval.
+## B. Display back to life (over WiFi, once the ESP is up)
+With the ESP alive again, push `blank.tft` over WiFi from the integration
+exactly as before — the ESP drives the display UART, no SD card involved.
+(The earlier version of this guide told you to use the display's SD slot.
+That was wrong: the socket is not accessible inside the sealed NSPanel
+assembly. Retracted — verify on the device, not the datasheet.)
+From a booted blank screen the integration can push any TFT over WiFi
+again — but per RULE R6 nothing of mine goes near the panel anyway.
 
 ## If A fails (esptool cannot connect)
 - Swap TX/RX, check GND, try 115200 baud, try another USB cable/port
   (charge-only cables have no data wires — most common gotcha).
-- If the ESP chip itself is dead, the board needs replacing; the display
-  SD route (B) is still worth trying first.
+- If the ESP chip itself is dead, the board needs replacing.
