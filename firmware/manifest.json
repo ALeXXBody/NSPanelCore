@@ -1,22 +1,22 @@
 {
-  "version": "0.1.179",
-  "notes": "Boot display handshake without power-cycle first (USB-power safe); display power-cycle only as fallback after failed gentle handshake",
+  "version": "0.1.180",
+  "notes": "Rebuilt on Arduino core 3.x / ESP-IDF 5.5 so app and bootloader are the same generation (old IDF 4.4 app under the IDF 5.5 bootloader was unstable on weak power). Recovery kit: full-ours image with bootloader included.",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "64801a0facd50cfe26cf82ffad429d42"
+      "md5": "2e671c2222450e2861b6ea0f78c80722"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
-      "md5": "12285ae4028cae932994a635a506e22b"
+      "md5": "7a6015302c7655c8d4b5f8dd5a6b09a5"
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "64801a0facd50cfe26cf82ffad429d42"
+      "md5": "2e671c2222450e2861b6ea0f78c80722"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
-      "md5": "12285ae4028cae932994a635a506e22b"
+      "md5": "7a6015302c7655c8d4b5f8dd5a6b09a5"
     },
     "tft/gui.tft": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/gui.tft",
