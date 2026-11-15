@@ -365,3 +365,29 @@ def test_wifi_scan_endpoint_never_dead_ends():
     assert "WiFi.scanNetworks(true)" in window, (
         "AP bring-up must start the first WiFi scan immediately"
     )
+
+
+def test_fs_ota_unmounts_littlefs_and_bounded_retries():
+    """P129 (panel died stuck at 'Updating FS 100%'): the data-partition OTA
+    must unmount LittleFS BEFORE Update.begin (mounted fs deadlocked
+    Update.end() on IDF 5.5), remount after success, and the update task
+    must have no infinite while(true) loops — every retry is bounded."""
+    src = _src(WEBMGR)
+    upd_i = src.index("bool WebManager::_update")
+    upd_body = src[upd_i:src.index("\n}\n", upd_i)]
+    unmount = upd_body.find("LittleFS.end();")
+    begin = upd_body.find("Update.begin(")
+    assert unmount != -1 and begin != -1 and unmount < begin, (
+        "fs OTA must unmount LittleFS before Update.begin"
+    )
+    remount = upd_body.find("LittleFS.begin(false)", begin)
+    assert remount != -1 and remount < upd_body.find("return true;", begin), (
+        "fs OTA must remount the updated filesystem after success"
+    )
+    task_i = src.index("void WebManager::_taskPerformOTAUpdate")
+    task_body = src[task_i:]
+    assert "while (true)" not in task_body[:task_body.index("void WebManager::", task_i + 10)] if "void WebManager::" in task_body[task_i+10:] else True, (
+        "no infinite loops allowed in the OTA task"
+    )
+    assert task_body.count("of 3.") == 2, "fw and fs retries must be bounded to 3"
+    assert "save_attempt < 10" in task_body, "config save retries must be bounded"

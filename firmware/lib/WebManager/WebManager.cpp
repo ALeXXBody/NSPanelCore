@@ -221,16 +221,24 @@ void WebManager::_taskPerformOTAUpdate(void *param) {
   PageManager::GetNSPanelManagerPage()->show();
 
   char checksum_holder[33];
-  while (true) {
+  bool got_checksum = false;
+  for (int attempt = 0; attempt < 60 && !got_checksum; attempt++) {
     std::string checksumUrl = "http://";
     checksumUrl.append(NSPMConfig::instance->manager_address);
     checksumUrl.append(":");
     checksumUrl.append(std::to_string(NSPMConfig::instance->manager_port));
     checksumUrl.append("/checksum_firmware");
     if (HttpLib::GetMD5sum(checksumUrl.c_str(), checksum_holder)) {
+      got_checksum = true;
       break;
     }
     vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+  if (!got_checksum) {
+    LOG_ERROR("Could not reach the manager checksum endpoint — aborting update task.");
+    PageManager::GetNSPanelManagerPage()->setText("Update failed!");
+    vTaskDelete(NULL);
+    return;
   }
   LOG_DEBUG("Got firmware MD5 ", checksum_holder);
   LOG_DEBUG("Stored firmware MD5 ", NSPMConfig::instance->md5_firmware.c_str());
@@ -240,13 +248,15 @@ void WebManager::_taskPerformOTAUpdate(void *param) {
   yield();
   vTaskDelay(250 / portTICK_PERIOD_MS); // Wait for other tasks.
   if (NSPMConfig::instance->md5_firmware.compare(checksum_holder) != 0) {
+    uint8_t fw_attempts = 0;
     do {
       firmwareUpdateSuccessful = WebManager::_update(U_FLASH, "/download_firmware");
       if (!firmwareUpdateSuccessful) {
-        LOG_ERROR("Failed to run OTA. Will try again in 5 seconds.");
+        LOG_ERROR("Failed to run OTA. Attempt ", String(++fw_attempts).c_str(), " of 3.");
+        if (fw_attempts >= 3) break;
         vTaskDelay(5000 / portTICK_PERIOD_MS);
       }
-    } while (!firmwareUpdateSuccessful);
+    } while (!firmwareUpdateSuccessful && fw_attempts < 3);
     if (firmwareUpdateSuccessful) {
       LOG_INFO("Successfully updated firmware.");
       // Save new firmware checksum
@@ -262,17 +272,25 @@ void WebManager::_taskPerformOTAUpdate(void *param) {
 
   if (firmwareUpdateSuccessful) {
     LOG_INFO("Firmware update done without errors, will check LittleFS.");
-    while (true) {
+    got_checksum = false;
+    for (int attempt = 0; attempt < 60 && !got_checksum; attempt++) {
       std::string checksumUrl = "http://";
       checksumUrl.append(NSPMConfig::instance->manager_address);
       checksumUrl.append(":");
       checksumUrl.append(std::to_string(NSPMConfig::instance->manager_port));
       checksumUrl.append("/checksum_data_file");
       if (HttpLib::GetMD5sum(checksumUrl.c_str(), checksum_holder)) {
+        got_checksum = true;
         break;
       }
       vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
+    if (!got_checksum) {
+      LOG_ERROR("Could not reach the manager data checksum endpoint — rebooting without fs update.");
+      hasAnythingUpdated = true; // firmware changed; persist + reboot below
+      checksum_holder[0] = '\0';
+    }
+    if (got_checksum) {
     LOG_DEBUG("Got LittleFS MD5 ", checksum_holder);
     LOG_DEBUG("Stored LittleFS MD5 ", NSPMConfig::instance->md5_data_file.c_str());
     vTaskDelay(250 / portTICK_PERIOD_MS); // Wait for other tasks.
@@ -280,13 +298,15 @@ void WebManager::_taskPerformOTAUpdate(void *param) {
       LOG_INFO("Will update LittleFS.");
       vTaskDelay(250 / portTICK_PERIOD_MS);
       bool littleFSUpdateSuccessful = false;
+      uint8_t fs_attempts = 0;
       do {
         littleFSUpdateSuccessful = WebManager::_update(U_SPIFFS, "/download_data_file");
         if (!littleFSUpdateSuccessful) {
-          LOG_ERROR("Failed to run OTA. Will try again in 5 seconds.");
+          LOG_ERROR("Failed to run OTA. Attempt ", String(++fs_attempts).c_str(), " of 3.");
+          if (fs_attempts >= 3) break;
           vTaskDelay(5000 / portTICK_PERIOD_MS);
         }
-      } while (!littleFSUpdateSuccessful);
+      } while (!littleFSUpdateSuccessful && fs_attempts < 3);
       if (littleFSUpdateSuccessful) {
         LOG_INFO("Successfully updated LittleFS.");
         // Save new LittleFS checksum
@@ -299,6 +319,9 @@ void WebManager::_taskPerformOTAUpdate(void *param) {
     } else {
       LOG_INFO("LittleFS is the same, will not update.");
     }
+    } else {
+      LOG_INFO("Skipping LittleFS check (checksum unreachable).");
+    }
   }
 
   PageManager::GetNSPanelManagerPage()->setText("Restarting...");
@@ -306,13 +329,16 @@ void WebManager::_taskPerformOTAUpdate(void *param) {
   vTaskDelay(5000 / portTICK_PERIOD_MS);
   if (hasAnythingUpdated) {
     bool successfully_saved = false;
-    do {
+    for (uint8_t save_attempt = 0; save_attempt < 10 && !successfully_saved; save_attempt++) {
       successfully_saved = NSPMConfig::instance->saveToLittleFS(true);
       if (!successfully_saved) {
-        LOG_ERROR("Failed to save config, will try again in 1 second.");
+        LOG_ERROR("Failed to save config, attempt ", String(save_attempt + 1).c_str(), " of 10.");
         vTaskDelay(1000 / portTICK_PERIOD_MS);
       }
-    } while (!successfully_saved);
+    }
+    if (!successfully_saved) {
+      LOG_ERROR("Config could not be persisted — rebooting anyway (panel re-syncs after boot).");
+    }
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
   ESP.restart();
@@ -362,6 +388,14 @@ bool WebManager::_update(uint8_t type, const char *url) {
   LOG_INFO("Size of remote file '", downloadUrl.c_str(), "' is ", totalSize, " bytes.");
 
   LOG_INFO("Starting update.");
+  if (type == U_SPIFFS) {
+    // The data partition is about to be erased and rewritten. The mounted
+    // LittleFS driver must be shut down FIRST — writing under a mounted fs
+    // deadlocked Update.end() (panel froze at "Updating FS 100%" and died).
+    LOG_INFO("Unmounting LittleFS before data partition update.");
+    LittleFS.end();
+    vTaskDelay(250 / portTICK_PERIOD_MS);
+  }
   Update.onProgress(WebManager::_onProgress);
   bool canBegin = Update.begin(totalSize, type);
   if (!canBegin) {
@@ -398,6 +432,13 @@ bool WebManager::_update(uint8_t type, const char *url) {
   LOG_INFO("OTA Successful!");
   if (Update.isFinished()) {
     LOG_WARNING("OTA Done, will reboot!");
+    if (type == U_SPIFFS) {
+      // Remount the freshly written filesystem so the config save that
+      // follows lands on the new partition content, not a stale cache.
+      if (!LittleFS.begin(false)) {
+        LOG_ERROR("Remounting updated LittleFS failed — config save cannot run.");
+      }
+    }
     return true;
   } else {
     LOG_ERROR("OTA Not finished. Something went wrong!");
