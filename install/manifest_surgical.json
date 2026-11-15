@@ -1,6 +1,6 @@
 {
   "name": "NSPanel Core recovery (surgical: app+config only, keeps bootloader)",
-  "version": "0.1.178",
+  "version": "0.1.179",
   "new_install_prompt_erase": false,
   "builds": [
     {
