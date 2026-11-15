@@ -4,47 +4,24 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="dark light" />
-  <title>NSPanel Core — panel recovery</title>
+  <title>NSPanel Core</title>
   <style>
-    body { margin: 0 auto; max-width: 560px; padding: 24px 16px 40px;
+    body { margin: 0 auto; max-width: 520px; padding: 24px 16px 40px;
       font: 14px/1.5 system-ui, sans-serif; background: #0d1016; color: #c8cbce; }
     h1 { font-size: 20px; } h1 span { color: #39c8e8; }
     .card { background: #141a24; border: 1px solid #232c3b; border-radius: 10px;
       padding: 14px; margin: 0 0 12px; }
-    ol { margin: 8px 0; padding-left: 20px; } li { margin: 6px 0; }
     code { background: #0d1016; padding: 1px 5px; border-radius: 4px; }
-    a { color: #39c8e8; }
     .note { color: #8b93a1; font-size: 13px; }
   </style>
   <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 </head>
 <body>
-  <h1>NSPanel <span>Core</span> — panel recovery</h1>
+  <h1>NSPanel <span>Core</span> <small class="note">0.1.182 · ESP-IDF 5.5</small></h1>
   <div class="card">
-    <ol>
-      <li>Unplug the panel (mains OFF), open it, connect a USB-to-TTL adapter (3.3V): GND→GND, TX→RX, RX→TX.</li>
-      <li>Put the ESP32 into download mode (hold BOOT, tap RESET).</li>
-      <li>Use Chrome or Edge on a computer (needs WebSerial). Click install, pick the USB serial port.</li>
-    </ol>
-    <p class="note">After ANY install: release BOOT, power from mains, reset, wait 60 seconds.</p>
-  </div>
-
-  <div class="card">
-    <strong>Option A — full NSPanel Core (recommended): bootloader + firmware + config, all 0.1.182 on ESP-IDF 5.5.</strong>
+    <p>Flashes NSPanel Core — our bootloader, firmware and config filesystem, one image.</p>
     <p><esp-web-install-button manifest="./manifest_full.json"></esp-web-install-button></p>
-    <p class="note">Everything ours, bootloader included — app and bootloader are now the same toolchain generation (the old mismatch was the fault). If it boots: setup AP <em>NSPanelCore</em> appears — configure WiFi + MQTT at http://192.168.1.1.</p>
-  </div>
-
-  <div class="card">
-    <strong>Option B — hybrid fallback:</strong> upstream's proven bootloader + our 0.1.182 firmware + clean config.
-    <p><esp-web-install-button manifest="./manifest_hybrid.json"></esp-web-install-button></p>
-    <p class="note">Use if Option A shows any bootloader trouble. Same firmware, borrowed bootloader.</p>
-  </div>
-
-  <div class="card">
-    <strong>Option C — upstream NSPanel Manager (last resort):</strong> the stock image.
-    <p><esp-web-install-button manifest="./manifest_upstream_full.json"></esp-web-install-button></p>
-    <p class="note">Panel runs upstream software with its own setup flow.</p>
+    <p class="note">Chrome or Edge (WebSerial). Hold <code>BOOT</code>, tap <code>RESET</code> for download mode. After install: release BOOT, reset — join the <code>NSPanelCore</code> AP and finish setup at <code>http://192.168.1.1</code>.</p>
   </div>
 </body>
 </html>
