@@ -36,14 +36,22 @@ func TestWindowAndJumpRules(t *testing.T) {
 	if fwupdate.ResponseWindowMs != 5000 {
 		t.Fatal("response window must be 5000ms (upstream-proven)")
 	}
-	if !fwupdate.ShouldJump(0x1000, 1<<20) {
-		t.Fatal("in-range offset must jump")
+	if !fwupdate.ShouldJump(0x1000, 1<<20, 0x2000) {
+		t.Fatal("in-range already-sent offset must jump (retransmit)")
 	}
-	if fwupdate.ShouldJump(0, 100) {
+	if fwupdate.ShouldJump(0, 100, 50) {
 		t.Fatal("offset 0 must be IGNORED (keep streaming forward)")
 	}
-	if fwupdate.ShouldJump(1<<21, 1<<20) {
+	if fwupdate.ShouldJump(1<<21, 1<<20, 1<<21) {
 		t.Fatal("beyond-size offset must not jump")
+	}
+	// The 0xF10000 bug: display asks for data never sent (16s into a
+	// 115200 stream). Jumping writes a Frankenstein image at "100%".
+	if fwupdate.ShouldJump(0xF10000, 16<<20, 200000) {
+		t.Fatal("offset beyond bytesSent must NOT jump (clean-restart instead)")
+	}
+	if !fwupdate.ShouldJump(200000, 16<<20, 200000) {
+		t.Fatal("offset == bytesSent means continue, must be allowed")
 	}
 }
 

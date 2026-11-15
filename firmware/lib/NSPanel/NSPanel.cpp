@@ -646,11 +646,21 @@ void NSPanel::_taskUpdateTFTConfigOTA(void *param) {
     }
   }
 
+  // Consecutive full failures (absurd display offsets): each retry does
+  // a full clean re-init, but a display that keeps asking for unsent
+  // data will never converge — stop after 10 and say so loudly instead
+  // of churning (or worse, writing a corrupt image) forever.
+  int consecutiveFailures = 0;
   for (;;) {
     bool updateResult = NSPanel::_updateTFTOTA();
     if (updateResult) {
       LOG_INFO("Update of TFT successful, will reboot.");
       ESP.restart();
+    } else if (++consecutiveFailures >= 10) {
+      LOG_ERROR("TFT update failed 10 times in a row (display keeps requesting unsent data). Giving up — check display storage.");
+      NSPanel::instance->_isUpdating = false;
+      NSPanel::instance->_update_progress = 0;
+      vTaskDelete(NULL);
     } else {
       LOG_ERROR("Failed to update TFT. Will try again in 5 seconds.");
       vTaskDelay(5000 / portTICK_PERIOD_MS);
@@ -895,6 +905,15 @@ bool NSPanel::_streamTFTFile(const std::string &downloadUrl, unsigned long file_
       readNextOffset |= return_string[2] << 8;
       readNextOffset |= return_string[3] << 16;
       readNextOffset |= return_string[4] << 24;
+      if (readNextOffset > lastReadByte) {
+        // Absurd jump: the display asks for data it was never sent (e.g.
+        // offset 0xF10000 sixteen seconds into a 115200 stream). Streaming
+        // on would write a Frankenstein image that reports 100% and then
+        // fails to boot (System Data ERROR). Refuse: return false so the
+        // task does a FULL clean re-init and streams from byte 0.
+        LOG_ERROR("Got 0x08 with absurd offset ", readNextOffset, " (only ", lastReadByte, " sent). Restarting upload clean.");
+        return false;
+      }
       if (readNextOffset > 0 && readNextOffset <= file_size) {
         LOG_INFO("Got 0x08 with offset, jumping to: ", readNextOffset, " please wait.");
         nextStartWriteOffset = readNextOffset;

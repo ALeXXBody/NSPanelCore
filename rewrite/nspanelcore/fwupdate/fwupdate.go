@@ -46,8 +46,17 @@ func NextChunk(remaining uint32) int {
 // requests and permanently diverges the v1.2 stream (display-brick bug).
 const ResponseWindowMs = 5000
 
-// ShouldJump mirrors the 0x08 handling: jump only for offsets in range,
-// IGNORE offset 0 (keep streaming forward), never abort.
-func ShouldJump(offset, fileSize uint32) bool {
-	return offset > 0 && offset <= fileSize
+// ShouldJump mirrors the 0x08 handling: jump only for offsets in range
+// AND already sent (a retransmit). IGNORE offset 0 (keep streaming
+// forward). REJECT offsets beyond bytesSent (asking for unsent data —
+// the 0xF10000-jump bug that wrote Frankenstein images reporting 100%):
+// the caller must clean-restart instead, never abort.
+func ShouldJump(offset, fileSize, bytesSent uint32) bool {
+	if offset == 0 {
+		return false
+	}
+	if offset > fileSize {
+		return false
+	}
+	return offset <= bytesSent
 }

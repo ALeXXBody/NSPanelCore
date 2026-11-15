@@ -241,3 +241,16 @@ def test_w7_poller_uses_get_not_head():
     assert 'open("GET", "/"' in html or "open('GET', '/'" in html, (
         "W7 REGRESSION: connection poller must GET /"
     )
+
+
+def test_absurd_offset_restarts_clean():
+    """P104: a 0x08 offset beyond bytes-sent (0xF10000 16s into a 115200
+    stream) must clean-restart, never jump — jumping wrote Frankenstein
+    images reporting 100% then System Data ERROR."""
+    src = _src(NSPANEL)
+    assert "readNextOffset > lastReadByte" in src, (
+        "absurd-offset guard missing: unsent-data jumps must restart clean"
+    )
+    assert "consecutiveFailures" in src, (
+        "retry bound missing: absurd-jump loop must give up loudly, not churn forever"
+    )
