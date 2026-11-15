@@ -1,10 +1,10 @@
 {
-  "version": "0.1.182",
-  "notes": "Setup page layout fix: MQTT Port and Username rows now render as standard aligned field rows (they were wrapped in a 2-col container that stacked the labels). Web UI shipped inside the config filesystem.",
+  "version": "0.1.183",
+  "notes": "Fix panel death during fs OTA: data partition is now unmounted from LittleFS BEFORE Update.begin (the mounted fs deadlocked Update.end() \u2014 panel froze at 'Updating FS 100%' and died); filesystem remounted after the write; all OTA retries and config-save loops bounded (3 attempts, save 10) so the task can never hang forever.",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "c885e477ae7a3e0e45975eb50b27bbab"
+      "md5": "b827290fad9d9ed0e2435d6c8b68142e"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "c885e477ae7a3e0e45975eb50b27bbab"
+      "md5": "b827290fad9d9ed0e2435d6c8b68142e"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
