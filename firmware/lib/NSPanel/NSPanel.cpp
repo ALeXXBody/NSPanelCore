@@ -192,10 +192,11 @@ bool NSPanel::init() {
 
   // Pin 4 controls screen on/off.
   pinMode(4, OUTPUT);
-  digitalWrite(4, HIGH); // Turn off power to the display
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
+  // Leave the display POWERED at boot: the hard off→on transition here
+  // browns out weak USB-adapter power (board boot-loops with
+  // rst:0x1 POWERON_RESET ~5s after boot). The display is tried directly
+  // first; the power cycle only happens below if it never answers.
   digitalWrite(4, LOW); // Turn on power to the display
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
 
   // Drain any boot chatter from the display so the handshake below reads a
   // clean reply. (There used to be a 2.5 s wait here for a magic "NSPM"
@@ -271,6 +272,60 @@ bool NSPanel::init() {
     } else {
       LOG_WARNING("No reply from display on connect attempt ", String(attempt + 1).c_str());
       vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+  }
+
+  // Display never answered the gentle path. ONLY NOW power-cycle it: the
+  // hard off→on transition browns out weak USB-adapter power, so it is a
+  // last resort — on mains power it works as before.
+  if (!this->_display_ready) {
+    LOG_WARNING("Display unreachable — power-cycling the display once (needs stable power).");
+    digitalWrite(4, HIGH); // Turn off power to the display
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    digitalWrite(4, LOW); // Turn on power to the display
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    // Drain any boot chatter from the freshly powered display.
+    unsigned long silence_start = millis();
+    while (millis() - silence_start < 1500) {
+      while (Serial2.available() > 0) {
+        Serial2.read();
+        silence_start = millis();
+      }
+      vTaskDelay(25 / portTICK_PERIOD_MS);
+    }
+    Serial2.print("DRAKJHSUYDGBNCJHGJKSHBDN");
+    NSPanel::_sendCommandEndSequence();
+    vTaskDelay((1000000 / Serial2.baudRate()) + 30 / portTICK_PERIOD_MS);
+    while (Serial2.available() > 0) {
+      Serial2.read();
+    }
+    for (uint8_t attempt = 0; attempt < 3 && !this->_display_ready; attempt++) {
+      Serial2.print("connect");
+      NSPanel::_sendCommandEndSequence();
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      std::string reply_data = "";
+      unsigned long reply_deadline = millis() + 1000;
+      while ((long)(reply_deadline - millis()) > 0) {
+        while (Serial2.available() > 0) {
+          reply_data.push_back((char)Serial2.read());
+        }
+        if (!reply_data.empty() && Serial2.available() == 0) {
+          vTaskDelay(25 / portTICK_PERIOD_MS);
+          if (Serial2.available() == 0) break;
+        } else {
+          vTaskDelay(25 / portTICK_PERIOD_MS);
+        }
+      }
+      while (reply_data.length() > 3 && reply_data.back() == (char)0xFF) {
+        reply_data.pop_back();
+      }
+      if (!reply_data.empty()) {
+        LOG_INFO("Got reply from display (after power cycle): ", reply_data.c_str());
+        this->_display_ready = true;
+      } else {
+        LOG_WARNING("No reply from display on post-power-cycle attempt ", String(attempt + 1).c_str());
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+      }
     }
   }
 

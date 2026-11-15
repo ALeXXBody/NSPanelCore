@@ -319,3 +319,24 @@ def test_ap_fallback_state_machine_sequence():
     assert m3, "no-config AP path missing"
     assert "ensureAP()" in m3.group(1)
     assert "vTaskDelay(1000 / portTICK_PERIOD_MS)" in m3.group(1)
+
+
+def test_boot_display_power_gentle_first():
+    """P122 (user constraint: panel cannot be on mains while on the TTL
+    bench): boot must NOT power-cycle the display before first trying to
+    talk to it — the hard off→on transition browns out USB power and
+    boot-loops the panel. The power cycle is a fallback only, after the
+    gentle handshake fails."""
+    src = _src(NSPANEL)
+    init_body = src[src.index("bool NSPanel::init() {"):]
+    init_body = init_body[:init_body.index("\n}\n", 100)]
+    first_high = init_body.find("digitalWrite(4, HIGH)")
+    first_connect = init_body.find('Serial2.print("connect")')
+    assert first_connect != -1, "connect handshake missing"
+    assert first_high == -1 or first_high > first_connect, (
+        "boot power-cycles the display BEFORE trying the gentle handshake — "
+        "boot-loops on USB power"
+    )
+    assert "power-cycling the display once" in src, (
+        "power-cycle fallback missing (dead display would never recover)"
+    )
