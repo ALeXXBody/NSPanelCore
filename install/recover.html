@@ -30,13 +30,13 @@
   </div>
 
   <div class="card">
-    <strong>Option A — full NSPanel Core (recommended): bootloader + firmware + config, all 0.1.181 on ESP-IDF 5.5.</strong>
+    <strong>Option A — full NSPanel Core (recommended): bootloader + firmware + config, all 0.1.182 on ESP-IDF 5.5.</strong>
     <p><esp-web-install-button manifest="./manifest_full.json"></esp-web-install-button></p>
     <p class="note">Everything ours, bootloader included — app and bootloader are now the same toolchain generation (the old mismatch was the fault). If it boots: setup AP <em>NSPanelCore</em> appears — configure WiFi + MQTT at http://192.168.1.1.</p>
   </div>
 
   <div class="card">
-    <strong>Option B — hybrid fallback:</strong> upstream's proven bootloader + our 0.1.181 firmware + clean config.
+    <strong>Option B — hybrid fallback:</strong> upstream's proven bootloader + our 0.1.182 firmware + clean config.
     <p><esp-web-install-button manifest="./manifest_hybrid.json"></esp-web-install-button></p>
     <p class="note">Use if Option A shows any bootloader trouble. Same firmware, borrowed bootloader.</p>
   </div>
