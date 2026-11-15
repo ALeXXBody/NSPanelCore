@@ -32,7 +32,7 @@ func TestPanelNormalizeLegacyScreensaver(t *testing.T) {
 
 func TestLoadRealStorageShape(t *testing.T) {
 	// Unknown keys must be ignored; old files without new keys get defaults.
-	raw := `{"settings":{"manager_address":"core","unknown_future_key":1},"panels":[{"id":1,"mac":"e465b849a100","name":"KitchenPanel","screensaver_mode":"0"}],"next_id":{"panel":2}}`
+	raw := `{"settings":{"manager_address":"core","unknown_future_key":1},"panels":[{"id":1,"mac":"aabbccddeeff","name":"DemoPanel","screensaver_mode":"0"}],"next_id":{"panel":2}}`
 	cfg, err := config.Unmarshal([]byte(raw))
 	if err != nil {
 		t.Fatal(err)

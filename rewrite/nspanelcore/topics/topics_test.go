@@ -7,7 +7,7 @@ import (
 )
 
 func TestBaseVerbatimHostname(t *testing.T) {
-	if got := topics.Base("KitchenPanel"); got != "nspanel/KitchenPanel" {
+	if got := topics.Base("DemoPanel"); got != "nspanel/DemoPanel" {
 		t.Fatalf("Base = %q", got)
 	}
 	// Case and spaces are preserved: the firmware subscribes verbatim.
@@ -34,16 +34,16 @@ func TestBaseSanitizesStructureOnly(t *testing.T) {
 }
 
 func TestTopicCommand(t *testing.T) {
-	if got := topics.Topic("KitchenPanel", "command"); got != "nspanel/KitchenPanel/command" {
+	if got := topics.Topic("DemoPanel", "command"); got != "nspanel/DemoPanel/command" {
 		t.Fatalf("Topic = %q", got)
 	}
-	if got := topics.Topic("KitchenPanel", "r1_state"); got != "nspanel/KitchenPanel/r1_state" {
+	if got := topics.Topic("DemoPanel", "r1_state"); got != "nspanel/DemoPanel/r1_state" {
 		t.Fatalf("Topic = %q", got)
 	}
 }
 
 func TestSegmentVerbatim(t *testing.T) {
-	if got := topics.Segment("nspanel/Kitchen Panel/status"); got != "Kitchen Panel" {
+	if got := topics.Segment("nspanel/Demo Panel/status"); got != "Demo Panel" {
 		t.Fatalf("Segment = %q", got)
 	}
 	if got := topics.Segment("nspanel/aa/r1_state"); got != "aa" {
@@ -59,8 +59,8 @@ func TestSegmentVerbatim(t *testing.T) {
 
 func TestSafeTopic(t *testing.T) {
 	cases := map[string]string{
-		"E4:65:B8:49:A1:00": "e465b849a100",
-		"Kitchen Panel":     "kitchen_panel",
+		"AA:BB:CC:DD:EE:FF": "aabbccddeeff",
+		"Demo Panel":     "demo_panel",
 		"My-Panel 2":        "mypanel_2",
 		"  __Hi__  ":        "hi",
 	}

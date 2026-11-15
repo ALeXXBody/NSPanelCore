@@ -45,7 +45,7 @@ func TestStringIntsParity(t *testing.T) {
 }
 
 func TestStompSend(t *testing.T) {
-	known := func(s string) bool { return s == "KitchenPanel" }
+	known := func(s string) bool { return s == "DemoPanel" }
 	_, _, ok := command.StompSend("nspanel/Nope/command", "reboot", known)
 	if ok {
 		t.Fatal("unknown panel must not forward")
@@ -54,11 +54,11 @@ func TestStompSend(t *testing.T) {
 	if ok {
 		t.Fatal("bad dest must not forward")
 	}
-	topic, payload, ok := command.StompSend("nspanel/KitchenPanel/command", "reboot", known)
-	if !ok || topic != "nspanel/KitchenPanel/command" || payload != `{"command":"reboot"}` {
+	topic, payload, ok := command.StompSend("nspanel/DemoPanel/command", "reboot", known)
+	if !ok || topic != "nspanel/DemoPanel/command" || payload != `{"command":"reboot"}` {
 		t.Fatalf("got %q %q", topic, payload)
 	}
-	topic, payload, ok = command.StompSend("nspanel/KitchenPanel/command", "gui_update", known)
+	topic, payload, ok = command.StompSend("nspanel/DemoPanel/command", "gui_update", known)
 	if !ok || payload != `{"command":"tft_update"}` {
 		t.Fatalf("alias broken: %q", payload)
 	}

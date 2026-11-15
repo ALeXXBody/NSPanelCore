@@ -1,4 +1,4 @@
-# KitchenPanel recovery — exact steps, ~20 minutes
+# DemoPanel recovery — exact steps, ~20 minutes
 
 ## What happened (one line)
 A display (TFT) update left the screen unbootable; the ESP side then went

@@ -44,14 +44,14 @@ func TestZeroOmission(t *testing.T) {
 }
 
 func TestStringFieldRoundTrip(t *testing.T) {
-	enc := pcode.EncodeStringField(2, "Kitchen")
+	enc := pcode.EncodeStringField(2, "Lounge")
 	r := pcode.NewReader(enc)
 	fn, wt, err := r.ReadTag()
 	if err != nil || fn != 2 || wt != 2 {
 		t.Fatalf("tag = %d/%d err=%v", fn, wt, err)
 	}
 	b, err := r.ReadBytes()
-	if err != nil || !bytes.Equal(b, []byte("Kitchen")) {
+	if err != nil || !bytes.Equal(b, []byte("Lounge")) {
 		t.Fatalf("payload = %q err=%v", b, err)
 	}
 }

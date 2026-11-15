@@ -9,7 +9,7 @@
 // Usage:
 //
 //	nspanel-manage -ha wss://host/api/websocket -rest https://host \
-//	  -token-file FILE [-accepted e465b849a100,...] [-publish] [-seconds 300]
+//	  -token-file FILE [-accepted aabbccddeeff,...] [-publish] [-seconds 300]
 package main
 
 import (

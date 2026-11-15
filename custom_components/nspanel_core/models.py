@@ -15,7 +15,7 @@ from typing import Any
 class LightConfig:
     id: int
     name: str
-    ha_entity: str  # Home Assistant entity_id, e.g. "light.kitchen"
+    ha_entity: str  # Home Assistant entity_id, e.g. "light.lounge"
     room_id: int
     page_id: int
     page_slot: int

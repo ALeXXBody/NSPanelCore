@@ -1,4 +1,4 @@
-# USB recovery set — KitchenPanel unbrick
+# USB recovery set — DemoPanel unbrick
 
 Fresh, consistent build from this repo HEAD (firmware 0.1.177 + current
 LittleFS + bootloader + partition table), plus the proven blank display

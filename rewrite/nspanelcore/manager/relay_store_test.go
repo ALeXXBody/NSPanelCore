@@ -18,12 +18,12 @@ func TestRelayPrimaryAndFallbackSeparate(t *testing.T) {
 	}
 	// Primary lookup for a DIFFERENT panel must not see it (no keyspace
 	// collision between tuple keys and raw strings — impossible by type).
-	if _, ok := s.Get("e465b849a100", 1, "nspanel/KitchenPanel/r1_state"); ok {
+	if _, ok := s.Get("aabbccddeeff", 1, "nspanel/DemoPanel/r1_state"); ok {
 		t.Fatal("fallback for one topic must not leak into another panel")
 	}
 	// Known panel: primary wins.
-	s.SetPrimary("e465b849a100", 1, false)
-	if st, ok := s.Get("e465b849a100", 1, "nspanel/KitchenPanel/r1_state"); !ok || st {
+	s.SetPrimary("aabbccddeeff", 1, false)
+	if st, ok := s.Get("aabbccddeeff", 1, "nspanel/DemoPanel/r1_state"); !ok || st {
 		t.Fatal("primary must win and report stored state")
 	}
 }

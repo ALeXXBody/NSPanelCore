@@ -143,7 +143,7 @@ async def test_save_full_valid_parse(mgr, panel):
     status, _ = await _post(
         view,
         MultiDict([
-            ("friendly_name", "Kitchen"), ("button1_mode", "2"), ("button2_mode", "9"),
+            ("friendly_name", "Demo"), ("button1_mode", "2"), ("button2_mode", "9"),
             ("reverse_relays", "True"), ("relay1_default_mode", "False"),
             ("relay2_default_mode", "True"), ("relay1_is_light", "True"),
             ("relay2_is_light", "False"), ("panel_type", "us_horizontal"),
@@ -167,7 +167,7 @@ async def test_save_full_valid_parse(mgr, panel):
     assert panel.room_id == 3
     assert panel.button1_detached_light == 5
     assert panel.lock_to_default_room is True
-    assert panel.name == "Kitchen"
+    assert panel.name == "Demo"
 
 
 async def test_save_preserves_phantom_flags(mgr, panel):
@@ -298,8 +298,8 @@ async def test_reregister_accepted_panel_stays_online():
 
     cfg = IntegrationConfig()
     cfg.rooms.append(RoomConfig(id=1, name="Living"))
-    p = PanelConfig(id=7, mac="aabbcc", name="Kitchen",
-                    wifi_hostname="Kitchen", room_id=1)
+    p = PanelConfig(id=7, mac="aabbcc", name="Demo",
+                    wifi_hostname="Demo", room_id=1)
     p.accepted = True
     cfg.panels.append(p)
     mgr = M.NSPanelCoreManager.__new__(M.NSPanelCoreManager)
@@ -323,7 +323,7 @@ async def test_reregister_accepted_panel_stays_online():
     mgr._publish_panel_status = fake_status
     mgr.add_message = lambda title, message: None
 
-    data = {"mac_origin": "AABBCC", "friendly_name": "Kitchen",
+    data = {"mac_origin": "AABBCC", "friendly_name": "Demo",
             "model": "sonoff", "version": "0.1.171"}
     await mgr._handle_register_request("aabbcc", data)
     states = [s for t, s in published if t == "__status__"]
@@ -377,8 +377,8 @@ async def test_delete_online_panel_stays_deleted():
 
     cfg = IntegrationConfig()
     cfg.rooms.append(RoomConfig(id=1, name="Living"))
-    p = PanelConfig(id=7, mac="aabbcc", name="Kitchen",
-                    wifi_hostname="Kitchen", room_id=1)
+    p = PanelConfig(id=7, mac="aabbcc", name="Demo",
+                    wifi_hostname="Demo", room_id=1)
     p.accepted = True
     cfg.panels.append(p)
     mgr = M.NSPanelCoreManager.__new__(M.NSPanelCoreManager)
@@ -416,14 +416,14 @@ async def test_delete_online_panel_stays_deleted():
 
     # The panel's next register must NOT resurrect it.
     await mgr._handle_register_request(
-        "aabbcc", {"friendly_name": "Kitchen", "model": "sonoff"})
+        "aabbcc", {"friendly_name": "Demo", "model": "sonoff"})
     assert not mgr.config.panels, "register of a deleted MAC must be ignored"
 
     # Allow again -> register creates a fresh row.
     assert mgr.allow_mac("aabbcc")
     assert not mgr.is_ignored_mac("aabbcc")
     await mgr._handle_register_request(
-        "aabbcc", {"friendly_name": "Kitchen", "model": "sonoff"})
+        "aabbcc", {"friendly_name": "Demo", "model": "sonoff"})
     assert len(mgr.config.panels) == 1
     assert not mgr.config.panels[0].accepted
 
@@ -437,8 +437,8 @@ async def test_denied_panel_not_resurrected_on_main_grid():
 
     cfg = IntegrationConfig()
     cfg.rooms.append(RoomConfig(id=1, name="Living"))
-    p = PanelConfig(id=7, mac="aabbcc", name="Kitchen",
-                    wifi_hostname="Kitchen", room_id=1)
+    p = PanelConfig(id=7, mac="aabbcc", name="Demo",
+                    wifi_hostname="Demo", room_id=1)
     p.accepted = True
     cfg.panels.append(p)
     mgr = M.NSPanelCoreManager.__new__(M.NSPanelCoreManager)
@@ -473,7 +473,7 @@ async def test_denied_panel_not_resurrected_on_main_grid():
     p.accepted = False
     await mgr._handle_register_request(
         "aabbcc", {"friendly_name": "RenamedByPanel", "model": "sonoff"})
-    assert p.name == "Kitchen", "denied row must keep its name"
+    assert p.name == "Demo", "denied row must keep its name"
     assert not [s for s in statuses if s == "awaiting_accept"], (
         "denied register must not publish awaiting_accept")
     assert p.denied, "denied state must persist across registers"
@@ -522,8 +522,8 @@ def _log_manager(cfg):
 
     from nspanel_core import manager as M
 
-    p = PanelConfig(id=7, mac="aabbcc", name="Kitchen",
-                    wifi_hostname="Kitchen", room_id=1)
+    p = PanelConfig(id=7, mac="aabbcc", name="Demo",
+                    wifi_hostname="Demo", room_id=1)
     p.accepted = True
     cfg.panels.append(p)
     mgr = M.NSPanelCoreManager.__new__(M.NSPanelCoreManager)
@@ -544,8 +544,8 @@ async def test_panel_log_lines_get_arrival_timestamp():
     cfg.rooms.append(RoomConfig(id=1, name="Living"))
     mgr, p = _log_manager(cfg)
     await mgr._on_panel_log(_FakeMsg(
-        "nspanel/Kitchen/log",
-        "E4:65:B8:49:A1:00;ERROR; main.cpp:372 f(.setup) Failed to initiate NSPanel.",
+        "nspanel/Demo/log",
+        "AA:BB:CC:DD:EE:00;ERROR; main.cpp:372 f(.setup) Failed to initiate NSPanel.",
     ))
     assert len(mgr._log_backlog["aabbcc"]) == 1
     entry = mgr._log_backlog["aabbcc"][0]
@@ -565,7 +565,7 @@ async def test_panel_log_keeps_firmware_timestamp():
     cfg.rooms.append(RoomConfig(id=1, name="Living"))
     mgr, p = _log_manager(cfg)
     await mgr._on_panel_log(_FakeMsg(
-        "nspanel/Kitchen/log",
+        "nspanel/Demo/log",
         json.dumps({"time": "2026-01-01T00:00:00+00:00",
                     "level": "INFO", "message": "hi"}),
     ))

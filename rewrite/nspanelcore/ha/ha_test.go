@@ -20,7 +20,7 @@ func TestBrightnessConvert(t *testing.T) {
 }
 
 func TestTurnOnPayload(t *testing.T) {
-	d := ha.TurnOnPayload("light.kitchen", ha.LightCommand{HasBrightness: true, Brightness: 100}, 2700, 6500)
+	d := ha.TurnOnPayload("light.lounge", ha.LightCommand{HasBrightness: true, Brightness: 100}, 2700, 6500)
 	if d["brightness"] != 255 {
 		t.Fatalf("bri: %v", d)
 	}

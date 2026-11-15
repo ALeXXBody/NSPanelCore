@@ -52,8 +52,8 @@ func TestPublish(t *testing.T) {
 }
 
 func TestRelay(t *testing.T) {
-	seg, r := entities.ParseRelayTopic("nspanel/KitchenPanel/r1_state")
-	if seg != "KitchenPanel" || r != 1 {
+	seg, r := entities.ParseRelayTopic("nspanel/DemoPanel/r1_state")
+	if seg != "DemoPanel" || r != 1 {
 		t.Fatalf("got %q %d", seg, r)
 	}
 	if _, r := entities.ParseRelayTopic("nspanel/x/r3_state"); r != 0 {

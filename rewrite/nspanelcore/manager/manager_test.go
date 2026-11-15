@@ -8,14 +8,14 @@ import (
 
 func panels() []manager.Panel {
 	return []manager.Panel{
-		{ID: 1, MAC: "e465b849a100", Name: "KitchenPanel", WifiHostname: "KitchenPanel", Model: "sonoff"},
+		{ID: 1, MAC: "aabbccddeeff", Name: "DemoPanel", WifiHostname: "DemoPanel", Model: "sonoff"},
 		{ID: 2, MAC: "b0cbd8993754", Name: "Dressing Room", WifiHostname: "DressingRoom", Model: "custom"},
 	}
 }
 
 func TestCommandTopicUsesHostname(t *testing.T) {
-	p := manager.Panel{Name: "My Display Name", WifiHostname: "KitchenPanel"}
-	if got := manager.CommandTopic(p, "command"); got != "nspanel/KitchenPanel/command" {
+	p := manager.Panel{Name: "My Display Name", WifiHostname: "DemoPanel"}
+	if got := manager.CommandTopic(p, "command"); got != "nspanel/DemoPanel/command" {
 		t.Fatalf("got %q", got)
 	}
 	// Rename must not black-hole commands: falls back to name only when no hostname.
@@ -27,12 +27,12 @@ func TestCommandTopicUsesHostname(t *testing.T) {
 
 func TestFindByTopicVerbatimFirst(t *testing.T) {
 	ps := panels()
-	got, drift, found := manager.FindByTopic(ps, "KitchenPanel")
+	got, drift, found := manager.FindByTopic(ps, "DemoPanel")
 	if !found || got.ID != 1 || drift {
 		t.Fatalf("verbatim hostname must win without drift: %+v %v", got, drift)
 	}
 	// Case mismatch falls to normalized with drift warning.
-	got, drift, found = manager.FindByTopic(ps, "kitchenpanel")
+	got, drift, found = manager.FindByTopic(ps, "demopanel")
 	if !found || got.ID != 1 || !drift {
 		t.Fatalf("normalized match must flag drift: %+v %v", got, drift)
 	}
@@ -44,14 +44,14 @@ func TestFindByTopicVerbatimFirst(t *testing.T) {
 }
 
 func TestNoteHostnameHeals(t *testing.T) {
-	p := manager.Panel{Name: "KitchenPanel", WifiHostname: "Old"}
-	if !manager.NoteHostname(&p, "KitchenPanel") {
+	p := manager.Panel{Name: "DemoPanel", WifiHostname: "Old"}
+	if !manager.NoteHostname(&p, "DemoPanel") {
 		t.Fatal("should report change")
 	}
-	if p.WifiHostname != "KitchenPanel" {
+	if p.WifiHostname != "DemoPanel" {
 		t.Fatal("not updated")
 	}
-	if manager.NoteHostname(&p, "KitchenPanel") {
+	if manager.NoteHostname(&p, "DemoPanel") {
 		t.Fatal("same segment must not report change")
 	}
 }
@@ -94,8 +94,8 @@ func TestModelAndTFTFilename(t *testing.T) {
 }
 
 func TestRelayKeyNormalized(t *testing.T) {
-	k, r := manager.RelayKey("E4:65:B8:49:A1:00", 1)
-	if k != "e465b849a100" || r != 1 {
+	k, r := manager.RelayKey("AA:BB:CC:DD:EE:FF", 1)
+	if k != "aabbccddeeff" || r != 1 {
 		t.Fatalf("got %q %d", k, r)
 	}
 }

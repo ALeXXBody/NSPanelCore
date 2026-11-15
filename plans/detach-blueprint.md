@@ -68,7 +68,7 @@ liability documented in LEDGER P37–P107.
 ## Step 7 — Cutover + release
 - App release v2.0.0 (breaking-surface audit: anything renamed/removed
   listed in release notes), evergreen firmware publish, staged rollout:
-  bench panel → KitchenPanel with user watching.
+  bench panel → DemoPanel with user watching.
 - Verify: R1 full matrix (pytest + Go + Playwright + hardware flash+boot).
 
 ## Rollback per step

@@ -156,7 +156,7 @@ func main() {
 			seen++
 		case "state_changed":
 			eid, _ := data["entity_id"].(string)
-			if strings.Contains(eid, "kitchenpanel") || strings.Contains(eid, "nspanel") ||
+			if strings.Contains(eid, "demopanel") || strings.Contains(eid, "nspanel") ||
 				strings.Contains(eid, "dressing") {
 				ns, _ := data["new_state"].(map[string]any)
 				st := ""

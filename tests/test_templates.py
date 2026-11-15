@@ -48,7 +48,7 @@ def _base(**kw):
 
 def _panel(**kw):
     d = dict(
-        id=1, name="Kitchen Panel", mac="aabbcc", wifi_hostname="KitchenPanel",
+        id=1, name="Demo Panel", mac="aabbcc", wifi_hostname="DemoPanel",
         button1_mode=1, button2_mode=2, button1_detached_light=5,
         button2_detached_light=0, button1_detached_room=3, button2_detached_room=1,
         reverse_relays=False, relay1_default_mode=True, relay2_default_mode=False,

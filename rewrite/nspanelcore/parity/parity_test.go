@@ -22,12 +22,12 @@ import (
 )
 
 func TestTopicParity(t *testing.T) {
-	// Python: panel_mqtt_topic("KitchenPanel","command") == "nspanel/KitchenPanel/command"
-	if topics.PanelTopic("KitchenPanel", "command") != "nspanel/KitchenPanel/command" {
+	// Python: panel_mqtt_topic("DemoPanel","command") == "nspanel/DemoPanel/command"
+	if topics.PanelTopic("DemoPanel", "command") != "nspanel/DemoPanel/command" {
 		t.Fatal("panel topic parity broken")
 	}
-	// Python: topic_safe("E4:65:B8:49:A1:00") == "e465b849a100"
-	if topics.Safe("E4:65:B8:49:A1:00") != "e465b849a100" {
+	// Python: topic_safe("AA:BB:CC:DD:EE:FF") == "aabbccddeeff"
+	if topics.Safe("AA:BB:CC:DD:EE:FF") != "aabbccddeeff" {
 		t.Fatal("topic_safe parity broken")
 	}
 	// Python: panel_mqtt_base("My Panel") == "My Panel" (verbatim)
@@ -77,8 +77,8 @@ func TestCommandParity(t *testing.T) {
 	if c.Kind != "set" || c.Value != 3200 {
 		t.Fatal("set parse parity broken")
 	}
-	known := func(s string) bool { return s == "KitchenPanel" }
-	_, payload, ok := command.StompSend("nspanel/KitchenPanel/command", "gui_update", known)
+	known := func(s string) bool { return s == "DemoPanel" }
+	_, payload, ok := command.StompSend("nspanel/DemoPanel/command", "gui_update", known)
 	if !ok || payload != `{"command":"tft_update"}` {
 		t.Fatal("stomp alias parity broken")
 	}
@@ -93,7 +93,7 @@ func TestSTOMPGateParity(t *testing.T) {
 
 func TestMQTTMatchParity(t *testing.T) {
 	// Python subscribes nspanel/+/status: must match panels, not deeper.
-	if !mqttstore.Match("nspanel/+/status", "nspanel/KitchenPanel/status") {
+	if !mqttstore.Match("nspanel/+/status", "nspanel/DemoPanel/status") {
 		t.Fatal("wildcard parity broken")
 	}
 	if mqttstore.Match("nspanel/+/status", "nspanel/a/b/status") {
