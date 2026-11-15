@@ -340,3 +340,28 @@ def test_boot_display_power_gentle_first():
     assert "power-cycling the display once" in src, (
         "power-cycle fallback missing (dead display would never recover)"
     )
+
+
+def test_wifi_scan_endpoint_never_dead_ends():
+    """P126: the setup-page scan endpoint must actively (re)start a scan on
+    every empty/failed result. The old code only re-triggered on the exact
+    WIFI_SCAN_FAILED value — an empty or odd state answered '[]' forever and
+    the setup page never showed a single network (0.1.180 on IDF 5.5)."""
+    src = _src(WEBMGR)
+    i = src.index("void WebManager::respondAvailableWiFiNetworks")
+    body = src[i:src.index("\n}\n", i)]
+    # Every path that does not report results must call scanNetworks
+    assert body.count("WiFi.scanNetworks(true)") >= 2, (
+        "scan endpoint must re-trigger scanning on empty/failed states"
+    )
+    # Explicitly handle the running state instead of falling through
+    assert "WIFI_SCAN_RUNNING" in body, (
+        "scan-in-progress state must be handled explicitly"
+    )
+    # The AP bring-up kicks a first scan so the page has results on first poll
+    main_src = _src(FW / "src" / "main.cpp")
+    ap_start = main_src.index('Serial.println("Soft-AP started')
+    window = main_src[ap_start:ap_start + 600]
+    assert "WiFi.scanNetworks(true)" in window, (
+        "AP bring-up must start the first WiFi scan immediately"
+    )

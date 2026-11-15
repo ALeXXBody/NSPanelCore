@@ -143,50 +143,58 @@ void WebManager::doRebootNow(AsyncWebServerRequest *request) {
 }
 
 void WebManager::respondAvailableWiFiNetworks(AsyncWebServerRequest *request) {
-  String json = "[";
   int n = WiFi.scanComplete();
-  if (n == -2) {
-    WiFi.scanNetworks(true);
-  } else if (n) {
-    for (int i = 0; i < n; ++i) {
-      if (!WiFi.SSID(i).isEmpty()) {
-        LOG_DEBUG("Found WiFi ", WiFi.SSID(i).c_str());
-        if (i)
-          json += ",";
-        json += "{";
-        json += "\"rssi\":" + String(WiFi.RSSI(i));
-        json += ",\"ssid\":\"" + WiFi.SSID(i) + "\"";
-        json += ",\"channel\":" + String(WiFi.channel(i));
-
-        switch (WiFi.encryptionType(i)) {
-        case wifi_auth_mode_t::WIFI_AUTH_OPEN:
-          json += ",\"security\": \"OPEN\"";
-          break;
-        case wifi_auth_mode_t::WIFI_AUTH_WPA2_PSK:
-          json += ",\"security\": \"WPA2 PSK\"";
-          break;
-        case wifi_auth_mode_t::WIFI_AUTH_WPA3_PSK:
-          json += ",\"security\": \"WPA3 PSK\"";
-          break;
-        case wifi_auth_mode_t::WIFI_AUTH_WPA_PSK:
-          json += ",\"security\": \"WPA PSK\"";
-          break;
-        case wifi_auth_mode_t::WIFI_AUTH_WEP:
-          json += ",\"security\": \"WEP\"";
-          break;
-
-        default:
-          json += ",\"security\": \"UNKNOWN\"";
-          break;
-        }
-        json += "}";
-      }
-    }
+  if (n == WIFI_SCAN_RUNNING) {
+    // Scan still running: report an empty list, the page polls again.
+    request->send(200, "application/json", "[]");
+    return;
+  }
+  if (n <= 0) {
+    // No usable scan results (failed, never started, or empty). Clear any
+    // stale state and start a fresh async scan NOW — this endpoint must
+    // never dead-end on "no networks" (it used to only re-trigger on the
+    // exact WIFI_SCAN_FAILED value, so an empty/odd state stuck it silent).
     WiFi.scanDelete();
-    if (WiFi.scanComplete() == -2) {
-      WiFi.scanNetworks(true);
+    WiFi.scanNetworks(true);
+    request->send(200, "application/json", "[]");
+    return;
+  }
+  String json = "[";
+  for (int i = 0; i < n; ++i) {
+    if (!WiFi.SSID(i).isEmpty()) {
+      LOG_DEBUG("Found WiFi ", WiFi.SSID(i).c_str());
+      if (i)
+        json += ",";
+      json += "{";
+      json += "\"rssi\":" + String(WiFi.RSSI(i));
+      json += ",\"ssid\":\"" + WiFi.SSID(i) + "\"";
+      json += ",\"channel\":" + String(WiFi.channel(i));
+
+      switch (WiFi.encryptionType(i)) {
+      case wifi_auth_mode_t::WIFI_AUTH_OPEN:
+        json += ",\"security\": \"OPEN\"";
+        break;
+      case wifi_auth_mode_t::WIFI_AUTH_WPA2_PSK:
+        json += ",\"security\": \"WPA2 PSK\"";
+        break;
+      case wifi_auth_mode_t::WIFI_AUTH_WPA_PSK:
+        json += ",\"security\": \"WPA PSK\"";
+        break;
+      case wifi_auth_mode_t::WIFI_AUTH_WEP:
+        json += ",\"security\": \"WEP\"";
+        break;
+
+      default:
+        json += ",\"security\": \"UNKNOWN\"";
+        break;
+      }
+      json += "}";
     }
   }
+  // Results served: drop them and start the next scan so the list stays
+  // fresh while the user sits on the setup page.
+  WiFi.scanDelete();
+  WiFi.scanNetworks(true);
   json += "]";
   request->send(200, "application/json", json);
   json = String();

@@ -199,6 +199,9 @@ static void ensureAP() {
   if (WiFi.softAP("NSPanelCore", NULL) && WiFi.softAPConfig(local_ip, local_ip, subnet)) {
     Serial.println("Soft-AP started: SSID 'NSPanelCore', http://192.168.1.1");
     _apActive = true;
+    // Start the first WiFi scan right away so the setup page has networks
+    // to show on its first poll.
+    WiFi.scanNetworks(true);
     webMan.init(NSPanelCoreFirmwareVersion);
   } else {
     LOG_ERROR("Failed to start Soft-AP!");
