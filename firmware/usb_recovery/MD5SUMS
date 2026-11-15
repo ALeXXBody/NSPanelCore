@@ -1,0 +1,6 @@
+31ed23faf5db06e2f36009fc0940354e  blank.tft
+6bf55d2acdd830c317f57426ce8dcfd9  bootloader.bin
+64801a0facd50cfe26cf82ffad429d42  firmware.bin
+76f6995668887be88392e251bdeea004  littlefs.bin
+97e6363b4d310ce4bc4c46e9a885ae3a  MD5SUMS
+0d2338d1ab80d47bc30edf94c63cb716  partitions.csv
