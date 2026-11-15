@@ -42,3 +42,11 @@ again — but per RULE R6 nothing of mine goes near the panel anyway.
 - Swap TX/RX, check GND, try 115200 baud, try another USB cable/port
   (charge-only cables have no data wires — most common gotcha).
 - If the ESP chip itself is dead, the board needs replacing.
+
+## What was wrong with the previous image (and is fixed in r2)
+The filesystem region shipped with no config file. The panel booted, found
+no config, wiped itself, and sat with an empty state instead of coming back
+as your panel. r2 ships the filesystem WITH your working config pre-loaded
+(DemoPanel / Home_Network / MQTT 192.168.1.20 demo values — edit config.json
+from the panel web page afterwards if needed). After the web install the
+panel should come straight back online at its configured IP.
