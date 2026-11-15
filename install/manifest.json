@@ -1,6 +1,6 @@
 {
   "name": "NSPanel Core panel recovery",
-  "version": "0.1.177",
+  "version": "0.1.177-r2",
   "new_install_prompt_erase": true,
   "builds": [
     {
