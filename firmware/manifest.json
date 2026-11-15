@@ -1,6 +1,6 @@
 {
-  "version": "0.1.177",
-  "notes": "Absurd-0x08-offset guard: offsets beyond bytes-sent clean-restart (max 10) instead of writing Frankenstein images at fake 100% (P104 root cause of all System Data ERRORs)",
+  "version": "0.1.178",
+  "notes": "AP fallback fixed: setup AP comes up immediately on WiFi failure (AP+STA), stays up while retrying, dropped on connect, restored on drop; removed 3-min gate + scan-restart reboot loop",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
