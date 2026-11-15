@@ -245,6 +245,7 @@ void WebManager::_taskPerformOTAUpdate(void *param) {
 
   bool hasAnythingUpdated = false;
   bool firmwareUpdateSuccessful = true;
+  bool fw_was_flashed = false; // set when the firmware image actually changed
   yield();
   vTaskDelay(250 / portTICK_PERIOD_MS); // Wait for other tasks.
   if (NSPMConfig::instance->md5_firmware.compare(checksum_holder) != 0) {
@@ -262,6 +263,7 @@ void WebManager::_taskPerformOTAUpdate(void *param) {
       // Save new firmware checksum
       NSPMConfig::instance->md5_firmware = checksum_holder;
       hasAnythingUpdated = true;
+      fw_was_flashed = true;
     } else {
       LOG_ERROR("Something went wrong during firmware upgrade.");
       PageManager::GetNSPanelManagerPage()->setText("Update failed!");
@@ -270,7 +272,13 @@ void WebManager::_taskPerformOTAUpdate(void *param) {
     LOG_INFO("Firmware is the same, will not update.");
   }
 
-  if (firmwareUpdateSuccessful) {
+  if (fw_was_flashed) {
+    // NEVER run the filesystem update under freshly flashed (not yet
+    // running) firmware — the fs step must always execute under the
+    // NEWEST code. Reboot now; after the restart the manager re-checks
+    // checksums and drives the fs update under the new firmware.
+    LOG_INFO("Firmware flashed — rebooting before the fs update (fs always runs under the newest fw).");
+  } else if (firmwareUpdateSuccessful) {
     LOG_INFO("Firmware update done without errors, will check LittleFS.");
     got_checksum = false;
     for (int attempt = 0; attempt < 60 && !got_checksum; attempt++) {

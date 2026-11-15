@@ -171,6 +171,16 @@ class NSPanelCoreManager:
         self._restore_firmware_overlay()
         await self.refresh_ota_cache()
         self._reschedule_firmware_check()
+        # P132: run one firmware check shortly after startup so a fresh HA
+        # boot can never keep serving files older than the manifest.
+        from homeassistant.helpers.event import async_call_later
+
+        async def _initial_firmware_check(_now):
+            await self._poll_firmware_manifest(_now)
+
+        self._firmware_unsubs.append(
+            async_call_later(self.hass, 90, _initial_firmware_check)
+        )
         _LOGGER.info("NSPanel Core manager started")
 
     async def async_stop(self) -> None:
@@ -367,16 +377,27 @@ class NSPanelCoreManager:
     async def _poll_firmware_manifest(self, _now) -> None:
         status = await self.check_firmware_updates(auto=True)
         latest = status.get("latest") if isinstance(status, dict) else ""
-        if (
-            status.get("update_available")
-            and latest
-            and latest != self._firmware_notified_version
-        ):
-            self._firmware_notified_version = latest
+        if not (status.get("update_available") and latest):
+            return
+        # P132: auto-activate. Serving stale bundled files caused both panel
+        # OTA deaths (old IDF4.4 binary + demo fs pushed over a good app).
+        # The served set must ALWAYS match the manifest before any panel
+        # can be pushed an update — no manual step, no approval gap.
+        try:
+            ok, message = await self.activate_firmware_version()
+        except Exception as err:  # noqa: BLE001
+            ok, message = False, f"auto-activate failed: {err}"
+        self._firmware_notified_version = latest
+        if ok:
             self.add_message(
-                "Panel firmware update available",
-                f"Version {latest} is ready ({status.get('notes', '') or 'see manifest notes'})."
-                " Install it from the Actions menu (Download + activate latest).",
+                "Panel firmware updated",
+                f"Version {latest} is now served ({message}).",
+            )
+        else:
+            self.add_message(
+                "Panel firmware update FAILED to activate",
+                f"Version {latest} could not be downloaded/verified ({message})."
+                " OTA pushes are BLOCKED until it activates — do not update panels.",
             )
 
     def servable_path(self, kind: str, name: str) -> str | None:

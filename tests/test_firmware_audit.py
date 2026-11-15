@@ -391,3 +391,37 @@ def test_fs_ota_unmounts_littlefs_and_bounded_retries():
     )
     assert task_body.count("of 3.") == 2, "fw and fs retries must be bounded to 3"
     assert "save_attempt < 10" in task_body, "config save retries must be bounded"
+
+
+def test_fw_and_fs_ota_split_across_reboots():
+    """P132 (both panel deaths): after flashing new firmware the fs update
+    must NEVER run in the same boot under freshly-flashed (not yet running)
+    code — the fs step always executes under the newest firmware. The fw
+    path reboots immediately; the manager drives the fs update after the
+    restart."""
+    src = _src(WEBMGR)
+    task_i = src.index("void WebManager::_taskPerformOTAUpdate")
+    task_body = src[task_i:]
+    assert "fw_was_flashed = true;" in task_body, "fw flash must be tracked"
+    assert "Firmware flashed — rebooting before the fs update" in task_body, (
+        "fw update must reboot before any fs work"
+    )
+    fs_guard = src.index("} else if (firmwareUpdateSuccessful) {", task_i)
+    assert fs_guard > src.index("Firmware flashed — rebooting before the fs update", task_i), (
+        "fs section must be skipped when firmware was flashed"
+    )
+
+
+def test_app_never_serves_stale_firmware():
+    """P132: the integration must auto-activate the manifest firmware (no
+    manual step) — on update_available in the periodic poll and once shortly
+    after startup — because serving stale bundled files caused both deaths."""
+    src = _src(FW.parent / "custom_components" / "nspanel_core" / "manager.py")
+    poll_i = src.index("async def _poll_firmware_manifest")
+    poll_body = src[poll_i:src.index("\n    def ", poll_i + 10)]
+    assert "activate_firmware_version" in poll_body, (
+        "update_available must trigger auto-activation, not just a notification"
+    )
+    assert "_initial_firmware_check" in src, (
+        "startup must schedule an early firmware check"
+    )
