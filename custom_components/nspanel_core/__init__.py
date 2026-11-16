@@ -73,6 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "core": core,
         "unsub": unsub_mqtt,
         "active": active,
+        "save": _save_state,
     }
     entry.async_on_unload(entry.add_update_listener(_reload))
     return True

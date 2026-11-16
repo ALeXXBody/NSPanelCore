@@ -36,16 +36,18 @@ class ManagerConfig:
     manager_port: int = DEFAULT_MANAGER_PORT
     settings: Settings = field(default_factory=Settings)
     panels: list[Panel] = field(default_factory=list)
+    deleted_macs: list[str] = field(default_factory=list)  # v1: deleted panels never resurrect
 
 
 class Core:
     """Panel lifecycle + wire protocol, transport-injected."""
 
-    def __init__(self, config: ManagerConfig, publish, log=None):
+    def __init__(self, config: ManagerConfig, publish, log=None, on_new_panel=None):
         """``publish(topic, payload, retain=False)`` is the only I/O primitive."""
         self.config = config
         self._publish = publish
         self._log = log or _LOGGER
+        self.on_new_panel = on_new_panel
 
     # -- lookups ------------------------------------------------------------
 
@@ -79,10 +81,25 @@ class Core:
             self._log.warning("Ignoring unparsable register_request")
             return False
         mac = str(data.get("mac_origin") or "")
-        panel = self.panel_by_mac(mac)
-        if panel is None:
-            self._log.info("Registration from unknown panel %s", mac)
+        import re as _re
+
+        mac_norm = _re.sub(r"[^0-9a-f]", "", mac.lower())
+        if mac_norm in self.config.deleted_macs:
+            self._log.info("Ignoring register from deleted panel %s", mac)
             return False
+        panel = self.panel_by_mac(mac)
+        created = False
+        if panel is None:
+            # Auto-discovery (v1 contract): new panels register as
+            # UNACCEPTED and wait for the user's accept in the dashboard.
+            friendly = str(data.get("friendly_name") or f"NSPanel {mac_norm[-4:].upper()}")
+            panel = Panel(mac=mac_norm, name=friendly, wifi_hostname=friendly,
+                          version=str(data.get("version") or "UNKNOWN"),
+                          model=str(data.get("model") or "sonoff"))
+            self.config.panels.append(panel)
+            created = True
+            if self.on_new_panel is not None:
+                self.on_new_panel(panel)
 
         friendly = str(data.get("friendly_name") or "")
         if friendly and friendly.strip() != "NSPanelCore":
@@ -98,6 +115,11 @@ class Core:
             panel.littlefs_md5 = str(data["md5_data_file"])
         if data.get("md5_tft_file"):
             panel.tft_md5 = str(data["md5_tft_file"])
+
+        if created:
+            # Unaccepted panels wait for the dashboard's Accept; no accept
+            # reply goes out until the user approves them.
+            return True
 
         reply = {
             "command": CMD_REGISTER_ACCEPT,

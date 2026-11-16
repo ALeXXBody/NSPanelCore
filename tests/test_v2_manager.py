@@ -86,11 +86,28 @@ def test_register_ignores_bare_default_hostname(core):
     assert core.config.panels[0].wifi_hostname == "KitchenPanel"
 
 
-def test_unknown_panel_registration_ignored(core):
+def test_unknown_panel_autoregisters_unaccepted(core):
+    """v1 contract: new panels auto-register as UNACCEPTED, no accept reply,
+    and wait for the dashboard's Accept button."""
     core, published = core
-    req = {"mac_origin": "AA:BB:CC:DD:EE:FF", "version": "9"}
+    req = {"mac_origin": "AA:BB:CC:DD:EE:FF", "friendly_name": "GaragePanel",
+           "version": "0.1.0"}
+    assert core.handle_register_request(json.dumps(req)) is True
+    assert published == []                       # no accept reply yet
+    new = next(p for p in core.config.panels if p.mac == "aabbccddeeff")
+    assert new.accepted is False and new.name == "GaragePanel"
+
+
+def test_deleted_panel_never_resurrects(core):
+    """P72 contract: deleting must remember the MAC — the panel re-registers
+    every few seconds and would resurrect instantly otherwise."""
+    core, published = core
+    panel = core.config.panels[0]
+    core.config.deleted_macs.append("e465b849a100")
+    req = {"mac_origin": "E4:65:B8:49:A1:00", "friendly_name": "KitchenPanel",
+           "version": "0.1.0"}
     assert core.handle_register_request(json.dumps(req)) is False
-    assert published == []
+    assert all(p.mac != "e465b849a100" for p in core.config.panels)
 
 
 def test_status_report_adopts_version_and_telemetry(core):
