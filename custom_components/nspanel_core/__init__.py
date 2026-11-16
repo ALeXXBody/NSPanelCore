@@ -32,6 +32,9 @@ STORE_DIR = "nspanel_core/firmware"   # under hass config dir
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    # P167: the MQTT component may still be setting up when we run —
+    # wait for its client (manifest also declares the mqtt dependency).
+    await mqtt.async_wait_for_mqtt_client(hass)
     cfg = ManagerConfig(
         manager_address=_manager_address(hass),
         manager_port=8123,

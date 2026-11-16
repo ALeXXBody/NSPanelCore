@@ -156,9 +156,11 @@ def register_dashboard(hass: HomeAssistant) -> None:
         from homeassistant.components.frontend import async_remove_panel
         from homeassistant.components.panel_custom import async_register_panel
 
+        from homeassistant.components.http import StaticPathConfig
+
         static_dir = Path(__file__).parent / "static"
         await hass.http.async_register_static_paths(
-            [(f"{URL_BASE}/static", str(static_dir))]
+            [StaticPathConfig(f"{URL_BASE}/static", str(static_dir))]
         )
         hass.http.register_view(DashboardPage())
         hass.http.register_view(PanelAction())
