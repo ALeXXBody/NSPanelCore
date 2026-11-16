@@ -63,6 +63,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await mqtt.async_subscribe(hass, "nspanel/+/r2_state", on_relay_state),
     ]
     _register_ota_views(hass, active)
+    # Dashboard + sidebar (parity: the management UI is back)
+    from .dashboard import register_dashboard
+
+    register_dashboard(hass)
     # Entity platforms (parity: sensors + relay switches) — standard forwarding
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "switch"])
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
