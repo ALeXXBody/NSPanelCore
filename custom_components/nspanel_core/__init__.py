@@ -10,6 +10,8 @@ from pathlib import Path
 from homeassistant.components import mqtt
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from aiohttp import web
+
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.helpers.storage import Store
 
@@ -37,7 +39,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     # Persistence: panels (accepted/denied), deletions and settings survive
     # HA restarts — without this every restart reset acceptance to none.
-    store = Store(hass, "nspanel_core", "state.json")
+    store = Store(hass, 1, "nspanel_core_state.json")
     saved = await store.async_load() or {}
     cfg.panels = [Panel.from_dict(d) for d in saved.get("panels", [])]
     cfg.deleted_macs = list(saved.get("deleted_macs", []))
@@ -140,10 +142,22 @@ async def _reload(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 def _make_publisher(hass: HomeAssistant):
-    async def publish(topic: str, payload: str, retain: bool = False) -> None:
+    """Return a THREAD-SAFE publish callable.
+
+    The core runs inside hass.async_add_executor_job (a worker thread) —
+    creating tasks directly on the loop from that thread is not thread-safe
+    (P162 audit finding). call_soon_threadsafe is the correct bridge.
+    """
+
+    async def _publish(topic: str, payload: str, retain: bool = False) -> None:
         await mqtt.async_publish(hass, topic, payload, retain=retain)
-    # The core calls publish synchronously; bridge through the loop.
-    return lambda t, p, retain=False: hass.loop.create_task(publish(t, p, retain))
+
+    def publish(topic: str, payload: str, retain: bool = False) -> None:
+        hass.loop.call_soon_threadsafe(
+            hass.async_create_task, _publish(topic, payload, retain)
+        )
+
+    return publish
 
 
 def _manager_address(hass: HomeAssistant) -> str:

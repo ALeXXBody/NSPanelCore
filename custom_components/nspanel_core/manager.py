@@ -81,9 +81,7 @@ class Core:
             self._log.warning("Ignoring unparsable register_request")
             return False
         mac = str(data.get("mac_origin") or "")
-        import re as _re
-
-        mac_norm = _re.sub(r"[^0-9a-f]", "", mac.lower())
+        mac_norm = topic_safe(mac)  # ONE normalization everywhere (P162 audit)
         if mac_norm in self.config.deleted_macs:
             self._log.info("Ignoring register from deleted panel %s", mac)
             return False
