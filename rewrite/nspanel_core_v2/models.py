@@ -41,20 +41,14 @@ class Panel:
         return int(self.mac.replace(":", ""), 16) % 1000000
 
     def topic_base(self) -> str:
-        try:
-            from .const import panel_mqtt_base
-        except ImportError:
-            from const import panel_mqtt_base
+        from v2_const import panel_mqtt_base
         return panel_mqtt_base(self.wifi_hostname or self.name)
 
     def command_topic(self) -> str:
         return f"nspanel/{self.topic_base()}/command"
 
     def status_report_topic(self) -> str:
-        try:
-            from .const import panel_topic
-        except ImportError:
-            from const import panel_topic
+        from v2_const import panel_topic
         return panel_topic(self.mac, "status_report")
 
     def to_dict(self) -> dict:
