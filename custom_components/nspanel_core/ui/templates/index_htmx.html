@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block head %}
+
+<script src="/nspanel_core/static/index_htmx.js?version={{ version }}"></script>
+<link rel="stylesheet" type="text/css" href="/nspanel_core/static/index.css?version={{ version }}">
+{% if manager_address == "" %}<script src="/nspanel_core/static/initial_setup.js?version={{ version }}"></script>{% endif %}
+{% endblock %}
+
+{% block content %}
+
+<span class="hidden" id="temperature_unit">{{ temperature_unit }}</span>
+<div class="flex flex-wrap justify-between items-center">
+  <div class="flex justify-between items-center">
+    <span class="font-medium text-2xl me-2">NSPanels</span>
+  </div>
+</div>
+<div>
+    {% include 'index_htmx_nspanels_section.html' %}
+</div>
+{% endblock %}

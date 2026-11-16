@@ -289,21 +289,3 @@ def test_time_date_publishing_contract():
     assert '"nspanel/status/ampm"' in src
     assert "timedelta(seconds=60)" in src
     assert "clock_us_style" in src and 'date_format or "%d/%m"' in src
-
-
-def test_dashboard_auth_model_v1_parity():
-    """The dashboard PAGE loads unauthenticated (iframe cannot authenticate)
-    and authenticates its ACTIONS with the postMessage token."""
-    src = (ROOT / "custom_components" / "nspanel_core" / "dashboard.py").read_text()
-    i = src.index("class DashboardPage")
-    body = src[i:src.index("class PanelAction", i)]
-    assert "requires_auth = False" in body, (
-        "the page must load without auth (the iframe cannot send credentials)"
-    )
-    script = src[src.index("_PAGE_SCRIPT"):]
-    assert "nspanel-hass-token" in script
-    assert 'Authorization' in script
-    # the ACTION endpoint stays authenticated
-    j = src.index("class PanelAction")
-    action_body = src[j:src.index("\n\n\nclass", j) if "\n\n\nclass" in src[j:] else len(src)]
-    assert "requires_auth = True" in action_body

@@ -1,4 +1,4 @@
-"""Config flow for NSPanel Core (parity port of the v1 flow).
+"""Config flow for NSPanel Core.
 
 The integration uses Home Assistant's own MQTT broker connection — there is
 no connection setup needed. The flow simply creates the entry; rooms, lights,
@@ -47,30 +47,25 @@ class NSPanelCoreOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
         errors: dict[str, str] = {}
-        data = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id) or {}
-        core = data.get("core")
-        current = core.config.settings if core else None
+        manager = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id)
+        current = manager.config.settings if manager else None
 
         if user_input is not None:
-            if core:
-                # Live-update the fields the v2 core consumes directly.
-                core.config.manager_address = user_input.get("manager_address", core.config.manager_address)
-                core.config.manager_port = user_input.get("manager_port", core.config.manager_port)
-                # Persist the rest as settings (consumed as features port).
-                from .models import Settings
-
-                settings_fields = {f for f in Settings.__dataclass_fields__}
-                core.config.settings = Settings(
-                    **{k: v for k, v in user_input.items() if k in settings_fields}
-                )
-            clean = {k: v for k, v in (user_input or {}).items()}
-            self.hass.config_entries.async_update_entry(self.entry, options=clean)
-            return self.async_create_entry(title="", data=clean)
+            if manager:
+                errors = await manager.apply_settings(user_input)
+                if not errors:
+                    # Persist a copy on the entry so HA shows effective options.
+                    clean, _ = manager.validate_settings(user_input)
+                    self.hass.config_entries.async_update_entry(
+                        self.entry, options=clean
+                    )
+                    return self.async_create_entry(title="", data=clean)
+            else:
+                return self.async_create_entry(title="", data=user_input)
+            # errors -> fall through and re-show the form
 
         def d(name, fallback):
-            if current is not None:
-                return getattr(current, name, fallback)
-            return (self.entry.options or {}).get(name, fallback)
+            return getattr(current, name, fallback) if current else fallback
 
         schema = vol.Schema(
             {
@@ -81,7 +76,6 @@ class NSPanelCoreOptionsFlow(config_entries.OptionsFlow):
                 vol.Required("date_format", default=d("date_format", "%d/%m")): str,
                 vol.Optional("location_latitude", default=d("location_latitude", "")): str,
                 vol.Optional("location_longitude", default=d("location_longitude", "")): str,
-                vol.Optional("weather_entity", default=d("weather_entity", "")): str,
                 vol.Optional("weather_update_interval", default=d("weather_update_interval", 30)): int,
                 vol.Optional("precipitation_format", default=d("precipitation_format", "mm")): str,
                 vol.Optional("wind_speed_format", default=d("wind_speed_format", "kmh")): str,

@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="flex items-center justify-between" id="nspanel_settings_container">
+  <div>
+    <h2 class="font-medium text-2xl" id="nspanel_name">Relay groups</h2>
+  </div>
+  <div>
+      <a href="https://github.com/ALeXXBody/NSPanelCore/tree/main/docs" target="_blank" type="button" class="btn btn-info">Help</a>
+  </div>
+</div>
+<div class="pm-2" id="warning_container">
+</div>
+<div class="md:flex md:justify-between md:items-start mt-2 mb-6 p-4 bg-base-100 rounded-md shadow-lg w-full">
+    <table class="table table-sm">
+      <thead class="">
+        <tr>
+          <th class="px-3 py-1">Name</th>
+          <th class="px-3 py-1">Relay members</th>
+          <th class="px-3 py-1">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="log_body" class="">
+        {% for relay_group in relay_groups %}
+          <tr class="hover">
+            <th class="">
+              {{ relay_group.name }}
+            </th>
+            <td class="max-w-36">
+                <ul class="">
+                    {% for member in relay_group.members %}
+                    <li class="join my-1 mx-1 w-full">
+                        <span class="join-item badge badge-neutral">{{ member.panel_name }}</span>
+                        <span class="join-item badge badge-info">Relay {{ member.relay_num }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </td>
+            <td>
+                <span class="text-sm opacity-60">Managed via configuration</span>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+</div>
+{% endblock %}

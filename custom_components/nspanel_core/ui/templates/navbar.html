@@ -1,0 +1,167 @@
+
+
+<nav class="bg-base-100 w-full z-20 top-0 start-0">
+  <div class="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
+    <a href="/nspanel_core/ui" class=" flex items-center space-x-3 rtl:space-x-reverse">
+        <div class="bg-neutral/50 p-2 rounded-box">
+            <img src="/nspanel_core/static/logo.svg?version={{ version }}" alt="Logo" class="h-10">
+        </div>
+        <div class="flex flex-col leading-tight">
+            <span class="text-lg font-semibold">NSPanel <span class="text-accent" style="color:#39c8e8">Core</span></span>
+            <span class="text-xs text-base-content/60">{{ version }}</span>
+        </div>
+    </a>
+    <div class="flex md:order-2 space-x-3 md:space-x-0 rtl:space-x-reverse">
+      <div class="flex items-center">
+          <button class="btn btn-sm mdi mdi-inbox" hx-get="/nspanel_core/api/messages" hx-swap="none" hx-swap-oob="true">
+          Messages
+          {% if has_unread_messages %}
+              <span class="badge badge-sm badge-info">new</span>
+          {% endif %}
+          </button>
+
+          <div class="dropdown dropdown-end">
+            <div tabindex="0" role="button" class="btn btn-sm m-1">
+              Actions
+              <svg
+                width="12px"
+                height="12px"
+                class="inline-block h-2 w-2 fill-current opacity-60"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 2048 2048">
+                <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
+              </svg>
+            </div>
+            <ul tabindex="0" class="dropdown-content bg-base-300 text-base-content rounded-box z-[1] w-98 p-2 shadow-2xl">
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Check firmware updates</span>
+                        </label>
+                        <button class="btn btn-xs btn-info mr-2" onclick="nspanelFetch('/nspanel_core/firmware_check',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.latest?('Latest: '+j.latest+(j.update_available?' — update available (install it from Actions > Download + activate latest).':' (up to date)')):('Check failed: '+(j.error||'unknown')))).catch(e=>alert('Check failed'));">Check</button>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Download + activate latest firmware</span>
+                        </label>
+                        <button class="btn btn-xs btn-warning mr-2" onclick="if(confirm('Download and activate the latest firmware? Panels update over MQTT OTA.'))nspanelFetch('/nspanel_core/firmware_install',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.message)).catch(e=>alert('Install failed'));">Install</button>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Reboot all panels</span>
+                        </label>
+                        <button class="btn btn-xs btn-warning mr-2" onclick="if(confirm('Reboot all accepted panels?'))document.querySelectorAll('.nspanel-reboot-button').forEach(b=>b.click());">Reboot</button>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Update firmware on all panels</span>
+                        </label>
+                        <button class="btn btn-xs btn-warning mr-2" onclick="if(confirm('Flash ESP firmware on ALL panels? This also refreshes their setup web UI and WIPES their WiFi settings. Continue?'))document.querySelectorAll('[id^=firmware-update-]').forEach(b=>b.click());">Flash all</button>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Served display files (what panels download)</span>
+                        </label>
+                        <button class="btn btn-xs btn-info mr-2" onclick="nspanelFetch('/nspanel_core/firmware_status').then(r=>r.json()).then(j=>{var t=j.served_tft||{};var f=function(v){return v?(v.filename+': '+v.bytes+' bytes, md5 '+String(v.md5).slice(0,12)+'… ('+v.source+')'):'missing';};var w=j.served_firmware||{};var g=function(v){return v?(v.filename+': '+v.bytes+' bytes, md5 '+String(v.md5).slice(0,12)+'… ('+v.source+')'):'missing';};alert('EU display: '+f(t.eu)+'\nUS display: '+f(t.us)+'\nESP sonoff fw: '+g(w.sonoff)+'\nESP sonoff data: '+g(w['sonoff-data'])+'\nESP custom fw: '+g(w.custom)+'\nESP custom data: '+g(w['custom-data']));}).catch(e=>alert('Check failed'));">Show</button>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Upload files (exact bytes panels get)</span>
+                        </label>
+                        <span class="mr-2 flex gap-1">
+                            <button class="btn btn-xs btn-warning" onclick="upload_tft_modal.showModal();">Display</button>
+                            <button class="btn btn-xs btn-warning" onclick="upload_firmware_modal.showModal();">ESP</button>
+                            <button class="btn btn-xs btn-warning" onclick="upload_data_file_modal.showModal();" title="Flashing the data file WIPES the panel WiFi settings!">Data!</button>
+                        </span>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Update display on all panels</span>
+                        </label>
+                        <button class="btn btn-xs btn-warning mr-2" onclick="document.querySelectorAll('[id^=screen-update-]').forEach(b=>b.click());">Flash all</button>
+                    </div>
+                </li>
+                <li>
+                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
+                        <label class="label">
+                            <span class="label-text justify-start w-full ml-2">Restart NSPanel Core</span>
+                        </label>
+                        <button class="btn btn-xs btn-error mr-2" hx-post="/nspanel_core/api/restart" hx-swap="none">Restart</button>
+                    </div>
+                </li>
+            </ul>
+          </div>
+      </div>
+      <button data-collapse-toggle="navbar" type="button"
+        class="inline-flex items-center p-2 w-10 h-10 justify-center text-sm text-gray-500 rounded-lg md:hidden focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark: hover:bg-accent dark:focus:ring-gray-600"
+        aria-controls="navbar" aria-expanded="false">
+        <span class="sr-only">Open main menu</span>
+        <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 17 14">
+          <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M1 1h15M1 7h15M1 13h15" />
+        </svg>
+      </button>
+    </div>
+    <div class="items-center justify-between max-md:hidden md:visible md:flex md:flex-wrap w-full md:w-auto md:order-1"
+      id="navbar">
+      <ul
+        class="flex flex-col p-4 md:p-0 mt-4 font-medium border rounded-lg md:space-x-8 rtl:space-x-reverse md:flex-row md:mt-0 md:border-0">
+        <li>
+          <a href="/nspanel_core/ui" data-active="{% if request.path == '/' %}true{% endif %}"
+            class="block py-2 px-3 rounded md:p-0 md:hover:text-accent hover:bg-accent hover: md:hover:bg-transparent border-gray-700 data-[active=true]:text-accent ">NSPanels</a>
+        </li>
+        <li>
+          <button data-dropdown-toggle="entitiesMenuDropdown" data-active="{% if request.path == '/entities/relay_groups' %}true{% elif request.path == '/entities/global_scenes' %}true{% elif request.path == '/entities/weather_and_time' %}true{% elif request.path == '/denied_nspanels' %}true{% endif %}"
+            class="cursor-pointer flex items-center justify-between w-full py-2 px-3 rounded md:border-0 md:p-0 md:w-auto  md:hover:text-accent focus: border-gray-700  hover:bg-accent md:hover:bg-transparent data-[active=true]:text-accent ">
+            Entities
+            <svg class="w-2.5 h-2.5 ms-2.5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none"
+              viewBox="0 0 10 6">
+              <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="m1 1 4 4 4-4" />
+            </svg>
+          </button>
+          <!-- Dropdown menu -->
+          <div id="entitiesMenuDropdown"
+            class="z-10 font-normal hidden bg-neutral divide-y devide-neutral-content rounded-lg shadow md:absolute inset-x-auto w-full md:w-44 overflow-hidden">
+            <ul class="py-2 text-sm text-neutral-content" aria-labelledby="dropdownLargeButton">
+              <li>
+                <a href="/nspanel_core/relay_groups" data-active="{% if request.path == '/entities/relay_groups' %}true{% endif %}"
+                  class="block px-4 py-2  hover:bg-accent hover:text-accent-content hover: data-[active=true]:text-accent ">Relay/Light groups</a>
+              </li>
+              <li>
+                <a href="/nspanel_core/global_scenes" data-active="{% if request.path == '/entities/global_scenes' %}true{% endif %}" class="block px-4 py-2  hover:bg-accent hover:text-accent-content hover: data-[active=true]:text-accent ">
+                  Global scenes</a>
+              </li>
+              <li>
+                <a href="/nspanel_core/weather_and_time" data-active="{% if request.path == '/entities/weather_and_time' %}true{% endif %}"
+                  class="block px-4 py-2  hover:bg-accent hover:text-accent-content hover: data-[active=true]:text-accent ">Weather & Time</a>
+              </li>
+            </ul>
+            <div class="py-1 text-sm text-neutral-content">
+              <a href="/nspanel_core/denied_nspanels" data-active="{% if request.path == '/denied_nspanels' %}true{% endif %}" class="block px-4 py-2  hover:bg-accent hover:text-accent-content hover: data-[active=true]:text-accent ">Denied NSPanels</a>
+            </div>
+          </div>
+        <li>
+          <a href="/nspanel_core/settings" data-active="{% if request.path == '/settings' %}true{% endif %}"
+            class="block py-2 px-3 rounded md:p-0 md:hover:text-accent hover:bg-accent md:hover:bg-transparent border-gray-700 data-[active=true]:text-accent ">Settings</a>
+        </li>
+        <li>
+          <a onclick="about_modal.showModal();"
+            class="block py-2 px-3 rounded md:p-0 md:hover:text-accent hover:bg-accent cursor-pointer md:hover:bg-transparent border-gray-700 data-[active=true]:text-accent ">About</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
