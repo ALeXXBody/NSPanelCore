@@ -255,3 +255,15 @@ def test_v2_app_has_entity_platform_parity():
     assert "async_turn_on" in (v2 / "platforms.py").read_text()
     src = _py(v2 / "__init__.py")
     assert '["sensor", "switch"]' in src
+
+
+def test_v2_app_has_config_flow():
+    """P152: manifest declares config_flow — the module must exist (HA setup
+    crashed when it was missing after the consolidation)."""
+    cf = ROOT / "custom_components" / "nspanel_core" / "config_flow.py"
+    assert cf.is_file(), "manifest declares config_flow: true — module missing"
+    src = cf.read_text()
+    assert "class NSPanelCoreConfigFlow" in src
+    assert "async_get_options_flow" in src
+    m = json.loads((ROOT / "custom_components" / "nspanel_core" / "manifest.json").read_text())
+    assert m.get("config_flow") is True

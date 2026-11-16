@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 
 DOMAIN = "nspanel_core"
+DEFAULT_NAME = "NSPanel Core"
 
 TOPIC_ROOT = "nspanel"
 

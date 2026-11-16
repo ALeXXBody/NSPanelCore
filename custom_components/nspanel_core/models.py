@@ -101,10 +101,22 @@ class Thermostat:
 class Settings:
     """Manager settings (persisted)."""
 
+    manager_address: str = "core"
+    manager_port: int = 8000
+    color_temp_min: int = 2700
+    color_temp_max: int = 6500
+    date_format: str = "%d/%m"
+    location_latitude: str = ""
+    location_longitude: str = ""
     weather_entity: str = ""
     weather_update_interval: int = 30
-    temperature_unit: str = "C"
-    time_format: str = "24"
-    screensaver_mode: str = "with_background"
+    precipitation_format: str = "mm"
+    wind_speed_format: str = "kmh"
+    use_fahrenheit: bool = False
+    reverse_color_temp: bool = False
+    clock_us_style: bool = False
+    optimistic_mode: bool = False
+    turn_on_behaviour: str = "color_temp"
+    light_turn_on_brightness: int = 0
     firmware_last_check: str = ""
     firmware_latest_version: str = ""
