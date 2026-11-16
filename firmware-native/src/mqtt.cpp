@@ -20,6 +20,10 @@ static void nsp_mqtt_connected(void *handler_args, esp_event_base_t base,
     std::string cmd = topic_panel_cmd(s_hostname);
     esp_mqtt_client_subscribe(s_mqtt, cmd.c_str(), 1);
     esp_mqtt_client_subscribe(s_mqtt, TOPIC_MANAGER_COMMAND, 0);
+    // Screensaver clock topics (the manager publishes them every 60 s)
+    esp_mqtt_client_subscribe(s_mqtt, "nspanel/status/time", 0);
+    esp_mqtt_client_subscribe(s_mqtt, "nspanel/status/date", 0);
+    esp_mqtt_client_subscribe(s_mqtt, "nspanel/status/ampm", 0);
     // Register immediately on connect, then every 5 minutes (P135)
     nsp_mqtt_send_register(s_mqtt);
 }
@@ -33,9 +37,26 @@ static void nsp_mqtt_data(void *handler_args, esp_event_base_t base,
         // register_request arrives here FROM panels; the manager handles it.
         return;
     }
-    if (topic == topic_panel_cmd(s_hostname)) {
+    if (topic == "nspanel/status/time") {
+        extern void nsp_display_set_clock(const std::string &);
+        nsp_display_set_clock(payload);
+    } else if (topic == "nspanel/status/date") {
+        extern void nsp_display_set_date(const std::string &);
+        nsp_display_set_date(payload);
+    } else if (topic == "nspanel/status/ampm") {
+        extern void nsp_display_set_ampm(const std::string &);
+        nsp_display_set_ampm(payload);
+    } else if (topic == topic_panel_cmd(s_hostname)) {
         nsp_mqtt_handle_command(payload);
     }
+}
+
+void nsp_mqtt_publish_touch(int page, int component, int event) {
+    if (s_mqtt == nullptr) return;
+    char buf[96];
+    snprintf(buf, sizeof(buf),
+        "{\"page\":%d,\"component\":%d,\"event\":%d}", page, component, event);
+    esp_mqtt_client_publish(s_mqtt, topic_touch(s_hostname).c_str(), buf, 0, 0, false);
 }
 
 void nsp_mqtt_handle_command(const std::string &payload) {

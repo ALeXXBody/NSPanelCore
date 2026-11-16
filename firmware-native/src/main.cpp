@@ -29,6 +29,8 @@ extern void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
 extern void nsp_display_init(void);
 extern const char *nsp_display_warning(void);
 extern void nsp_ota_watchdog_feed_check(void);
+extern void nsp_display_touch_task_start(void);  // file scope — an in-body
+    // declaration inside extern "C" app_main would get C linkage (P160)
 extern float nsp_temperature(void);
 
 static std::string s_mac;
@@ -74,6 +76,7 @@ extern "C" void app_main(void) {
 
     // Display FIRST, gently — never blocks the network path (P130).
     nsp_display_init();
+    nsp_display_touch_task_start();
 
     if (g_cfg.wifi_ssid.empty()) {
         // Unconfigured (fresh NVS): the setup AP owns first boot.

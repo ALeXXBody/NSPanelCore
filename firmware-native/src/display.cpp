@@ -112,3 +112,67 @@ void nsp_display_start_tft_update(int new_baud) {
     // The stream itself is chunked by the manager's /download_tft_eu fetch;
     // offsets are validated against 0x08-starting garbage (guard) before write.
 }
+
+
+/* ---- Page layer (alpha): clock/date rendering + touch decode ----
+ * The panel's HMI (NSPanelManager-style, same object names) exposes:
+ *   screensaver.curTime / curDay / curAMPM  (+ the _minimal variants)
+ * The manager publishes nspanel/status/{time,date,ampm}; we render them.
+ * Touch events arrive as 0x65 <page> <component> <event> FF FF FF. */
+
+static const char *SCREENSAVER_PAGE = "screensaver";
+static const char *SCREENSAVER_MINIMAL_PAGE = "screensaver_minimal";
+
+void nsp_display_show_screensaver(void) {
+    if (!s_display_ready) return;
+    std::string cmd = std::string("page ") + SCREENSAVER_PAGE;
+    nsp_display_send_command(cmd.c_str());
+}
+
+void nsp_display_set_text(const char *object, const char *value) {
+    if (!s_display_ready) return;
+    std::string cmd = std::string(object) + "=\"" + value + "\"";
+    nsp_display_send_command(cmd.c_str());
+}
+
+void nsp_display_set_clock(const std::string &time_str) {
+    nsp_display_set_text("screensaver.curTime", time_str.c_str());
+    nsp_display_set_text("screensaver_minimal.curTime", time_str.c_str());
+}
+
+void nsp_display_set_date(const std::string &date_str) {
+    nsp_display_set_text("screensaver.curDay", date_str.c_str());
+    nsp_display_set_text("screensaver_minimal.curDay", date_str.c_str());
+}
+
+void nsp_display_set_ampm(const std::string &ampm_str) {
+    nsp_display_set_text("screensaver.curAMPM", ampm_str.c_str());
+    nsp_display_set_text("screensaver_minimal.curAMPM", ampm_str.c_str());
+}
+
+/* Touch listener: decode 0x65 events, wake the screen on touch. */
+void nsp_display_touch_task(void *);
+
+void nsp_display_touch_task_start(void) {
+    xTaskCreatePinnedToCore(nsp_display_touch_task, "touch", 4096, nullptr, 0, nullptr, 0);
+}
+
+void nsp_display_touch_task(void *) {
+    uint8_t buf[64];
+    for (;;) {
+        int n = uart_read_bytes(DISPLAY_UART, buf, sizeof(buf), pdMS_TO_TICKS(200));
+        for (int i = 0; i + 6 <= n; i++) {
+            if (buf[i] == 0x65 && buf[i + 4] == 0xFF && buf[i + 5] == 0xFF && buf[i + 6] == 0xFF) {
+                int page = buf[i + 1], component = buf[i + 2], event = buf[i + 3];
+                if (event == 1 && page != -1) {
+                    // Any touch wakes the panel from the screensaver to home.
+                    std::string cmd = "page home";
+                    nsp_display_send_command(cmd.c_str());
+                }
+                extern void nsp_mqtt_publish_touch(int page, int component, int event);
+                nsp_mqtt_publish_touch(page, component, event);
+                i += 6;
+            }
+        }
+    }
+}
