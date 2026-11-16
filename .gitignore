@@ -10,3 +10,4 @@ firmware/node_modules/
 # HA test sandbox
 *.log
 custom_components/**/node_modules/
+firmware-native/.pio/
