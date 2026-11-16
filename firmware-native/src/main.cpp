@@ -44,7 +44,7 @@ float nsp_temperature() {
     if (!s_adc_init) {
         adc_oneshot_unit_init_cfg_t init = {};
         init.unit_id = ADC_UNIT_1;
-        if (adc_oneshot_unit_init(&s_adc, &init) != ESP_OK) return 0.0f;
+        if (adc_oneshot_new_unit(&init, &s_adc) != ESP_OK) return 0.0f;
         adc_oneshot_chan_cfg_t chan = { .atten = ADC_ATTEN_DB_12, .bitwidth = ADC_BITWIDTH_12 };
         if (adc_oneshot_config_channel(s_adc, ADC_CHANNEL_7, &chan) != ESP_OK) return 0.0f;
         s_adc_init = true;
