@@ -254,7 +254,7 @@ def test_v2_app_has_entity_platform_parity():
     assert "RelaySwitch" in switch
     assert "async_turn_on" in (v2 / "platforms.py").read_text()
     src = _py(v2 / "__init__.py")
-    assert '["sensor", "switch"]' in src
+    assert '["sensor", "switch", "light"]' in src
 
 
 def test_v2_app_has_config_flow():
@@ -267,3 +267,13 @@ def test_v2_app_has_config_flow():
     assert "async_get_options_flow" in src
     m = json.loads((ROOT / "custom_components" / "nspanel_core" / "manifest.json").read_text())
     assert m.get("config_flow") is True
+
+
+def test_v2_app_has_light_platform_parity():
+    """v1 had relay-as-light (per-panel flag); v2 must too."""
+    v2 = ROOT / "custom_components" / "nspanel_core"
+    assert (v2 / "light.py").is_file()
+    src = (v2 / "light.py").read_text()
+    assert "RelayLight" in src and "set_relay" in src
+    glue = (v2 / "__init__.py").read_text()
+    assert '["sensor", "switch", "light"]' in glue

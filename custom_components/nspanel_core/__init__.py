@@ -68,7 +68,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     register_dashboard(hass)
     # Entity platforms (parity: sensors + relay switches) — standard forwarding
-    await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "switch"])
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "switch", "light"])
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "core": core,
         "unsub": unsub_mqtt,

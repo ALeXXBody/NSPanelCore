@@ -34,6 +34,7 @@ class Panel:
     has_pressure: bool = False
     warnings: list = field(default_factory=list)
     relay_states: dict = field(default_factory=dict)
+    relay_is_light: dict = field(default_factory=dict)
     last_seen: datetime = field(default_factory=_utcnow)
 
     @property
