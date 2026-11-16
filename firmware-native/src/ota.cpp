@@ -23,6 +23,8 @@
 #include "protocol.h"
 #include "config.h"
 
+extern void nsp_mqtt_publish_log(const char *msg);
+
 #define OTA_MAX_ATTEMPTS   3
 #define OTA_STALL_TIMEOUT_MS 120000
 
@@ -155,6 +157,7 @@ static void nsp_ota_fw_task(void *) {
     s_state = OTA_FW;
     s_progress = 0;
     s_last_progress_us = esp_timer_get_time();
+    nsp_mqtt_publish_log("OTA: task started");
 
     std::string checksum;
     for (int i = 0; i < 60 && checksum.empty(); i++) {
@@ -163,7 +166,16 @@ static void nsp_ota_fw_task(void *) {
             && checksum.size() >= 32) break;
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
-    if (checksum.size() < 32) { s_state = OTA_IDLE; vTaskDelete(nullptr); return; }
+    if (checksum.size() < 32) {
+        nsp_mqtt_publish_log("OTA: checksum fetch FAILED after retries");
+        s_state = OTA_IDLE; vTaskDelete(nullptr); return;
+    }
+    {
+        char l[128];
+        snprintf(l, sizeof(l), "OTA: served=%.32s stored=%.32s",
+                 checksum.c_str(), g_cfg.md5_firmware.c_str());
+        nsp_mqtt_publish_log(l);
+    }
 
     if (g_cfg.md5_firmware.compare(0, 32, checksum, 0, 32) == 0) {
         // same firmware — skip the app flash, fs may still be needed (below)
@@ -176,9 +188,16 @@ static void nsp_ota_fw_task(void *) {
                 vTaskDelay(pdMS_TO_TICKS(5000));
                 continue;
             }
+            nsp_mqtt_publish_log("OTA: downloading firmware (streaming)");
             fw_sink_ctx ctx = { handle, true };
             size_t total = nsp_http_stream(nsp_manager_url("/download_firmware").c_str(),
                                            fw_sink, &ctx);
+            {
+                char l[96];
+                snprintf(l, sizeof(l), "OTA: streamed %u bytes, sink_ok=%d",
+                         (unsigned)total, (int)ctx.ok);
+                nsp_mqtt_publish_log(l);
+            }
             if (total > 0x100 && ctx.ok && esp_ota_end(handle) == ESP_OK
                 && esp_ota_set_boot_partition(target) == ESP_OK) {
                 flashed = true;
@@ -188,9 +207,11 @@ static void nsp_ota_fw_task(void *) {
             }
         }
         if (!flashed) {
+            nsp_mqtt_publish_log("OTA: firmware flash FAILED after attempts");
             s_state = OTA_IDLE;
             vTaskDelete(nullptr);  // bounded: no infinite retry (P129)
         }
+        nsp_mqtt_publish_log("OTA: flashed OK, boot slot set — rebooting");
         g_cfg.md5_firmware = checksum.substr(0, 32);
         nsp_config_save();
         // RAIL #1: reboot NOW — the fs update runs under the new firmware.

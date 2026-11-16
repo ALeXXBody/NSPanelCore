@@ -102,6 +102,13 @@ void nsp_mqtt_send_register(esp_mqtt_client_handle_t client) {
     esp_mqtt_client_publish(client, TOPIC_MANAGER_COMMAND, buf, 0, 0, false);
 }
 
+/* P179 diagnostic: OTA milestones on the panel log topic — the same channel
+ * the v1 line used; wire-visible evidence of where the OTA stops. */
+void nsp_mqtt_publish_log(const char *msg) {
+    if (s_mqtt == nullptr) return;
+    esp_mqtt_client_publish(s_mqtt, topic_log(s_hostname).c_str(), msg, 0, 0, false);
+}
+
 void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
                                     int heap_pct, float temperature,
                                     const std::string &warnings) {
