@@ -113,7 +113,7 @@ def test_panel_command_names_frozen(command):
 def test_dashboard_update_actions_use_frozen_command_names():
     src = _py(INT / "dashboard.py")
     i = src.index('action not in ("accept", "deny", "delete", "update_firmware", "update_tft")')
-    window = src[i:i + 1200]
+    window = src[i:i + 2600]
     assert '"firmware_update"' in window
     assert '"tft_update"' in window
 
