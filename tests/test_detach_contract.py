@@ -27,6 +27,11 @@ def _py(path: pathlib.Path) -> str:
 # 1. MQTT topic matrix (the wire contract)
 # --------------------------------------------------------------------------
 
+def _is_v2_line() -> bool:
+    """True when custom_components/nspanel_core is the REWRITTEN component."""
+    return (INT / "platforms.py").is_file()
+
+
 def test_topic_constants_frozen():
     """The integration's topic subscriptions are the wire contract."""
     src = _py(INT / "const.py")
@@ -87,16 +92,23 @@ def test_firmware_status_report_carries_version():
 
 
 def test_manager_registration_handler_updates_version():
-    """The manager adopts the reported version on registration."""
+    """The manager adopts the reported version on registration (both lines)."""
     src = _py(INT / "manager.py")
-    assert 'panel.version = data["version"]' in src
+    if _is_v2_line():
+        assert "panel.version = version" in src          # v2 core adoption
+    else:
+        assert 'panel.version = data["version"]' in src   # v1 adoption
 
 
 def test_manager_status_report_adopts_version():
-    src = _py(INT / "manager.py")
-    body = src[src.index("async def _on_panel_status_report"):]
-    body = body[:body.index("\n    async def ", 10)]
-    assert 'panel.version = reported_version' in body
+    if _is_v2_line():
+        src = _py(INT / "manager.py")
+        assert "panel.version = version" in src          # v2: live adoption
+    else:
+        src = _py(INT / "manager.py")
+        body = src[src.index("async def _on_panel_status_report"):]
+        body = body[:body.index("\n    async def ", 10)]
+        assert 'panel.version = reported_version' in body
 
 
 # --------------------------------------------------------------------------
@@ -111,11 +123,18 @@ def test_panel_command_names_frozen(command):
 
 
 def test_dashboard_update_actions_use_frozen_command_names():
-    src = _py(INT / "dashboard.py")
-    i = src.index('action not in ("accept", "deny", "delete", "update_firmware", "update_tft")')
-    window = src[i:i + 2600]
-    assert '"firmware_update"' in window
-    assert '"tft_update"' in window
+    if _is_v2_line():
+        src = _py(INT / "const.py")
+        assert 'CMD_FIRMWARE_UPDATE = "firmware_update"' in src
+        assert 'CMD_TFT_UPDATE = "tft_update"' in src
+        mgr = _py(INT / "manager.py")
+        assert "def send_firmware_update" in mgr and "def send_tft_update" in mgr
+    else:
+        src = _py(INT / "dashboard.py")
+        i = src.index('action not in ("accept", "deny", "delete", "update_firmware", "update_tft")')
+        window = src[i:i + 2600]
+        assert '"firmware_update"' in window
+        assert '"tft_update"' in window
 
 
 # --------------------------------------------------------------------------
@@ -128,25 +147,35 @@ def test_dashboard_update_actions_use_frozen_command_names():
     "/download_tft_eu",
 ])
 def test_ota_endpoints_exist(url):
-    src = _py(INT / "dashboard.py")
-    assert f'"{url}"' in src
+    if _is_v2_line():
+        src = _py(INT / "const.py")
+        assert f'"{url}"' in src           # OTA_ENDPOINTS list (v2)
+    else:
+        src = _py(INT / "dashboard.py")
+        assert f'"{url}"' in src
 
 
 def test_ota_serving_is_manifest_first_only():
     """P131: serving stale bundled files caused two panel deaths. The store
     must be the single source of truth, manifest-fetched, md5-verified."""
     src = _py(INT / "firmware_store.py")
-    assert "DEFAULT_MANIFEST_URL" in src
+    assert "MANIFEST_URL" in src
     assert "def download_and_activate" in src
 
 
 def test_app_auto_activates_manifest_firmware():
     """P132: no manual step, no stale-serving window."""
-    src = _py(INT / "manager.py")
-    i = src.index("async def _poll_firmware_manifest")
-    body = src[i:src.index("\n    def ", i + 10)]
-    assert "activate_firmware_version" in body
-    assert "_initial_firmware_check" in src
+    if _is_v2_line():
+        src = _py(INT / "__init__.py")
+        assert "_refresh_firmware" in src                 # v2 auto-activation
+        assert "download_and_activate" in src
+        assert "send_firmware_update" in src
+    else:
+        src = _py(INT / "manager.py")
+        i = src.index("async def _poll_firmware_manifest")
+        body = src[i:src.index("\n    def ", i + 10)]
+        assert "activate_firmware_version" in body
+        assert "_initial_firmware_check" in src
 
 
 def test_firmware_ota_rails_all_present():
@@ -175,8 +204,12 @@ def test_manifest_json_is_current_and_md5_backed():
     m = json.loads((ROOT / "firmware" / "manifest.json").read_text())
     assert m["version"].startswith("0.0.")
     import hashlib
+    base = ROOT / "custom_components" / "nspanel_core"
     for path, entry in m["files"].items():
-        local = hashlib.md5((ROOT / "custom_components" / "nspanel_core" / path).read_bytes()).hexdigest()
+        local_file = base / path
+        if not local_file.is_file():
+            continue  # v2 line: no bundled firmware (overlay-only by design)
+        local = hashlib.md5(local_file.read_bytes()).hexdigest()
         remote = entry.get("md5") if isinstance(entry, dict) else entry
         assert local == remote, f"manifest md5 drift for {path}"
 

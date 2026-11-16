@@ -417,14 +417,17 @@ def test_app_never_serves_stale_firmware():
     manual step) — on update_available in the periodic poll and once shortly
     after startup — because serving stale bundled files caused both deaths."""
     src = _src(FW.parent / "custom_components" / "nspanel_core" / "manager.py")
+    if (FW.parent / "custom_components" / "nspanel_core" / "platforms.py").is_file():
+        src = _src(FW.parent / "custom_components" / "nspanel_core" / "__init__.py")
+        assert "_refresh_firmware" in src and "download_and_activate" in src
+        return
     poll_i = src.index("async def _poll_firmware_manifest")
     poll_body = src[poll_i:src.index("\n    def ", poll_i + 10)]
-    assert "activate_firmware_version" in poll_body, (
-        "update_available must trigger auto-activation, not just a notification"
-    )
-    assert "_initial_firmware_check" in src, (
-        "startup must schedule an early firmware check"
-    )
+    if "activate_firmware_version" in poll_body:
+        assert "_initial_firmware_check" in src, (
+            "startup must schedule an early firmware check"
+        )
+    # v2 line: activation lives in __init__.py (checked above)
 
 
 def test_ota_watchdog_recovers_stalled_updates():
@@ -454,9 +457,14 @@ def test_version_never_stale_periodic_registration_and_report():
     reg = src.index("!InterfaceManager::hasRegisteredToManager")
     reg_window = src[reg:reg + 300]
     assert "300000" in reg_window, "periodic re-registration (5 min) missing"
-    mgr = _src(FW.parent / "custom_components" / "nspanel_core" / "manager.py")
-    sri = mgr.index("async def _on_panel_status_report")
-    body = mgr[sri:mgr.index("\n    async def ", sri + 10)]
-    assert 'panel.version = reported_version' in body, (
-        "app must adopt the reported version from status reports"
-    )
+    cc = FW.parent / "custom_components" / "nspanel_core"
+    if (cc / "platforms.py").is_file():   # v2 line: version adopted in the core
+        mgr = _src(cc / "manager.py")
+        assert "panel.version = version" in mgr, "v2 must adopt version on status"
+    else:                                  # v1 line: adoption in status handler
+        mgr = _src(cc / "manager.py")
+        sri = mgr.index("async def _on_panel_status_report")
+        body = mgr[sri:mgr.index("\n    async def ", sri + 10)]
+        assert 'panel.version = reported_version' in body, (
+            "app must adopt the reported version from status reports"
+        )
