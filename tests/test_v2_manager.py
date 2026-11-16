@@ -13,14 +13,23 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 V2 = ROOT / "rewrite" / "nspanel_core_v2"
 
 
+def _pkg():
+    """Load the v2 tree as a real package (relative imports resolve)."""
+    if "v2pkg" in sys.modules:
+        return sys.modules["v2pkg"]
+    spec = importlib.util.spec_from_file_location(
+        "v2pkg", V2 / "__init__.py", submodule_search_locations=[str(V2)]
+    )
+    pkg = importlib.util.module_from_spec(spec)
+    sys.modules["v2pkg"] = pkg
+    spec.loader.exec_module(pkg)
+    return pkg
+
+
 def _load(unique: str, filename: str):
-    if unique in sys.modules:
-        return sys.modules[unique]
-    spec = importlib.util.spec_from_file_location(unique, V2 / filename)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[unique] = module
-    spec.loader.exec_module(module)
-    return module
+    """Load a v2 submodule inside the package context (unique name kept)."""
+    _pkg()
+    return importlib.import_module("v2pkg." + filename.rsplit(".", 1)[0])
 
 
 @pytest.fixture()

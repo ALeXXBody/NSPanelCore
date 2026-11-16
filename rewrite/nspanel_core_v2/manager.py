@@ -11,7 +11,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 
-from v2_const import (
+from .const import (
     CMD_DISPLAY_RESTART,
     CMD_FIRMWARE_UPDATE,
     CMD_REBOOT,
@@ -20,7 +20,7 @@ from v2_const import (
     TOPIC_MANAGER_COMMAND,
     topic_safe,
 )
-from v2_models import Panel, Settings
+from .models import Panel, Settings
 
 _LOGGER = logging.getLogger(__name__)
 

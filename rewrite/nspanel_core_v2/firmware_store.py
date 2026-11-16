@@ -16,7 +16,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from v2_const import MANIFEST_URL
+from .const import MANIFEST_URL
 
 _LOGGER = logging.getLogger(__name__)
 
