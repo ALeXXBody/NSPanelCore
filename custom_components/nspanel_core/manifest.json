@@ -5,13 +5,9 @@
     "@ALeXXBody"
   ],
   "config_flow": true,
-  "dependencies": [
-    "mqtt"
-  ],
   "documentation": "https://github.com/ALeXXBody/NSPanelCore",
-  "integration_type": "hub",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/ALeXXBody/NSPanelCore/issues",
   "requirements": [],
-  "version": "0.0.1"
+  "version": "0.1.0"
 }

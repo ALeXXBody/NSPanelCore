@@ -1,18 +1,9 @@
-"""Decoupled firmware delivery for NSPanel Core.
+"""NSPanel Core v2 — firmware store.
 
-Panels should get ESP/TFT firmware updates WITHOUT requiring a new release
-of this integration. The flow:
-
-1. A manifest (JSON) published alongside the firmware lists the current
-   version, per-file download URLs and MD5 checksums.
-2. The integration periodically fetches the manifest (or on user request),
-   compares with the bundled/served version and — on approval — downloads
-   the files into <hass_config>/.storage/nspanel_core/firmware/<version>/.
-3. Serving + OTA triggering then resolve through the downloaded set
-   (overlay) instead of the files bundled with the integration.
-
-The bundled files remain the fallback when no overlay is active or the
-manifest is unreachable.
+The serving model that ended the stale-firmware deaths (P131/P132):
+the manifest is the ONLY source of truth; files are downloaded, md5-verified
+against it, and activated. There is no bundled-fallback ambiguity: if the
+manifest is unreachable, serving is BLOCKED, never stale.
 """
 
 from __future__ import annotations
@@ -21,14 +12,14 @@ import hashlib
 import json
 import logging
 import os
+import shutil
+from dataclasses import dataclass
+from pathlib import Path
+
+from v2_const import MANIFEST_URL
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_MANIFEST_URL = (
-    "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/manifest.json"
-)
-
-# Keys are "<kind>/<name>" matching manager.ota_md5() / _hash_ota_files().
 SERVABLE_FILES = (
     "firmware/sonoff/firmware.bin",
     "firmware/sonoff/data_file.bin",
@@ -38,204 +29,133 @@ SERVABLE_FILES = (
     "tft/gui_us.tft",
 )
 
-_BUNDLED_VERSION_FILE = "version"
+
+@dataclass
+class ActiveFirmware:
+    version: str
+    files: dict[str, str]   # "<kind>/<name>" → absolute path
+    md5s: dict[str, str]
 
 
-def bundled_version(integration_dir: str) -> str:
-    """Version of the firmware bundled with the integration."""
-    try:
-        with open(os.path.join(integration_dir, "firmware", _BUNDLED_VERSION_FILE)) as f:
-            return f.read().strip()
-    except OSError:
-        return "0.0.0"
-
-
-def overlay_dir(hass_config_path: str, version: str) -> str:
-    return os.path.join(hass_config_path, ".storage", "nspanel_core", "firmware", version)
-
-
-def _rmtree(path: str) -> None:
-    import shutil
-
-    try:
-        shutil.rmtree(path, ignore_errors=True)
-    except Exception:  # noqa: BLE001
-        pass
-
-
-def _version_tuple(v: str) -> tuple:
-    parts = []
-    for p in str(v).strip().split("."):
-        try:
-            parts.append(int(p))
-        except ValueError:
-            parts.append(0)
-    # Zero-pad so different-length versions compare semantically
-    # ("1.0" == "1.0.0", not newer).
-    while len(parts) < 3:
-        parts.append(0)
-    return tuple(parts)
+def md5_of(path: str | Path) -> str:
+    h = hashlib.md5()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def is_newer(candidate: str, current: str) -> bool:
-    return _version_tuple(candidate) > _version_tuple(current)
+    """Numeric version compare: 0.1.187 > 0.1.186; non-numeric falls back to !=."""
 
-
-async def fetch_manifest(hass, url: str) -> dict | None:
-    """Download + minimally validate the firmware manifest. Runs in executor."""
-    import urllib.request
-
-    def _get():
-        req = urllib.request.Request(url, headers={"User-Agent": "NSPanelCore/1.0"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            if resp.status != 200:
-                raise ValueError(f"HTTP {resp.status}")
-            return json.loads(resp.read().decode("utf-8"))
-
-    try:
-        data = await hass.async_add_executor_job(_get)
-    except Exception as err:  # noqa: BLE001 — network/users can break anything
-        _LOGGER.warning("Firmware manifest fetch failed (%s): %s", url, err)
-        return None
-    if not isinstance(data, dict) or "version" not in data or "files" not in data:
-        _LOGGER.warning("Firmware manifest at %s is malformed", url)
-        return None
-    return data
-
-
-async def download_and_activate(hass, manager, manifest: dict) -> tuple[bool, str]:
-    """Download every manifest file, verify MD5, activate as serving overlay.
-
-    Returns (ok, message). Runs downloads in the executor; updates the
-    manager overlay + OTA MD5 cache on success.
-    """
-    version = str(manifest.get("version", "")).strip()
-    if not version:
-        return False, "manifest has no version"
-    files = manifest.get("files", {})
-    missing = [k for k in SERVABLE_FILES if k not in files]
-    if missing:
-        return False, f"manifest missing files: {', '.join(missing)}"
-
-    import urllib.request
-
-    target = overlay_dir(hass.config.path(), version)
-
-    def _download() -> dict[str, str]:
-        # Download into a temp dir first; a failed mid-set download must
-        # not leave half-overwritten files in the ACTIVE overlay dir
-        # (the boot path would then re-activate corrupt bytes).
-        staging = target + ".staging"
-        _rmtree(staging)
-        os.makedirs(staging, exist_ok=True)
-        paths: dict[str, str] = {}
-        md5s: dict[str, str] = {}
-        for key in SERVABLE_FILES:
-            entry = files[key]
-            url, want = entry.get("url", ""), (entry.get("md5") or "").lower()
-            if not url or not want:
-                raise ValueError(f"{key}: manifest entry lacks url/md5")
-            dest = os.path.join(staging, key.replace("/", "__"))
-            req = urllib.request.Request(url, headers={"User-Agent": "NSPanelCore/1.0"})
-            h = hashlib.md5()
-            with urllib.request.urlopen(req, timeout=120) as resp, open(dest, "wb") as f:
-                while True:
-                    chunk = resp.read(65536)
-                    if not chunk:
-                        break
-                    h.update(chunk)
-                    f.write(chunk)
-            if h.hexdigest() != want:
-                raise ValueError(f"{key}: checksum mismatch")
-            paths[key] = dest
-            md5s[key] = h.hexdigest()
-        # All verified: atomically swap into the live overlay dir.
-        _rmtree(target)
-        os.rename(staging, target)
-        final = {k: os.path.join(target, k.replace("/", "__")) for k in paths}
-        return final, md5s
-
-    try:
-        paths, md5s = await hass.async_add_executor_job(_download)
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.warning("Firmware %s download failed: %s", version, err)
-        return False, str(err)
-
-    manager.set_firmware_overlay(version, paths, md5s)
-    await manager.refresh_ota_cache()
-    # Re-pin a manually uploaded TFT if the bundled file still matches the
-    # recorded hash: the fresh overlay dir contains RELEASE TFTs and would
-    # otherwise silently overwrite the user's custom display file (and the
-    # panels' auto-TFT would push the release file over it).
-    repinned = maybe_repin_custom_tft(manager)
-    if repinned:
-        _LOGGER.info("Re-pinned custom %s after activating %s", repinned, version)
-    return True, f"firmware {version} active"
-
-
-def maybe_repin_custom_tft(manager) -> str:
-    """Re-pin the manually uploaded TFT over a fresh overlay, if it matches.
-
-    Split out of download_and_activate for testability. NOTE: this module
-    lives INSIDE the integration package, so the bundled dir is simply
-    dirname(__file__) — a top-level ``import nspanel_core`` worked in dev
-    (sys.path) but raised ModuleNotFoundError in production HA (the package
-    is custom_components.nspanel_core), 500ing every firmware_install while
-    a custom TFT was pinned. Never import the top-level package name here.
-    Returns the re-pinned filename, or "" when nothing was re-pinned.
-    """
-    import hashlib as _hashlib
-
-    s = getattr(manager.config, "settings", None)
-    if s is None or not getattr(s, "custom_tft_name", ""):
-        return ""
-    bundled = os.path.join(os.path.dirname(__file__), "tft", s.custom_tft_name)
-    h = _hashlib.md5()
-    try:
-        with open(bundled, "rb") as f:
-            for chunk in iter(lambda: f.read(65536), b""):
-                h.update(chunk)
-        if h.hexdigest() == s.custom_tft_md5:
-            proof = manager.note_custom_tft(s.custom_tft_name)
-            return proof["filename"]
-        _LOGGER.warning(
-            "Custom %s no longer matches its recorded hash; not re-pinning",
-            s.custom_tft_name,
-        )
-    except OSError:
-        pass
-    return ""
-
-
-def validate_manifest_against(paths: dict[str, str], manifest: dict | None = None) -> bool:
-    """Verify overlay files exist AND still match the manifest md5s.
-
-    Existence alone re-activated truncated/corrupt overlays on every boot;
-    callers that have the manifest pass it for hash verification.
-    """
-    expected: dict[str, str] = {}
-    if isinstance(manifest, dict):
-        files = manifest.get("files", {})
-        if isinstance(files, dict):
-            for key, entry in files.items():
-                if isinstance(entry, dict) and entry.get("md5"):
-                    expected[key] = str(entry["md5"]).lower()
-    import hashlib as _hashlib
-
-    for key, path in paths.items():
-        if not os.path.isfile(path):
-            return False
-        want = expected.get(key, "")
-        if not want:
-            continue
+    def tup(v: str):
         try:
-            h = _hashlib.md5()
-            with open(path, "rb") as f:
-                for chunk in iter(lambda: f.read(65536), b""):
-                    h.update(chunk)
-            if h.hexdigest() != want:
-                _LOGGER.warning("Firmware overlay file %s failed checksum; ignoring overlay", key)
-                return False
-        except OSError:
-            return False
-    return True
+            return tuple(int(x) for x in v.split("."))
+        except (ValueError, AttributeError):
+            return None
+
+    a, b = tup(candidate), tup(current)
+    if a is None or b is None:
+        return bool(candidate) and candidate != current
+    return a > b
+
+
+async def fetch_manifest(hass, url: str = MANIFEST_URL) -> dict | None:
+    """Fetch + validate the firmware manifest. Returns None on any failure."""
+    import aiohttp
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    return None
+                manifest = await resp.json(content_type=None)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("Firmware manifest fetch failed: %s", err)
+        return None
+    if not isinstance(manifest, dict) or not manifest.get("version") or not manifest.get("files"):
+        _LOGGER.warning("Firmware manifest malformed")
+        return None
+    return manifest
+
+
+async def _fetch_bytes(session, url: str) -> bytes:
+    async with session.get(url, timeout=aiohttp.ClientTimeout(total=600)) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"HTTP {resp.status} for {url}")
+        return await resp.read()
+
+
+async def download_and_activate(hass, manifest: dict, store_dir: str,
+                                fetch=None) -> ActiveFirmware | None:
+    """Download every manifest file, verify md5, activate atomically.
+
+    ``fetch`` is injectable (test seam). Returns the active set, or None if
+    ANY file fails (no partial activation — serving either fully-verified
+    content or nothing).
+    """
+    import aiohttp
+
+    version = str(manifest["version"])
+    target = Path(store_dir) / version
+    target.mkdir(parents=True, exist_ok=True)
+    files: dict[str, str] = {}
+    md5s: dict[str, str] = {}
+
+    if fetch is None:
+        session = aiohttp.ClientSession()
+        fetch = lambda url: _fetch_bytes(session, url)  # noqa: E731
+    else:
+        session = None
+
+    try:
+        for rel, entry in manifest["files"].items():
+            if rel not in SERVABLE_FILES:
+                continue
+            url = entry["url"] if isinstance(entry, dict) else entry
+            expected = entry["md5"] if isinstance(entry, dict) else ""
+            local = target / Path(rel).name
+            try:
+                blob = await fetch(url)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.error("Download failed (%s): %s", rel, err)
+                return None
+            local.write_bytes(blob)
+            actual = md5_of(local)
+            if expected and actual != expected:
+                _LOGGER.error("MD5 mismatch for %s: expected %s got %s", rel, expected, actual)
+                return None
+            files[rel] = str(local)
+            md5s[rel] = actual
+    finally:
+        if session is not None:
+            await session.close()
+
+    # Atomic activation: write the pointer last.
+    pointer = Path(store_dir) / "active.json"
+    pointer.write_text(json.dumps({"version": version, "files": files, "md5s": md5s}))
+    return ActiveFirmware(version=version, files=files, md5s=md5s)
+
+
+def load_active(store_dir: str) -> ActiveFirmware | None:
+    pointer = Path(store_dir) / "active.json"
+    if not pointer.is_file():
+        return None
+    data = json.loads(pointer.read_text())
+    return ActiveFirmware(
+        version=data["version"],
+        files=data["files"],
+        md5s=data["md5s"],
+    )
+
+
+def served_path(active: ActiveFirmware | None, kind: str, name: str,
+                integration_dir: str) -> str | None:
+    """Resolve a servable file: active overlay ONLY (no bundled fallback).
+
+    Serving a stale bundled binary is how panels died (P131); if the
+    overlay is not active the caller must refuse to serve, never fall back.
+    """
+    if active is None:
+        return None
+    return active.files.get(f"{kind}/{name}")
