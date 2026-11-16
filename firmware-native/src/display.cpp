@@ -13,6 +13,7 @@
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include <cstring>
+#include <cstdio>
 #include "esp_timer.h"
 #include "protocol.h"
 #include "config.h"

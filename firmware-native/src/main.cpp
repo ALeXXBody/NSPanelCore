@@ -11,6 +11,7 @@
 #include "nvs_flash.h"
 #include "esp_system.h"
 #include "esp_mac.h"
+#include <cstdio>
 #include <string>
 #include "protocol.h"
 #include "config.h"
