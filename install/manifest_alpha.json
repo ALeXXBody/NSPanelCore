@@ -1,6 +1,6 @@
 {
-  "name": "NSPanel Core v2 ALPHA (native IDF 5.5 \u2014 bench validation only, no page rendering yet)",
-  "version": "0.1.0-alpha",
+  "name": "NSPanel Core v2 ALPHA (native IDF 5.5, fw v0.1.1 \u2014 bench validation, no page rendering yet)",
+  "version": "0.1.1-alpha",
   "new_install_prompt_erase": true,
   "builds": [
     {
