@@ -1,18 +1,18 @@
 {
-  "version": "0.1.2",
-  "notes": "CUTOVER: native IDF 5.5 firmware v0.1.2. The panel migrates its settings automatically (the v0.0.2 migration firmware seeded them into NVS).",
+  "version": "0.1.3",
+  "notes": "native fw v0.1.3: display UART pins corrected (TX=16/RX=17) \u2014 the display handshake works; temperature reads the real NTC channel (GPIO38=ADC1_CH2).",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.2.bin",
-      "md5": "398379e8fded2f7fc1b2a59c3ca1d877"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.3.bin",
+      "md5": "03d6a31b8ac81e436220ccd46948fe0b"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.2.bin",
-      "md5": "398379e8fded2f7fc1b2a59c3ca1d877"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.3.bin",
+      "md5": "03d6a31b8ac81e436220ccd46948fe0b"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
