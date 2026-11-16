@@ -1,0 +1,3 @@
+## Managed dependencies (resolved by the IDF component manager)
+dependencies:
+  espressif/esp_littlefs: "*"
