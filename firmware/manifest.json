@@ -1,18 +1,18 @@
 {
-  "version": "0.1.6",
-  "notes": "native fw v0.1.6: the OTA root cause \u2014 the manager address now comes from the register_accept (v1 parity) and persists in NVS.",
+  "version": "0.1.0",
+  "notes": "Native fw v0.1.0 (epoch reset \u2014 the fixed build): manager address adopted from register_accept, streaming OTA, display UART pins corrected, NTC on GPIO38/ADC1_CH2.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.6.bin",
-      "md5": "2a9c6012482dc0fdd727084aacf15477"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.0-fixed.bin",
+      "md5": "39a5f4ac08ade5fc9e0b22365dbacc05"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.6.bin",
-      "md5": "2a9c6012482dc0fdd727084aacf15477"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.0-fixed.bin",
+      "md5": "39a5f4ac08ade5fc9e0b22365dbacc05"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
