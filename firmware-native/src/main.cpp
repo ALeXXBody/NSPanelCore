@@ -34,7 +34,7 @@ static std::string s_mac;
 static int64_t s_last_register_us = 0;
 static int64_t s_last_report_us = 0;
 
-void app_main(void) {
+extern "C" void app_main(void) {
     ESP_ERROR_CHECK(nvs_flash_init());  // factory NVS holds config
     nsp_config_load();
 
