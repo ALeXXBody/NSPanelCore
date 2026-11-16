@@ -4,28 +4,51 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="dark light" />
-  <title>NSPanel Core</title>
+  <title>NSPanel Core — Install</title>
   <style>
-    body { margin: 0 auto; max-width: 520px; padding: 24px 16px 40px;
+    body { margin: 0 auto; max-width: 560px; padding: 24px 16px 40px;
       font: 14px/1.5 system-ui, sans-serif; background: #0d1016; color: #c8cbce; }
     h1 { font-size: 20px; } h1 span { color: #39c8e8; }
     .card { background: #141a24; border: 1px solid #232c3b; border-radius: 10px;
       padding: 14px; margin: 0 0 12px; }
     code { background: #0d1016; padding: 1px 5px; border-radius: 4px; }
     .note { color: #8b93a1; font-size: 13px; }
+    .ok { color: #6fd18b; }
   </style>
   <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 </head>
 <body>
-  <h1>NSPanel <span>Core</span> <small class="note">0.0.1 · ESP-IDF 5.5</small></h1>
+  <h1>NSPanel <span>Core</span> <small class="note">native firmware line</small></h1>
+
   <div class="card">
-    <p>Flashes NSPanel Core — our bootloader, firmware and config filesystem, one image.</p>
-    <p><esp-web-install-button manifest="./manifest_full.json"></esp-web-install-button></p>
-    <p class="note">Chrome or Edge (WebSerial). Hold <code>BOOT</code>, tap <code>RESET</code> for download mode. After install: release BOOT, reset — join the <code>NSPanelCore</code> AP and finish setup at <code>http://192.168.1.1</code>.</p>
+    <p><strong class="ok">RECOMMENDED — native fw v0.1.0 (ESP32, 4 MB)</strong></p>
+    <p>The fixed native build: display handshake works (UART pins corrected),
+    temperature reads the real NTC, OTA streams to flash and self-configures
+    the manager address from the register_accept.</p>
+    <p><strong>WiFi + MQTT settings are PRESERVED</strong> — this flash does not
+    touch NVS. After the flash the panel joins WiFi/MQTT on its own; nothing to
+    re-enter.</p>
+    <p><esp-web-install-button manifest="./manifest_native.json"></esp-web-install-button></p>
+    <p class="note">Chrome or Edge (Web Serial) with a 3.3 V USB-TTL adapter wired
+    to TX/RX/GND. Hold <code>BOOT</code>, tap <code>RESET</code>, release
+    <code>BOOT</code> — then click INSTALL. Do NOT erase the flash when prompted
+    (the button above does not erase). Afterwards tap RESET once.</p>
   </div>
-<div class="card">
-    <strong>FIRMWARE 0.1.1-alpha ALPHA — native IDF (panel firmware only, bench validation):</strong> clean-room ESP-IDF build. Boots, setup AP at 192.168.1.1, WiFi+MQTT+telemetry — but no page rendering yet (screen stays as-is).
-    <p><esp-web-install-button manifest="./manifest_alpha.json"></esp-web-install-button></p>
+
+  <div class="card">
+    <p><strong>Rollback — the OLD firmware line (v0.0.1, full image)</strong></p>
+    <p>Flashes the complete old-line image (bootloader + partitions + app +
+    config filesystem) at 0x0. <strong>Erases everything</strong> — after this
+    the panel starts its own setup AP (<code>NSPanelCore</code>, then
+    <code>http://192.168.1.1</code>) and WiFi/MQTT must be entered again.</p>
+    <p><esp-web-install-button manifest="./manifest_full.json"></esp-web-install-button></p>
+  </div>
+
+  <div class="card note">
+    <p>Wired flash alternative (no browser): the general
+    <code>nspanel-core-native-0.1.0-esp32-wired-flash.zip</code> on the
+    <a href="https://github.com/ALeXXBody/NSPanelCore/releases/tag/fw-v0.1.0" style="color:#39c8e8">fw-v0.1.0 release</a>
+    contains the same files + an esptool command line.</p>
   </div>
 </body>
 </html>
