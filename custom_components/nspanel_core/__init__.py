@@ -11,6 +11,7 @@ from homeassistant.components import mqtt
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.helpers.storage import Store
 
 from . import firmware_store
 from .const import (
@@ -21,6 +22,7 @@ from .const import (
     TOPIC_PANEL_STATUS_REPORT,
 )
 from .manager import Core, ManagerConfig
+from .models import Panel
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,13 +35,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         manager_port=8123,
         panels=[],
     )
-    core = Core(cfg, publish=_make_publisher(hass))
+    # Persistence: panels (accepted/denied), deletions and settings survive
+    # HA restarts — without this every restart reset acceptance to none.
+    store = Store(hass, "nspanel_core", "state.json")
+    saved = await store.async_load() or {}
+    cfg.panels = [Panel.from_dict(d) for d in saved.get("panels", [])]
+    cfg.deleted_macs = list(saved.get("deleted_macs", []))
+
+    async def _save_state() -> None:
+        await store.async_save({
+            "panels": [p.to_dict() for p in core.config.panels],
+            "deleted_macs": core.config.deleted_macs,
+        })
+
+    def _on_new_panel(panel) -> None:
+        hass.add_job(_save_state())
+
+    core = Core(cfg, publish=_make_publisher(hass), on_new_panel=_on_new_panel)
     active = await hass.async_add_executor_job(
         firmware_store.load_active, str(Path(hass.config.path()) / STORE_DIR)
     )
 
     async def on_register(msg):
         await hass.async_add_executor_job(core.handle_register_request, msg.payload)
+        await _save_state()
         # refresh the served set opportunistically — never stale (P131/P132)
         await _refresh_firmware(hass, core)
 
@@ -93,8 +112,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .dashboard import register_dashboard
 
     register_dashboard(hass)
-    # Entity platforms (parity: sensors + relay switches) — standard forwarding
-    await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "switch", "light"])
+
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "core": core,
         "unsub": unsub_mqtt,
@@ -102,6 +120,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "save": _save_state,
     }
     entry.async_on_unload(entry.add_update_listener(_reload))
+    # Entity platforms (parity: sensors + relay switches + lights) — forward
+    # AFTER hass.data is populated (the platforms read the core from it).
+    await hass.config_entries.async_forward_entry_setups(
+        entry, ["sensor", "switch", "light"]
+    )
     return True
 
 
