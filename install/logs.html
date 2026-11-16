@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>NSPanel Core — serial console</title>
+<style>
+ body { margin:0 auto; max-width:760px; padding:20px 14px; font:14px/1.5 system-ui,sans-serif; background:#0d1016; color:#c8cbce; }
+ h1 { font-size:19px; } h1 span { color:#39c8e8; }
+ pre { background:#000; border:1px solid #232c3b; border-radius:8px; padding:12px;
+       height:60vh; overflow:auto; white-space:pre-wrap; word-break:break-all; font:12px/1.45 ui-monospace,monospace; }
+ button { padding:8px 16px; border-radius:8px; border:1px solid #2a3547; background:#182031; color:#cfe3ff; font-size:14px; cursor:pointer; margin-right:8px; }
+ .note { color:#8b93a1; font-size:13px; }
+</style>
+</head>
+<body>
+<h1>NSPanel <span>serial console</span></h1>
+<p class="note">Shows the panel's own boot log (UART0, 115200). Chrome/Edge only.
+Plug in the USB-TTL adapter (TX/RX/GND as used for flashing), hold <b>BOOT</b>,
+tap <b>RESET</b>, release <b>BOOT</b> — then CONNECT and watch (or tap RESET again
+to see a fresh boot). Copy everything shown and send it to the agent.</p>
+<p>
+<button id="c">CONNECT</button>
+<button id="s" disabled>STOP</button>
+<span id="st" class="note"></span>
+</p>
+<pre id="o">(no output yet)</pre>
+<script>
+const o=document.getElementById('o'), st=document.getElementById('st');
+const bC=document.getElementById('c'), bS=document.getElementById('s');
+let port=null, reader=null, keep=false;
+function line(t){ o.textContent += t + "\n"; o.scrollTop = o.scrollHeight; }
+bC.onclick = async () => {
+  try {
+    port = await navigator.serial.requestPort({});
+    await port.open({ baudRate: 115200, dataBits:8, stopBits:1, parity:'none', bufferSize:8192, flowControl:'none' });
+    st.textContent = "connected — waiting for panel output (tap RESET on the panel)";
+    bC.disabled=true; bS.disabled=false; keep=true;
+    const dec=new TextDecoderStream();
+    port.readable.pipeTo(dec.writable).catch(()=>{});
+    const r=dec.readable.getReader();
+    reader=r;
+    while (keep) {
+      const {value,done}=await r.read();
+      if (done) break;
+      if (value) line(value);
+    }
+  } catch(e) { st.textContent = "error: "+e.message; line("[error] "+e.message); }
+};
+bS.onclick = async () => {
+  keep=false;
+  try { if(reader) await reader.cancel(); } catch(e){}
+  try { if(port) await port.close(); } catch(e){}
+  st.textContent="stopped"; bC.disabled=false; bS.disabled=true;
+};
+</script>
+</body>
+</html>

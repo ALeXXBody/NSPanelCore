@@ -36,6 +36,21 @@
   </div>
 
   <div class="card">
+    <p><strong style="color:#e8b341">RECOVERY — proven-booting app (flash this if the panel does not come back)</strong></p>
+    <p>This is the app build that was verified booting and running on panels
+    (display warning + frozen temperature known — but WiFi/MQTT/relays work and
+    the panel RETURNS TO THE NETWORK). Same bootloader/partitions, NVS preserved.</p>
+    <p><esp-web-install-button manifest="./manifest_recovery.json"></esp-web-install-button></p>
+  </div>
+
+  <div class="card">
+    <p><strong>Serial console — see what the panel says</strong></p>
+    <p>One-click log viewer for the panel's boot output (needed for diagnosis;
+    keep the adapter wired, hold BOOT, tap RESET, CONNECT).</p>
+    <p><a href="./logs.html" style="color:#39c8e8">Open the serial console →</a></p>
+  </div>
+
+  <div class="card">
     <p><strong>Rollback — the OLD firmware line (v0.0.1, full image)</strong></p>
     <p>Flashes the complete old-line image (bootloader + partitions + app +
     config filesystem) at 0x0. <strong>Erases everything</strong> — after this
