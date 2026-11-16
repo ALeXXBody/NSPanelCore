@@ -10,6 +10,7 @@
 #include "esp_timer.h"
 #include "nvs_flash.h"
 #include "esp_system.h"
+#include "esp_mac.h"
 #include <string>
 #include "protocol.h"
 #include "config.h"
@@ -37,7 +38,7 @@ void app_main(void) {
     nsp_config_load();
 
     uint8_t mac[6];
-    esp_efuse_mac_get_default(mac);
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
     char macbuf[18];
     snprintf(macbuf, sizeof(macbuf), "%02X:%02X:%02X:%02X:%02X:%02X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);

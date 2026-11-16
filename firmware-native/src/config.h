@@ -9,11 +9,11 @@ struct NSPConfig {
     std::string wifi_psk;
     std::string wifi_hostname = "NSPanelCore";
     std::string mqtt_server;
-    int mqtt_port = 1883;
+    int32_t mqtt_port = 1883;
     std::string mqtt_user;
     std::string mqtt_pass;
     std::string manager_address;
-    int manager_port = 8123;
+    int32_t manager_port = 8123;
     std::string md5_firmware;
     std::string md5_data_file;
     std::string md5_tft_file;
