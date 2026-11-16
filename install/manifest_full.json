@@ -1,6 +1,6 @@
 {
   "name": "NSPanel Core recovery (FULL: our bootloader + app + config, all IDF 5.5)",
-  "version": "0.1.186-full",
+  "version": "0.1.187-full",
   "new_install_prompt_erase": true,
   "builds": [
     {
@@ -15,11 +15,11 @@
           "offset": 32768
         },
         {
-          "path": "fw_0186.bin",
+          "path": "fw_0187.bin",
           "offset": 65536
         },
         {
-          "path": "fs_0186.bin",
+          "path": "fs_0187.bin",
           "offset": 3604480
         }
       ]
