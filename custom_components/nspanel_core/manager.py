@@ -865,6 +865,14 @@ class NSPanelCoreManager:
 
     async def _handle_register_request(self, mac: str, data: dict) -> None:
         mac = topic_safe(mac)
+        # P173: the registration loop is the OTA-delivery diagnostic —
+        # if the panel keeps re-registering, the accept reply is not
+        # being delivered on the command topic (broker ACL / subscription).
+        _LOGGER.info(
+            "Panel registration: mac=%s hostname=%r version=%s (accepted=%s)",
+            mac, data.get("friendly_name"), data.get("version"),
+            bool(self._panel_by_mac(mac) and self._panel_by_mac(mac).accepted),
+        )
         if not mac:
             _LOGGER.warning("Ignoring register request with empty MAC")
             return
