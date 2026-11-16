@@ -11,6 +11,7 @@ static std::string s_hostname;
 
 void nsp_mqtt_send_register(esp_mqtt_client_handle_t client);
 void nsp_mqtt_handle_command(const std::string &payload);
+void nsp_mqtt_publish_log(const char *msg);
 void nsp_ota_start();
 
 static void nsp_mqtt_connected(void *handler_args, esp_event_base_t base,
@@ -75,6 +76,36 @@ void nsp_mqtt_publish_touch(int page, int component, int event) {
 }
 
 void nsp_mqtt_handle_command(const std::string &payload) {
+    /* P180: the manager address is NEVER persisted by the v1 line — it is
+     * set at runtime from the register_accept (NSPMConfig.cpp:49 wipes it
+     * on every load). The migration's NVS seed therefore captured an EMPTY
+     * manager address + port 8000, and every native OTA silently failed on
+     * http://:8000/... Handle the accept exactly like v1: adopt address+port. */
+    if (payload.find("register_accept") != std::string::npos) {
+        size_t a = payload.find("\"address\"");
+        if (a != std::string::npos) {
+            a = payload.find('"', a + 9);
+            size_t b = (a == std::string::npos) ? std::string::npos : payload.find('"', a + 1);
+            if (a != std::string::npos && b != std::string::npos) {
+                std::string addr = payload.substr(a + 1, b - a - 1);
+                int port = 8123;
+                size_t p = payload.find("\"port\"");
+                if (p != std::string::npos) {
+                    p = payload.find(':', p + 6);
+                    if (p != std::string::npos) port = atoi(payload.c_str() + p + 1);
+                }
+                if (!addr.empty() && (addr != g_cfg.manager_address || port != g_cfg.manager_port)) {
+                    g_cfg.manager_address = addr;
+                    g_cfg.manager_port = port;
+                    nsp_config_save();
+                    char l[128];
+                    snprintf(l, sizeof(l), "manager address adopted: %s:%d", addr.c_str(), port);
+                    nsp_mqtt_publish_log(l);
+                }
+            }
+        }
+        return;
+    }
     if (payload.find(CMD_REBOOT) != std::string::npos) {
         esp_restart();
     } else if (payload.find(CMD_FIRMWARE_UPDATE) != std::string::npos) {
