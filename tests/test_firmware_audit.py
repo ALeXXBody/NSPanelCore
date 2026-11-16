@@ -438,3 +438,25 @@ def test_ota_watchdog_recovers_stalled_updates():
     i = src.index("OTA progress frozen for 120s")
     loop_i = src.rindex("for (;;)", 0, i)
     assert loop_i < i, "watchdog must live inside the WiFi task loop"
+
+
+def test_version_never_stale_periodic_registration_and_report():
+    """P135 (app showed a forever-stale v0.3.967): the panel must (a) carry
+    its version in EVERY status report and (b) re-register periodically —
+    version was a one-shot boot event before. The app must adopt the
+    reported version from status reports."""
+    src = _src(FW / "src" / "main.cpp")
+    sr = src.index('status_report_doc["state"]')
+    window = src[sr - 600:sr + 200]
+    assert 'status_report_doc["version"]' in window, (
+        "status reports must carry the running version"
+    )
+    reg = src.index("!InterfaceManager::hasRegisteredToManager")
+    reg_window = src[reg:reg + 300]
+    assert "300000" in reg_window, "periodic re-registration (5 min) missing"
+    mgr = _src(FW.parent / "custom_components" / "nspanel_core" / "manager.py")
+    sri = mgr.index("async def _on_panel_status_report")
+    body = mgr[sri:mgr.index("\n    async def ", sri + 10)]
+    assert 'panel.version = reported_version' in body, (
+        "app must adopt the reported version from status reports"
+    )

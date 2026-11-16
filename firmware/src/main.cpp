@@ -290,14 +290,22 @@ void taskManageWifiAndMqtt(void *param) {
         }
       }
       if (WiFi.isConnected() && MqttManager::connected()) {
-        if (!InterfaceManager::hasRegisteredToManager) {
+        // P135: re-register periodically (every 5 min), not just once per
+        // boot — the manager must always know the running version.
+        static unsigned long lastPeriodicRegistration = 0;
+        if (!InterfaceManager::hasRegisteredToManager || millis() - lastPeriodicRegistration > 300000) {
           sendMqttManagerRegistrationRequest();
+          lastPeriodicRegistration = millis();
         }
         bool force_send_mqtt_update = false;
         // Reused across iterations — was `new JsonDocument` on every loop,
         // one alloc/free pair per second, forever.
         static JsonDocument status_report_doc;
         status_report_doc.clear();
+        // P135: report the running version with EVERY status report — the
+        // app's version display went permanently stale when the one-shot
+        // registration was the only source.
+        status_report_doc["version"] = NSPanelCoreFirmwareVersion;
         if (NSPanel::instance->getUpdateState()) {
           force_send_mqtt_update = true;
           status_report_doc["state"] = "updating_tft";

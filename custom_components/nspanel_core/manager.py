@@ -1066,6 +1066,11 @@ class NSPanelCoreManager:
                 "state": state,
                 "progress": data.get("progress", 0),
             }
+            # P135: every status report carries the running version — the
+            # displayed version may never go stale again.
+            reported_version = str(data.get("version") or "").strip()
+            if reported_version and panel.version != reported_version:
+                panel.version = reported_version
         except (ValueError, TypeError):
             # Legacy protobuf report — parse with the panel_pb codec.
             try:
