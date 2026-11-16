@@ -277,3 +277,15 @@ def test_v2_app_has_light_platform_parity():
     assert "RelayLight" in src and "set_relay" in src
     glue = (v2 / "__init__.py").read_text()
     assert '["sensor", "switch", "light"]' in glue
+
+
+def test_time_date_publishing_contract():
+    """P159: the panel's screensaver clock lives off the retained
+    nspanel/status/{time,date,ampm} topics — the manager must publish them
+    (60 s cadence), honoring the clock/date settings."""
+    src = (ROOT / "custom_components" / "nspanel_core" / "__init__.py").read_text()
+    assert '"nspanel/status/time"' in src
+    assert '"nspanel/status/date"' in src
+    assert '"nspanel/status/ampm"' in src
+    assert "timedelta(seconds=60)" in src
+    assert "clock_us_style" in src and 'date_format or "%d/%m"' in src

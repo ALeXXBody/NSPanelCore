@@ -63,6 +63,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await mqtt.async_subscribe(hass, "nspanel/+/r2_state", on_relay_state),
     ]
     _register_ota_views(hass, active)
+
+    # P159: time/date/ampm publishing (v1 ScreensaverPage contract — the
+    # panel's clock lives off these retained topics; every 60 s + at start)
+    async def _publish_time(_now=None) -> None:
+        from homeassistant.util import dt as dt_util
+
+        now = dt_util.now()
+        s = core.config.settings
+        time_str = (
+            now.strftime("%I:%M") if s.clock_us_style else now.strftime("%H:%M")
+        )
+        ampm = now.strftime("%p") if s.clock_us_style else ""
+        try:
+            date_str = now.strftime(s.date_format or "%d/%m")
+        except (ValueError, TypeError):
+            date_str = now.strftime("%d/%m")
+        await mqtt.async_publish(hass, "nspanel/status/time", time_str, retain=True)
+        await mqtt.async_publish(hass, "nspanel/status/date", date_str, retain=True)
+        await mqtt.async_publish(hass, "nspanel/status/ampm", ampm, retain=True)
+
+    from homeassistant.helpers.event import async_track_time_interval
+
+    entry.async_on_unload(
+        async_track_time_interval(hass, _publish_time, __import__("datetime").timedelta(seconds=60))
+    )
+    await _publish_time(None)
     # Dashboard + sidebar (parity: the management UI is back)
     from .dashboard import register_dashboard
 
