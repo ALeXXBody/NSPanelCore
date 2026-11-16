@@ -112,6 +112,11 @@ static esp_err_t on_post_save(httpd_req_t *req) {
 }
 
 void nsp_config_server_start(void) {
+    // P171 fix: the AP path previously skipped esp_netif_init/event-loop —
+    // esp_wifi_init without them crashed at boot, the bootloader rolled
+    // back, and the panel landed back on the old firmware forever.
+    esp_netif_init();
+    esp_event_loop_create_default();
     // Serve the config form over the CURRENT interface (AP or STA).
     nsp_config_server_start();
 }

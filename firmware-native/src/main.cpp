@@ -29,6 +29,8 @@ extern void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
 extern void nsp_display_init(void);
 extern const char *nsp_display_warning(void);
 extern void nsp_ota_watchdog_feed_check(void);
+extern "C" void nsp_ota_confirm(void);  // file scope: in-body extern "C"
+    // declarations are illegal inside app_main
 extern void nsp_display_touch_task_start(void);
 extern void nsp_relay_init(void);
 extern void nsp_button_scan(void);  // file scope — an in-body
@@ -110,7 +112,11 @@ extern "C" void app_main(void) {
             }
         }
         nsp_button_scan();
-        nsp_ota_watchdog_feed_check();  // P133 seatbelt (native)
+        nsp_ota_watchdog_feed_check();
+        // P171 fix: confirm the running app once the panel is functional —
+        // without this the bootloader rolls back on the next reboot
+        // (the native fw confirmed nothing and was eaten after OTA).
+        nsp_ota_confirm();  // P133 seatbelt (native)
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

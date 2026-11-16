@@ -29,6 +29,17 @@ static int s_progress = 0;
 static int64_t s_last_progress_us = 0;
 
 int nsp_ota_progress(void) { return s_progress; }
+
+static bool s_confirmed = false;
+extern "C" void nsp_ota_confirm(void) {
+    if (s_confirmed) return;
+    // Mark the running (OTA-updated) app valid — the bootloader's rollback
+    // would otherwise restore the previous slot on the next reboot.
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    if (esp_ota_mark_app_valid_cancel_rollback() == ESP_OK) {
+        s_confirmed = true;
+    }
+}
 OtaState nsp_ota_state(void) { return s_state; }
 
 static bool nsp_http_get_to_buffer(const char *url, std::string &out) {
