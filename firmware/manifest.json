@@ -1,18 +1,18 @@
 {
-  "version": "0.1.1",
-  "notes": "CUTOVER: native IDF 5.5 firmware (the rewrite line, fw v0.1.1). WiFi auto-recovers; MQTT credentials are entered once at http://nspanelcore.local after the update.",
+  "version": "0.1.2",
+  "notes": "CUTOVER build: native fw v0.1.2 \u2014 the boot-crash fix (AP-path netif init) + the OTA self-confirm (the rollback loop is fixed). WiFi auto-recovers; MQTT once at nspanelcore.local.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.1.bin",
-      "md5": "30879feac054d87a429ef73dc605ae77"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.2.bin",
+      "md5": "398379e8fded2f7fc1b2a59c3ca1d877"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.1.bin",
-      "md5": "30879feac054d87a429ef73dc605ae77"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.2.bin",
+      "md5": "398379e8fded2f7fc1b2a59c3ca1d877"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
