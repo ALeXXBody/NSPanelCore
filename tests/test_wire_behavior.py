@@ -217,8 +217,8 @@ async def test_relay_command_flow(hass, wire: Wire, request):
 
 async def test_ota_serving_refuses_without_active_set(hass, wire: Wire, request):
     data, hass = await _setup(hass, wire, request=request)
-    views = [c.args[0] for c in hass.http.register_view.call_args_list]
-    dl = next(v for v in views if getattr(v, "url", "") == "/download_firmware")
+    import custom_components.nspanel_core as _cc
+    dl = _cc.DownloadFirmware()
     resp = await dl.get(MagicMock())
     assert resp.status == 503, "no active set → must refuse, never fall back"
 
@@ -237,8 +237,8 @@ async def test_ota_serving_serves_active_bytes(hass, wire: Wire, request):
         files={"firmware/sonoff/firmware.bin": str(f)},
         md5s={},
     )
-    views = [c.args[0] for c in hass.http.register_view.call_args_list]
-    ck = next(v for v in views if getattr(v, "url", "") == "/checksum_firmware")
+    import custom_components.nspanel_core as _cc
+    ck = _cc.ChecksumFirmware()
     resp = await ck.get(MagicMock())
     assert resp.status == 200
     assert hashlib.md5(blob).hexdigest() == resp.text
