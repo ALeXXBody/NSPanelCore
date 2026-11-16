@@ -173,7 +173,7 @@ def test_firmware_ota_rails_all_present():
 
 def test_manifest_json_is_current_and_md5_backed():
     m = json.loads((ROOT / "firmware" / "manifest.json").read_text())
-    assert m["version"].startswith("0.1.")
+    assert m["version"].startswith("0.0.")
     import hashlib
     for path, entry in m["files"].items():
         local = hashlib.md5((ROOT / "custom_components" / "nspanel_core" / path).read_bytes()).hexdigest()
@@ -194,7 +194,7 @@ def test_recovery_page_serves_full_ours_image():
     inst = ROOT / "firmware" / ".pio" / "build" / "esp32dev_idf5"
     fw = inst / "firmware.bin"
     if fw.exists():
-        assert b"0.1.187" in fw.read_bytes(), "built image must match the published version"
+        assert b"0.0.1" in fw.read_bytes(), "built image must match the published version"
 
 
 # --------------------------------------------------------------------------
