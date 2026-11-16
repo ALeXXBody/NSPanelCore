@@ -83,20 +83,34 @@ def _render_panels() -> str:
 
 
 _PAGE_SCRIPT = """<script>
+let _token = null;
+window.addEventListener("message", (ev) => {
+  if (ev.origin !== window.location.origin) return;
+  if (ev.data && ev.data.type === "nspanel-hass-token") {
+    _token = ev.data.access_token;
+  }
+});
 async function act(id, action){
   if(action==="delete" && !confirm("Delete this panel? It can re-register later.")) return;
-  await fetch("%s/api/panel/"+id+"/"+action, {method:"POST"});
+  const headers = {};
+  if (_token) headers["Authorization"] = "Bearer " + _token;
+  await fetch("%s/api/panel/"+id+"/"+action, {method:"POST", headers: headers});
   location.reload();
 }
 </script>"""
 
 
 class DashboardPage(HomeAssistantView):
-    """The management UI (sidebar iframe target)."""
+    """The management UI (sidebar iframe target).
+
+    requires_auth stays FALSE (v1 parity): the panel_custom iframe cannot
+    authenticate a page load — the UI authenticates its API calls with the
+    access token the sidebar shim forwards via postMessage.
+    """
 
     url = f"{URL_BASE}/ui"
     name = "nspanel_core:dashboard"
-    requires_auth = True
+    requires_auth = False
 
     async def get(self, request, **kwargs):
         page = (
