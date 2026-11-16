@@ -35,6 +35,10 @@ static std::string s_mac;
 static int64_t s_last_register_us = 0;
 static int64_t s_last_report_us = 0;
 
+void nsp_setup_ap_start(void);  // declared at FILE scope — inside the
+                               // extern "C" app_main it would get C linkage
+                               // and never link against the C++ definition
+
 /* NTC 10k (B=3950) on GPIO39/ADC1_CH7 — same hardware the v1 firmware used. */
 #include "esp_adc/adc_oneshot.h"
 #include <cmath>
@@ -71,7 +75,10 @@ extern "C" void app_main(void) {
     // Display FIRST, gently — never blocks the network path (P130).
     nsp_display_init();
 
-    if (!g_cfg.wifi_ssid.empty()) {
+    if (g_cfg.wifi_ssid.empty()) {
+        // Unconfigured (fresh NVS): the setup AP owns first boot.
+        nsp_setup_ap_start();
+    } else {
         nsp_wifi_start();  // station; nsp_wifi registers the GOT_IP handler
     }
 
