@@ -1,18 +1,18 @@
 {
-  "version": "0.1.4",
-  "notes": "native fw v0.1.4: OTA streams to flash \u2014 fixes the RAM OOM that silently killed every OTA attempt on the classic ESP32.",
+  "version": "0.1.5",
+  "notes": "native fw v0.1.5: streaming OTA + wire-visible OTA diagnostics.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.4.bin",
-      "md5": "0cc4fdfc5828f0a51fd0f008d8d42c88"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.5.bin",
+      "md5": "c389674d66a546a7072a4ffab83486ef"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.4.bin",
-      "md5": "0cc4fdfc5828f0a51fd0f008d8d42c88"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.5.bin",
+      "md5": "c389674d66a546a7072a4ffab83486ef"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
