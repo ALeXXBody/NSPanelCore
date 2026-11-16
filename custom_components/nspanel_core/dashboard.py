@@ -910,10 +910,14 @@ class OtaFileView(HomeAssistantView):
         if path is None:
             if model not in ("sonoff", "custom") and self._filename not in ("eu", "us"):
                 return web.Response(status=400, text="Unknown model")
+            _LOGGER.warning("OTA %s/%s: no servable file — 404 (P172 diagnostic)", self._kind, self._filename)
             return web.Response(status=404, text="Not found")
         if self._kind == "checksum":
             # Serve the startup-computed hash (no disk I/O per request).
-            return web.Response(text=_ota_checksum(request, kind, name, path))
+            md5 = _ota_checksum(request, kind, name, path)
+            _LOGGER.info("OTA checksum %s/%s = %s (requested by %s)", self._kind, self._filename, md5, request.remote)
+            return web.Response(text=md5)
+        _LOGGER.info("OTA %s/%s served from %s (requested by %s)", self._kind, self._filename, path, request.remote)
         return web.FileResponse(path)
 
 

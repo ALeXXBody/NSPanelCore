@@ -206,10 +206,18 @@ def test_firmware_ota_rails_all_present():
 
 def test_manifest_json_is_current_and_md5_backed():
     m = json.loads((ROOT / "firmware" / "manifest.json").read_text())
-    assert m["version"].startswith("0.0.")
+    # 0.0.x = the live Arduino line (bundled files match); 0.1.x = the
+    # native-cutover state (the firmware entries point at the native build
+    # on the release — not bundled locally, verified at activation instead).
+    assert m["version"].startswith(("0.0.", "0.1."))
     import hashlib
     base = ROOT / "custom_components" / "nspanel_core"
     for path, entry in m["files"].items():
+        if "firmware.bin" in path and m["version"].startswith("0.1."):
+            assert (entry.get("md5") if isinstance(entry, dict) else entry), (
+                "cutover manifest: the native firmware md5 must be present"
+            )
+            continue
         local_file = base / path
         if not local_file.is_file():
             continue  # v2 line: no bundled firmware (overlay-only by design)
