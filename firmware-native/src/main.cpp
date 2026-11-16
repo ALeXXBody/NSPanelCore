@@ -35,6 +35,27 @@ static std::string s_mac;
 static int64_t s_last_register_us = 0;
 static int64_t s_last_report_us = 0;
 
+/* NTC 10k (B=3950) on GPIO39/ADC1_CH7 — same hardware the v1 firmware used. */
+#include "esp_adc/adc_oneshot.h"
+#include <cmath>
+static adc_oneshot_unit_handle_t s_adc = nullptr;
+static bool s_adc_init = false;
+float nsp_temperature() {
+    if (!s_adc_init) {
+        adc_oneshot_unit_init_cfg_t init = {};
+        init.unit_id = ADC_UNIT_1;
+        if (adc_oneshot_unit_init(&s_adc, &init) != ESP_OK) return 0.0f;
+        adc_oneshot_chan_cfg_t chan = { .atten = ADC_ATTEN_DB_12, .bitwidth = ADC_BITWIDTH_12 };
+        if (adc_oneshot_config_channel(s_adc, ADC_CHANNEL_7, &chan) != ESP_OK) return 0.0f;
+        s_adc_init = true;
+    }
+    int raw = 0;
+    if (adc_oneshot_read(s_adc, ADC_CHANNEL_7, &raw) != ESP_OK || raw <= 1) return 0.0f;
+    float r = 10000.0f * raw / (4095.0f - raw);
+    return 1.0f / (1.0f / 298.15f + logf(r / 10000.0f) / 3950.0f) - 273.15f;
+}
+
+
 extern "C" void app_main(void) {
     ESP_ERROR_CHECK(nvs_flash_init());  // factory NVS holds config
     nsp_config_load();
