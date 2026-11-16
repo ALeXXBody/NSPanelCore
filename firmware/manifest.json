@@ -1,18 +1,18 @@
 {
   "version": "0.1.0",
-  "notes": "Native fw v0.1.0 \u2014 setup-AP boot crash fixed (netif/event-loop init, recursion removed, form parser host-unit-tested).",
+  "notes": "Native fw v0.1.0 \u2014 setup-AP boot fix + WiFi scan in the setup portal (APSTA + /scan + pick-list).",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.0-bootfixed.bin",
-      "md5": "97d55689e6123cc2ce5167bbc5eaeab2"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.0-scan.bin",
+      "md5": "6315754fb096d4f194ed2d08c0b91a11"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.0-bootfixed.bin",
-      "md5": "97d55689e6123cc2ce5167bbc5eaeab2"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.0-scan.bin",
+      "md5": "6315754fb096d4f194ed2d08c0b91a11"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
