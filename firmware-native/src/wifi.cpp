@@ -1,6 +1,7 @@
 /* NSPanel Core — WiFi station + config AP fallback. */
 
 #include "esp_wifi.h"
+#include "mdns.h"
 #include <cstring>
 #include <string>
 #include "esp_event.h"
@@ -37,7 +38,15 @@ static void on_ip_event(void *arg, esp_event_base_t base, int32_t id, void *data
     ip_event_got_ip_t *ev = (ip_event_got_ip_t *)data;
     snprintf(s_ip, sizeof(s_ip), IPSTR, IP2STR(&ev->ip_info.ip));
     s_connected = true;
-    nsp_mqtt_start(g_cfg.wifi_hostname);
+    extern void nsp_config_server_start(void);
+    if (g_cfg.mqtt_server.empty()) {
+        // Migration/completion path (P148): WiFi recovered from NVS but the
+        // MQTT settings are not known — serve the completion form on the
+        // panel's LAN address (mDNS: nspanelcore.local) instead of MQTT.
+        nsp_config_server_start();
+    } else {
+        nsp_mqtt_start(g_cfg.wifi_hostname);
+    }
     esp_wifi_sta_get_ap_info(nullptr);  // triggers RSSI cache
     wifi_ap_record_t ap;
     if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) s_rssi = ap.rssi;
@@ -58,4 +67,8 @@ void nsp_wifi_start(void) {
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wcfg));
     ESP_ERROR_CHECK(esp_wifi_start());
+    // Advertise the config page by name during migration/completion.
+    ESP_ERROR_CHECK(mdns_init());
+    mdns_hostname_set("nspanelcore");
+    mdns_service_add("NSPanelCore", "_http", "_tcp", 80, nullptr, 0);
 }
