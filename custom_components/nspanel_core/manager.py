@@ -98,6 +98,11 @@ class NSPanelCoreManager:
     # ------------------------------------------------------------------
 
     async def async_start(self) -> None:
+        # P165/P167: wait for the MQTT client before anything subscribes
+        # or publishes — the not-connected race killed the v0.1.1 setup.
+        from homeassistant.components.mqtt import async_wait_for_mqtt_client
+
+        await async_wait_for_mqtt_client(self.hass)
         data = await self._store.async_load()
         self.config = IntegrationConfig.from_dict(data or {})
 
@@ -2093,9 +2098,14 @@ class NSPanelCoreManager:
         except (ValueError, TypeError):
             date_str = current.strftime("%d/%m")
         # Legacy fixed topics the firmware subscribes to (ScreensaverPage).
-        await self._publish("nspanel/status/time", time_str, True)
-        await self._publish("nspanel/status/date", date_str, True)
-        await self._publish("nspanel/status/ampm", ampm, True)
+        try:
+            await self._publish("nspanel/status/time", time_str, True)
+            await self._publish("nspanel/status/date", date_str, True)
+            await self._publish("nspanel/status/ampm", ampm, True)
+        except Exception as err:  # noqa: BLE001
+            # P165: never fail setup for a not-yet-connected client —
+            # the 60 s cadence retries.
+            _LOGGER.debug("Time publish skipped (MQTT not ready): %s", err)
         # Per-panel screensaver mode (ScreensaverPage subscribes to it).
         # "global" must be resolved to the actual mode: the firmware treats
         # the raw payload as the mode string and logs Unknown-mode errors.

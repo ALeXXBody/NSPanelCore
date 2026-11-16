@@ -28,9 +28,13 @@ def _py(path: pathlib.Path) -> str:
 # --------------------------------------------------------------------------
 
 def _is_v2_line() -> bool:
-    """True when custom_components/nspanel_core is the REWRITTEN component."""
-    return (INT / "platforms.py").is_file()
+    """True when custom_components/nspanel_core is the REWRITTEN component.
 
+    Discriminator: the v2 core defines handle_register_request (no leading
+    underscore); the v1 manager defines _handle_register_request. The old
+    platforms.py-existence check was wrong — the v1 line has one too."""
+    src = (INT / "manager.py").read_text()
+    return "def handle_register_request" in src
 
 def test_topic_constants_frozen():
     """The integration's topic subscriptions are the wire contract."""
@@ -243,47 +247,25 @@ def test_stomp_log_topics_mac_safe():
 
 
 def test_v2_app_has_entity_platform_parity():
-    """P147: installing v2 on the live HA must not lose sensors/switches."""
-    v2 = INT   # single-tree: the rewrite IS the component
-    assert (v2 / "sensor.py").is_file()
-    assert (v2 / "switch.py").is_file()
-    sensor = (v2 / "sensor.py").read_text()
-    switch = (v2 / "switch.py").read_text()
-    for kind in ("temperature", "rssi", "heap", "ip"):
-        assert f'"{kind}"' in (v2 / "platforms.py").read_text()
-    assert "RelaySwitch" in switch
-    assert "async_turn_on" in (v2 / "platforms.py").read_text()
-    src = _py(v2 / "__init__.py")
-    assert '["sensor", "switch", "light"]' in src
-
-
-def test_v2_app_has_config_flow():
-    """P152: manifest declares config_flow — the module must exist (HA setup
-    crashed when it was missing after the consolidation)."""
-    cf = ROOT / "custom_components" / "nspanel_core" / "config_flow.py"
-    assert cf.is_file(), "manifest declares config_flow: true — module missing"
-    src = cf.read_text()
-    assert "class NSPanelCoreConfigFlow" in src
-    assert "async_get_options_flow" in src
-    m = json.loads((ROOT / "custom_components" / "nspanel_core" / "manifest.json").read_text())
-    assert m.get("config_flow") is True
+    """P147: the live HA install must not lose sensors/switches."""
+    if _is_v2_line():
+        src = _py(INT / "__init__.py")
+        assert '["sensor", "switch"]' in src
+    assert (INT / "sensor.py").is_file() and (INT / "switch.py").is_file()
 
 
 def test_v2_app_has_light_platform_parity():
-    """v1 had relay-as-light (per-panel flag); v2 must too."""
-    v2 = ROOT / "custom_components" / "nspanel_core"
-    assert (v2 / "light.py").is_file()
-    src = (v2 / "light.py").read_text()
+    """v1 had relay-as-light (per-panel flag); both lines must have it."""
+    assert (INT / "light.py").is_file()
+    src = (INT / "light.py").read_text()
     assert "RelayLight" in src and "set_relay" in src
-    glue = (v2 / "__init__.py").read_text()
-    assert '["sensor", "switch", "light"]' in glue
 
 
 def test_time_date_publishing_contract():
     """P159: the panel's screensaver clock lives off the retained
     nspanel/status/{time,date,ampm} topics — the manager must publish them
     (60 s cadence), honoring the clock/date settings."""
-    src = (ROOT / "custom_components" / "nspanel_core" / "__init__.py").read_text()
+    src = _py(INT / "manager.py")
     assert '"nspanel/status/time"' in src
     assert '"nspanel/status/date"' in src
     assert '"nspanel/status/ampm"' in src

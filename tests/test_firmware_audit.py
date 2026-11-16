@@ -417,7 +417,8 @@ def test_app_never_serves_stale_firmware():
     manual step) — on update_available in the periodic poll and once shortly
     after startup — because serving stale bundled files caused both deaths."""
     src = _src(FW.parent / "custom_components" / "nspanel_core" / "manager.py")
-    if (FW.parent / "custom_components" / "nspanel_core" / "platforms.py").is_file():
+    v2 = "def handle_register_request" in src
+    if v2:
         src = _src(FW.parent / "custom_components" / "nspanel_core" / "__init__.py")
         assert "_refresh_firmware" in src and "download_and_activate" in src
         return
@@ -458,10 +459,11 @@ def test_version_never_stale_periodic_registration_and_report():
     reg_window = src[reg:reg + 300]
     assert "300000" in reg_window, "periodic re-registration (5 min) missing"
     cc = FW.parent / "custom_components" / "nspanel_core"
-    if (cc / "platforms.py").is_file():   # v2 line: version adopted in the core
+    v2 = "def handle_register_request" in (cc / "manager.py").read_text()
+    if v2:   # v2 line: version adopted in the core
         mgr = _src(cc / "manager.py")
         assert "panel.version = version" in mgr, "v2 must adopt version on status"
-    else:                                  # v1 line: adoption in status handler
+    else:    # v1 line: adoption in the status handler
         mgr = _src(cc / "manager.py")
         sri = mgr.index("async def _on_panel_status_report")
         body = mgr[sri:mgr.index("\n    async def ", sri + 10)]
