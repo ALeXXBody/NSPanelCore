@@ -1,6 +1,8 @@
 /* NSPanel Core — WiFi station + config AP fallback. */
 
 #include "esp_wifi.h"
+#include <cstring>
+#include <string>
 #include "esp_event.h"
 #include "protocol.h"
 #include "config.h"

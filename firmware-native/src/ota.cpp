@@ -14,6 +14,9 @@
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
 #include "esp_timer.h"
+#include <cstring>
+#include <cstdio>
+#include <string>
 #include "protocol.h"
 #include "config.h"
 

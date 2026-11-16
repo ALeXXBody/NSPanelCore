@@ -11,6 +11,8 @@
  */
 
 #include "driver/uart.h"
+#include "driver/gpio.h"
+#include <cstring>
 #include "esp_timer.h"
 #include "protocol.h"
 #include "config.h"
