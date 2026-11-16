@@ -1,10 +1,10 @@
 {
-  "version": "0.1.186",
-  "notes": "Last-resort seatbelt: an OTA watchdog force-reboots the panel if an update task ever stalls with frozen progress for 120s \u2014 the 'dead panel' failure mode becomes an automatic recovery (mid-write reboots are safe: firmware writes target the inactive partition, config fs re-initializes on boot).",
+  "version": "0.1.187",
+  "notes": "Version display fix: the panel reports its version in EVERY status report and re-registers every 5 minutes \u2014 the app's firmware version can never go stale again (was: one-shot registration only, panel stuck at whatever version it last registered with).",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
-      "md5": "cea6feee3a673a7fe74d33b6c5487c51"
+      "md5": "e44a32bc9a3ccc0b098c02a8786c377f"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
-      "md5": "cea6feee3a673a7fe74d33b6c5487c51"
+      "md5": "e44a32bc9a3ccc0b098c02a8786c377f"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
