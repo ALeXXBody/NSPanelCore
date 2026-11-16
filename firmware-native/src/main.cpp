@@ -45,7 +45,9 @@ void nsp_setup_ap_start(void);  // declared at FILE scope — inside the
                                // extern "C" app_main it would get C linkage
                                // and never link against the C++ definition
 
-/* NTC 10k (B=3950) on GPIO39/ADC1_CH7 — same hardware the v1 firmware used. */
+/* P178 fix: the v1 firmware reads analogRead(38) — the NTC divider is on
+ * GPIO38 = ADC1_CH2 (the old comment claimed GPIO39/CH7, which reads a
+ * floating input and produced 132.1 then 0.0). */
 #include "esp_adc/adc_oneshot.h"
 #include <cmath>
 static adc_oneshot_unit_handle_t s_adc = nullptr;
@@ -56,11 +58,11 @@ float nsp_temperature() {
         init.unit_id = ADC_UNIT_1;
         if (adc_oneshot_new_unit(&init, &s_adc) != ESP_OK) return 0.0f;
         adc_oneshot_chan_cfg_t chan = { .atten = ADC_ATTEN_DB_12, .bitwidth = ADC_BITWIDTH_12 };
-        if (adc_oneshot_config_channel(s_adc, ADC_CHANNEL_7, &chan) != ESP_OK) return 0.0f;
+        if (adc_oneshot_config_channel(s_adc, ADC_CHANNEL_2, &chan) != ESP_OK) return 0.0f;
         s_adc_init = true;
     }
     int raw = 0;
-    if (adc_oneshot_read(s_adc, ADC_CHANNEL_7, &raw) != ESP_OK || raw <= 1) return 0.0f;
+    if (adc_oneshot_read(s_adc, ADC_CHANNEL_2, &raw) != ESP_OK || raw <= 1) return 0.0f;
     float r = 10000.0f * raw / (4095.0f - raw);
     return 1.0f / (1.0f / 298.15f + logf(r / 10000.0f) / 3950.0f) - 273.15f;
 }

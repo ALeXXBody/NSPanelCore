@@ -1,4 +1,6 @@
 #include "esp32-hal.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 #include <Arduino.h>
 #include "freertos/portmacro.h"
 #include <ButtonManager.hpp>
@@ -371,6 +373,44 @@ void setup() {
   // Load config if any, and if it fails. Factory reset!
   if (!(config.init() && config.loadFromLittleFS())) {
     config.factoryReset();
+  }
+
+  // P176 MIGRATION: seed the NVS namespace the native (IDF) line reads —
+  // "nspcfg" carries WiFi/MQTT/manager so the native firmware boots with
+  // the panel's EXISTING settings, no setup AP, no manual re-entry.
+  // Runs once: skipped when the native's "ssid" key is already present.
+  {
+    nvs_handle_t nh;
+    if (nvs_open("nspcfg", NVS_READWRITE, &nh) == ESP_OK) {
+      char probe[8];
+      size_t plen = sizeof(probe);
+      if (nvs_get_str(nh, "ssid", probe, &plen) != ESP_OK) {
+        auto setS = [&](const char *key, const std::string &v) { nvs_set_str(nh, key, v.c_str()); };
+        setS("ssid", NSPMConfig::instance->wifi_ssid);
+        setS("psk", NSPMConfig::instance->wifi_psk);
+        setS("hostname", NSPMConfig::instance->wifi_hostname);
+        setS("mqtt_server", NSPMConfig::instance->mqtt_server);
+        nvs_set_i32(nh, "mqtt_port", (int32_t)NSPMConfig::instance->mqtt_port);
+        setS("mqtt_user", NSPMConfig::instance->mqtt_username);
+        setS("mqtt_pass", NSPMConfig::instance->mqtt_password);
+        setS("manager", NSPMConfig::instance->manager_address);
+        nvs_set_i32(nh, "manager_port", (int32_t)NSPMConfig::instance->manager_port);
+        setS("md5_fw", NSPMConfig::instance->md5_firmware);
+        setS("md5_fs", NSPMConfig::instance->md5_data_file);
+        setS("md5_tft", NSPMConfig::instance->md5_tft_file);
+        nvs_set_u8(nh, "reverse_relays", NSPMConfig::instance->reverse_relays ? 1 : 0);
+        nvs_set_i32(nh, "btn1_mode", (int32_t)NSPMConfig::instance->button1_mode);
+        nvs_set_i32(nh, "btn2_mode", (int32_t)NSPMConfig::instance->button2_mode);
+        setS("btn1_topic", NSPMConfig::instance->button1_mqtt_topic);
+        setS("btn1_payload", NSPMConfig::instance->button1_mqtt_payload);
+        setS("btn2_topic", NSPMConfig::instance->button2_mqtt_topic);
+        setS("btn2_payload", NSPMConfig::instance->button2_mqtt_payload);
+        if (nvs_commit(nh) == ESP_OK) {
+          Serial.println("MIGRATION: panel config seeded into NVS for the native firmware");
+        }
+      }
+      nvs_close(nh);
+    }
   }
 
   // Setup logging

@@ -19,8 +19,11 @@
 #include "config.h"
 
 #define DISPLAY_UART UART_NUM_1
-#define DISPLAY_TX_PIN 17
-#define DISPLAY_RX_PIN 16
+/* P178 fix: match the proven v1 mapping — Serial2.begin(115200, SERIAL_8N1, 17, 16)
+ * is Arduino (rxPin=17, txPin=16). The swapped defines made the native firmware
+ * transmit into the display's TX line: handshake could never succeed. */
+#define DISPLAY_TX_PIN 16
+#define DISPLAY_RX_PIN 17
 #define DISPLAY_POWER_PIN GPIO_NUM_4
 #define DISPLAY_BAUD 115200
 #define END_SEQ "\xFF\xFF\xFF"

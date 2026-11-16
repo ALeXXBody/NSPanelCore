@@ -253,11 +253,11 @@ void WebManager::_taskPerformOTAUpdate(void *param) {
     do {
       firmwareUpdateSuccessful = WebManager::_update(U_FLASH, "/download_firmware");
       if (!firmwareUpdateSuccessful) {
-        LOG_ERROR("Failed to run OTA. Attempt ", String(++fw_attempts).c_str(), " of 3.");
-        if (fw_attempts >= 3) break;
+        LOG_ERROR("Failed to run OTA. Attempt ", String(++fw_attempts).c_str(), " of 5.");
+        if (fw_attempts >= 5) break;
         vTaskDelay(5000 / portTICK_PERIOD_MS);
       }
-    } while (!firmwareUpdateSuccessful && fw_attempts < 3);
+    } while (!firmwareUpdateSuccessful && fw_attempts < 5);
     if (firmwareUpdateSuccessful) {
       LOG_INFO("Successfully updated firmware.");
       // Save new firmware checksum
@@ -310,11 +310,11 @@ void WebManager::_taskPerformOTAUpdate(void *param) {
       do {
         littleFSUpdateSuccessful = WebManager::_update(U_SPIFFS, "/download_data_file");
         if (!littleFSUpdateSuccessful) {
-          LOG_ERROR("Failed to run OTA. Attempt ", String(++fs_attempts).c_str(), " of 3.");
-          if (fs_attempts >= 3) break;
+          LOG_ERROR("Failed to run OTA. Attempt ", String(++fs_attempts).c_str(), " of 5.");
+          if (fs_attempts >= 5) break;
           vTaskDelay(5000 / portTICK_PERIOD_MS);
         }
-      } while (!littleFSUpdateSuccessful && fs_attempts < 3);
+      } while (!littleFSUpdateSuccessful && fs_attempts < 5);
       if (littleFSUpdateSuccessful) {
         LOG_INFO("Successfully updated LittleFS.");
         // Save new LittleFS checksum
@@ -413,6 +413,7 @@ bool WebManager::_update(uint8_t type, const char *url) {
 
   HTTPClient http;
   http.begin(downloadUrl.c_str());
+  http.setTimeout(60000);  // P176: the native OTA download over a fluctuating link needs > 5 s
   int http_code = http.GET();
   if (http_code != 200) {
     LOG_ERROR("Firmware download failed, HTTP code: ", http_code);
