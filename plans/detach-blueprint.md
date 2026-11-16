@@ -1,5 +1,16 @@
 # NSPanel Core: Detach-from-Upstream + Optimized Recreation — Blueprint
 
+## 2026 tech stack (P134 — user order: latest technologies, future proof)
+| Layer | Old (fork heritage) | New (this rewrite) | Why |
+|---|---|---|---|
+| ESP firmware | Arduino core 2.x→3.x fork of upstream, ~20 inherited libs | **Clean-room native ESP-IDF 5.5.x** (C++20, FreeRTOS-native, esp-mqtt, esp_http_server, LittleFS) | Same generation as the panel's proven bootloader; upstream themselves went native; drops the Arduino shim + all inherited libs; smallest flash/RAM surface |
+| Wire protocol | MQTT topics + protobuf | **UNCHANGED** (Step 0 decision) | Field panels + DressingRoom keep working; no coordinated flash |
+| HA integration | Python fork w/ Django-isms, legacy web dashboard | **Modern HA-native async component** (config/option flows, typed dataclasses, HA MQTT abstraction, no custom web server where HA UI suffices) | HA-standard = maintained forever, less surface |
+| Display HMI | binary .tft blobs from upstream | **nxwright text source in-repo** (Step 0 decision), CI-compiled .tft | Versioned, diffable, no binary blobs |
+| Web installer | ESP Web Tools page | **ESP Web Tools** (keep — it IS the modern standard) with IDF-native images | Proven on this hardware 4× |
+| Testing | pytest source-audit suite | **Contract tests + hardware-in-loop CI + Playwright UI sweep** | R1 enforced at every layer |
+| CI | none (manual publish) | **GitHub Actions: build → contract suite → publish evergreen + HACS release** | Future proof = reproducible releases |
+
 ## Objective
 Recreate the NSPanel Core stack (HA integration + ESP32 firmware + TFT HMI)
 as a native, upstream-independent codebase with everything optimized —
