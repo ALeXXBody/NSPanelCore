@@ -11,6 +11,7 @@
 #include "nvs_flash.h"
 #include "esp_system.h"
 #include "esp_mac.h"
+#include "esp_adc/adc_oneshot.h"
 #include <cstdio>
 #include <string>
 #include "protocol.h"

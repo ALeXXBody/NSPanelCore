@@ -48,6 +48,10 @@ void nsp_mqtt_handle_command(const std::string &payload) {
     }
 }
 
+void nsp_mqtt_send_register(void) {
+    nsp_mqtt_send_register(s_mqtt);
+}
+
 void nsp_mqtt_send_register(esp_mqtt_client_handle_t client) {
     if (client == nullptr) return;
     char buf[512];
