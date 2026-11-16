@@ -1,0 +1,77 @@
+/* NSPanel Core — persistent config in NVS (no fs round-trips). */
+
+#include "nvs_flash.h"
+#include "nvs.h"
+#include <string>
+
+struct NSPConfig {
+    std::string wifi_ssid;
+    std::string wifi_psk;
+    std::string wifi_hostname = "NSPanelCore";
+    std::string mqtt_server;
+    int mqtt_port = 1883;
+    std::string mqtt_user;
+    std::string mqtt_pass;
+    std::string manager_address;
+    int manager_port = 8123;
+    std::string md5_firmware;
+    std::string md5_data_file;
+    std::string md5_tft_file;
+};
+
+inline NSPConfig g_cfg;
+
+inline bool nsp_config_load() {
+    nvs_handle_t h;
+    if (nvs_open("nspcfg", NVS_READONLY, &h) != ESP_OK) return false;
+    char buf[128];
+    size_t len;
+    auto get = [&](const char *key, std::string &out) {
+        len = sizeof(buf);
+        if (nvs_get_str(h, key, buf, &len) == ESP_OK) out.assign(buf, len - 1);
+    };
+    get("ssid", g_cfg.wifi_ssid);
+    get("psk", g_cfg.wifi_psk);
+    get("hostname", g_cfg.wifi_hostname);
+    get("mqtt_server", g_cfg.mqtt_server);
+    nvs_get_i32(h, "mqtt_port", &g_cfg.mqtt_port);
+    get("mqtt_user", g_cfg.mqtt_user);
+    get("mqtt_pass", g_cfg.mqtt_pass);
+    get("manager", g_cfg.manager_address);
+    nvs_get_i32(h, "manager_port", &g_cfg.manager_port);
+    get("md5_fw", g_cfg.md5_firmware);
+    get("md5_fs", g_cfg.md5_data_file);
+    get("md5_tft", g_cfg.md5_tft_file);
+    nvs_close(h);
+    return !g_cfg.wifi_ssid.empty();
+}
+
+inline bool nsp_config_save() {
+    nvs_handle_t h;
+    if (nvs_open("nspcfg", NVS_READWRITE, &h) != ESP_OK) return false;
+    auto set = [&](const char *key, const std::string &v) {
+        nvs_set_str(h, key, v.c_str());
+    };
+    set("ssid", g_cfg.wifi_ssid);
+    set("psk", g_cfg.wifi_psk);
+    set("hostname", g_cfg.wifi_hostname);
+    set("mqtt_server", g_cfg.mqtt_server);
+    nvs_set_i32(h, "mqtt_port", g_cfg.mqtt_port);
+    set("mqtt_user", g_cfg.mqtt_user);
+    set("mqtt_pass", g_cfg.mqtt_pass);
+    set("manager", g_cfg.manager_address);
+    nvs_set_i32(h, "manager_port", g_cfg.manager_port);
+    set("md5_fw", g_cfg.md5_firmware);
+    set("md5_fs", g_cfg.md5_data_file);
+    set("md5_tft", g_cfg.md5_tft_file);
+    esp_err_t err = nvs_commit(h);
+    nvs_close(h);
+    return err == ESP_OK;
+}
+
+/* Called after a successful OTA to persist the new checksums. */
+inline void nsp_config_set_md5s(const std::string &fw, const std::string &fs) {
+    g_cfg.md5_firmware = fw;
+    g_cfg.md5_data_file = fs;
+    nsp_config_save();
+}

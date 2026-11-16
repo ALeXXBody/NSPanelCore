@@ -1,0 +1,17 @@
+# Native IDF 5.5 defaults — matches the proven bootloader generation
+CONFIG_IDF_TARGET="esp32"
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_FREERTOS_HZ=1000
+# No PSRAM on this board — never probe
+CONFIG_SPIRAM=n
+# Partitions: identical layout to the proven table (contract)
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+# LittleFS data partition
+CONFIG_ESP_LITTLEFS_ENABLED=y
+# Brownout: keep default detector (rail protection)
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
+# MQTT
+CONFIG_MQTT_TRANSPORT_SSL=n
+# HTTP OTA buffer
+CONFIG_ESP_HTTP_OTA_ENABLE_ADVANCED_SETTINGS=n
