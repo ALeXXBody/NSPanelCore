@@ -46,12 +46,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         segment = msg.topic.split("/")[1]
         await hass.async_add_executor_job(core.handle_status_report, segment, msg.payload)
 
+    async def on_relay_state(msg):
+        # nspanel/<hostname>/r{1,2}_state — segment = hostname, verbatim
+        parts = msg.topic.split("/")
+        segment, relay = parts[1], 1 if parts[2].startswith("r1") else 2
+        await hass.async_add_executor_job(
+            core.handle_relay_state, segment, relay, msg.payload
+        )
+
     unsub_mqtt = [
         await mqtt.async_subscribe(hass, TOPIC_MANAGER_COMMAND, on_register),
         await mqtt.async_subscribe(hass, TOPIC_PANEL_STATUS_REPORT, on_status_report),
         await mqtt.async_subscribe(hass, TOPIC_PANEL_STATUS, _on_panel_status),
+        await mqtt.async_subscribe(hass, "nspanel/+/r1_state", on_relay_state),
+        await mqtt.async_subscribe(hass, "nspanel/+/r2_state", on_relay_state),
     ]
     _register_ota_views(hass, active)
+    # Entity platforms (parity: sensors + relay switches) — standard forwarding
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "switch"])
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "core": core,
         "unsub": unsub_mqtt,
@@ -179,3 +191,4 @@ def _current(hass: HomeAssistant):
         return None
     entry_id = next(iter(data))
     return data[entry_id].get("active")
+

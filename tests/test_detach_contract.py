@@ -207,3 +207,17 @@ def test_stomp_log_topics_mac_safe():
     const_src = _py(INT / "const.py")
     # mac-safe topic building must go through topic_safe (no slashes)
     assert "def topic_safe" in const_src
+
+
+def test_v2_app_has_entity_platform_parity():
+    """P147: installing v2 on the live HA must not lose sensors/switches."""
+    v2 = ROOT / "rewrite" / "nspanel_core_v2"
+    assert (v2 / "sensor.py").is_file()
+    assert (v2 / "switch.py").is_file()
+    sensor = (v2 / "sensor.py").read_text()
+    switch = (v2 / "switch.py").read_text()
+    for kind in ("temperature", "rssi", "heap", "ip"):
+        assert f'"{kind}"' in (v2 / "platforms.py").read_text()
+    assert "RelaySwitch" in switch and "async_turn_on" in switch
+    src = _py(INT / "__init__.py") if False else (ROOT / "rewrite" / "nspanel_core_v2" / "__init__.py").read_text()
+    assert '["sensor", "switch"]' in src

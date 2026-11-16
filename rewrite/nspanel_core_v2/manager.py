@@ -152,6 +152,25 @@ class Core:
         panel.last_seen = datetime.now(timezone.utc)
         return panel
 
+    # -- relays (P147 parity: switches/sensors keep working in v2) ------------
+
+    def handle_relay_state(self, segment: str, relay: int, payload: bytes | str) -> Panel | None:
+        """Track r{N}_state (retained "0"/"1" from the panel)."""
+        panel = self.panel_by_topic_segment(segment)
+        if panel is None:
+            return None
+        panel.relay_states[int(relay)] = str(payload).strip() == "1"
+        return panel
+
+    def relay_state(self, panel: Panel, relay: int) -> bool:
+        return panel.relay_states.get(int(relay), False)
+
+    def set_relay(self, panel: Panel, relay: int, state: bool) -> str:
+        """Publish "1"/"0" to nspanel/<hostname>/r{N}_cmd (wire contract)."""
+        topic = f"nspanel/{panel.topic_base()}/r{int(relay)}_cmd"
+        self._publish(topic, "1" if state else "0")
+        return topic
+
     # -- commands (manager → panel) -------------------------------------------
 
     def send_command(self, panel: Panel, command: str) -> str:
@@ -178,4 +197,5 @@ class Core:
     @staticmethod
     def subscriptions() -> tuple[str, ...]:
         return (TOPIC_MANAGER_COMMAND, "nspanel/+/status",
-                "nspanel/+/status_report")
+                "nspanel/+/status_report",
+                "nspanel/+/r1_state", "nspanel/+/r2_state")
