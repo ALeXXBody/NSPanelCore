@@ -218,6 +218,7 @@ def test_v2_app_has_entity_platform_parity():
     switch = (v2 / "switch.py").read_text()
     for kind in ("temperature", "rssi", "heap", "ip"):
         assert f'"{kind}"' in (v2 / "platforms.py").read_text()
-    assert "RelaySwitch" in switch and "async_turn_on" in switch
+    assert "RelaySwitch" in switch
+    assert "async_turn_on" in (v2 / "platforms.py").read_text()
     src = _py(INT / "__init__.py") if False else (ROOT / "rewrite" / "nspanel_core_v2" / "__init__.py").read_text()
     assert '["sensor", "switch"]' in src
