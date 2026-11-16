@@ -29,7 +29,9 @@ extern void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
 extern void nsp_display_init(void);
 extern const char *nsp_display_warning(void);
 extern void nsp_ota_watchdog_feed_check(void);
-extern void nsp_display_touch_task_start(void);  // file scope — an in-body
+extern void nsp_display_touch_task_start(void);
+extern void nsp_relay_init(void);
+extern void nsp_button_scan(void);  // file scope — an in-body
     // declaration inside extern "C" app_main would get C linkage (P160)
 extern float nsp_temperature(void);
 
@@ -75,6 +77,7 @@ extern "C" void app_main(void) {
     g_mac = macbuf;
 
     // Display FIRST, gently — never blocks the network path (P130).
+    nsp_relay_init();
     nsp_display_init();
     nsp_display_touch_task_start();
 
@@ -106,6 +109,7 @@ extern "C" void app_main(void) {
                 s_last_report_us = now;
             }
         }
+        nsp_button_scan();
         nsp_ota_watchdog_feed_check();  // P133 seatbelt (native)
         vTaskDelay(pdMS_TO_TICKS(1000));
     }

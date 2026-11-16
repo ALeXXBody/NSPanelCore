@@ -22,6 +22,12 @@ inline std::string topic_screen_cmd(const std::string &hostname) {
 inline std::string topic_panel_cmd(const std::string &hostname) {
     return "nspanel/" + hostname + "/command";
 }
+inline std::string topic_relay_cmd(const std::string &hostname, int relay) {
+    return "nspanel/" + hostname + "/r" + std::to_string(relay) + "_cmd";
+}
+inline std::string topic_relay_state(const std::string &hostname, int relay) {
+    return "nspanel/" + hostname + "/r" + std::to_string(relay) + "_state";
+}
 inline std::string topic_touch(const std::string &hostname) {
     return "nspanel/" + hostname + "/touch";
 }

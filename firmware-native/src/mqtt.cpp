@@ -24,6 +24,9 @@ static void nsp_mqtt_connected(void *handler_args, esp_event_base_t base,
     esp_mqtt_client_subscribe(s_mqtt, "nspanel/status/time", 0);
     esp_mqtt_client_subscribe(s_mqtt, "nspanel/status/date", 0);
     esp_mqtt_client_subscribe(s_mqtt, "nspanel/status/ampm", 0);
+    // Relay commands (HA switches drive the physical relays)
+    esp_mqtt_client_subscribe(s_mqtt, topic_relay_cmd(s_hostname, 1).c_str(), 1);
+    esp_mqtt_client_subscribe(s_mqtt, topic_relay_cmd(s_hostname, 2).c_str(), 1);
     // Register immediately on connect, then every 5 minutes (P135)
     nsp_mqtt_send_register(s_mqtt);
 }
@@ -46,9 +49,21 @@ static void nsp_mqtt_data(void *handler_args, esp_event_base_t base,
     } else if (topic == "nspanel/status/ampm") {
         extern void nsp_display_set_ampm(const std::string &);
         nsp_display_set_ampm(payload);
+    } else if (topic == topic_relay_cmd(s_hostname, 1)) {
+        extern void nsp_relay_handle_cmd(int, const std::string &);
+        nsp_relay_handle_cmd(1, payload);
+    } else if (topic == topic_relay_cmd(s_hostname, 2)) {
+        extern void nsp_relay_handle_cmd(int, const std::string &);
+        nsp_relay_handle_cmd(2, payload);
     } else if (topic == topic_panel_cmd(s_hostname)) {
         nsp_mqtt_handle_command(payload);
     }
+}
+
+void nsp_mqtt_publish_relay_state(int relay, bool state) {
+    if (s_mqtt == nullptr) return;
+    esp_mqtt_client_publish(s_mqtt, topic_relay_state(s_hostname, relay).c_str(),
+                            state ? "1" : "0", 0, 0, true);
 }
 
 void nsp_mqtt_publish_touch(int page, int component, int event) {

@@ -14,6 +14,13 @@ struct NSPConfig {
     std::string mqtt_pass;
     std::string manager_address;
     int32_t manager_port = 8123;
+    bool reverse_relays = false;
+    int32_t button1_mode = 0;  // 0=DIRECT 1=FOLLOW 2=DETACHED 3=CUSTOM_MQTT
+    int32_t button2_mode = 0;
+    std::string button1_mqtt_topic;
+    std::string button1_mqtt_payload;
+    std::string button2_mqtt_topic;
+    std::string button2_mqtt_payload;
     std::string md5_firmware;
     std::string md5_data_file;
     std::string md5_tft_file;
@@ -39,6 +46,13 @@ inline bool nsp_config_load() {
     get("mqtt_pass", g_cfg.mqtt_pass);
     get("manager", g_cfg.manager_address);
     nvs_get_i32(h, "manager_port", &g_cfg.manager_port);
+    nvs_get_u8(h, "reverse_relays", (uint8_t *)&g_cfg.reverse_relays);
+    nvs_get_i32(h, "btn1_mode", &g_cfg.button1_mode);
+    nvs_get_i32(h, "btn2_mode", &g_cfg.button2_mode);
+    get("btn1_topic", g_cfg.button1_mqtt_topic);
+    get("btn1_payload", g_cfg.button1_mqtt_payload);
+    get("btn2_topic", g_cfg.button2_mqtt_topic);
+    get("btn2_payload", g_cfg.button2_mqtt_payload);
     get("md5_fw", g_cfg.md5_firmware);
     get("md5_fs", g_cfg.md5_data_file);
     get("md5_tft", g_cfg.md5_tft_file);
@@ -61,6 +75,13 @@ inline bool nsp_config_save() {
     set("mqtt_pass", g_cfg.mqtt_pass);
     set("manager", g_cfg.manager_address);
     nvs_set_i32(h, "manager_port", g_cfg.manager_port);
+    nvs_set_u8(h, "reverse_relays", g_cfg.reverse_relays ? 1 : 0);
+    nvs_set_i32(h, "btn1_mode", g_cfg.button1_mode);
+    nvs_set_i32(h, "btn2_mode", g_cfg.button2_mode);
+    set("btn1_topic", g_cfg.button1_mqtt_topic);
+    set("btn1_payload", g_cfg.button1_mqtt_payload);
+    set("btn2_topic", g_cfg.button2_mqtt_topic);
+    set("btn2_payload", g_cfg.button2_mqtt_payload);
     set("md5_fw", g_cfg.md5_firmware);
     set("md5_fs", g_cfg.md5_data_file);
     set("md5_tft", g_cfg.md5_tft_file);
