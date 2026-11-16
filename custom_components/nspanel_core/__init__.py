@@ -100,9 +100,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             date_str = now.strftime(s.date_format or "%d/%m")
         except (ValueError, TypeError):
             date_str = now.strftime("%d/%m")
-        await mqtt.async_publish(hass, "nspanel/status/time", time_str, retain=True)
-        await mqtt.async_publish(hass, "nspanel/status/date", date_str, retain=True)
-        await mqtt.async_publish(hass, "nspanel/status/ampm", ampm, retain=True)
+        try:
+            await mqtt.async_publish(hass, "nspanel/status/time", time_str, retain=True)
+            await mqtt.async_publish(hass, "nspanel/status/date", date_str, retain=True)
+            await mqtt.async_publish(hass, "nspanel/status/ampm", ampm, retain=True)
+        except Exception as err:  # noqa: BLE001
+            # P165: at setup time the MQTT client may not be connected yet —
+            # NEVER fail the integration for it; the 60 s cadence retries.
+            _LOGGER.debug("Time publish skipped (MQTT not ready): %s", err)
 
     from homeassistant.helpers.event import async_track_time_interval
 

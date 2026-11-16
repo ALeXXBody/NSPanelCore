@@ -85,3 +85,31 @@ async def test_setup_survives_register_failure(enable_custom_integrations, hass,
         await hass.async_block_till_done()
     data = hass.data[DOMAIN][entry.entry_id]
     assert data["core"] is not None, "core must survive a frontend registration failure"
+
+
+async def test_setup_survives_mqtt_not_connected(hass, enable_custom_integrations, stub_http):
+    """P165: at setup time the MQTT client may not be connected yet — a
+    publish failure must NOT fail the integration (the 60 s cadence retries)."""
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options={})
+    entry.add_to_hass(hass)
+
+    async def _not_ready(hass_, topic, payload, retain=False, **kwargs):
+        from homeassistant.exceptions import HomeAssistantError
+
+        raise HomeAssistantError("Error talking to MQTT: The client is not currently connected.")
+
+    with patch(
+        "homeassistant.components.mqtt.async_subscribe", return_value=MagicMock()
+    ), patch(
+        "homeassistant.components.mqtt.async_publish", new=_not_ready
+    ), patch(
+        "homeassistant.components.frontend.async_remove_panel"
+    ), patch(
+        "homeassistant.components.panel_custom.async_register_panel", new=AsyncMock()
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id), (
+            "setup must survive an MQTT publish failure"
+        )
+        await hass.async_block_till_done()
+    data = hass.data[DOMAIN][entry.entry_id]
+    assert data["core"] is not None
