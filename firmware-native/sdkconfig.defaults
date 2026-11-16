@@ -7,8 +7,6 @@ CONFIG_SPIRAM=n
 # Partitions: identical layout to the proven table (contract)
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
-# LittleFS data partition
-CONFIG_ESP_LITTLEFS_ENABLED=y
 # Brownout: keep default detector (rail protection)
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
 # MQTT

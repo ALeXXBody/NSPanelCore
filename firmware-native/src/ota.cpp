@@ -13,7 +13,6 @@
 
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
-#include "esp_littlefs.h"
 #include "protocol.h"
 #include "config.h"
 
@@ -83,14 +82,8 @@ static bool nsp_write_fs_partition(const std::string &blob) {
         written += n;
         s_progress = (int)((100ULL * written) / blob.size());
     }
-    // Remount so the config save lands on the new content.
-    esp_vfs_littlefs_conf_t lcfg = {
-        .base_path = "/littlefs", .partition_label = "spiffs",
-        .format_if_mount_failed = false, .dont_mount = false,
-    };
-    if (esp_vfs_littlefs_register(&lcfg) != ESP_OK) {
-        ok = false;  // still reboot — config re-syncs after boot
-    }
+    // NOTE: config lives in NVS, not in the fs — no remount needed. The
+    // panel reboots right after; the manager drives any further sync.
     return ok;
 }
 
