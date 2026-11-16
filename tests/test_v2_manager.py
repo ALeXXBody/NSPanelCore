@@ -43,9 +43,9 @@ def core():
     def publish(topic, payload, retain=False):
         published.append((topic, payload, retain))
 
-    cfg = manager.ManagerConfig(manager_address="192.168.50.20", manager_port=8123)
-    cfg.panels = [manager.Panel(mac="E4:65:B8:49:A1:00", name="KitchenPanel",
-                                wifi_hostname="KitchenPanel", accepted=True)]
+    cfg = manager.ManagerConfig(manager_address="10.0.0.2", manager_port=8123)
+    cfg.panels = [manager.Panel(mac="AA:BB:CC:DD:EE:01", name="DemoPanel",
+                                wifi_hostname="DemoPanel", accepted=True)]
     return manager.Core(cfg, publish), published
 
 
@@ -53,8 +53,8 @@ def test_register_request_adopts_and_accepts(core):
     core, published = core
     req = {
         "command": "register_request",
-        "mac_origin": "E4:65:B8:49:A1:00",
-        "friendly_name": "KitchenPanel",
+        "mac_origin": "AA:BB:CC:DD:EE:01",
+        "friendly_name": "DemoPanel",
         "version": "0.1.187",
         "md5_firmware": "a" * 32,
         "md5_data_file": "b" * 32,
@@ -68,22 +68,22 @@ def test_register_request_adopts_and_accepts(core):
     # accept reply on the panel's VERBATIM hostname topic, retained
     assert published, "accept reply must be published"
     topic, payload, retain = published[-1]
-    assert topic == "nspanel/KitchenPanel/command"
+    assert topic == "nspanel/DemoPanel/command"
     assert retain is True
     reply = json.loads(payload)
     assert reply["command"] == "register_accept"
-    assert reply["address"] == "192.168.50.20"
+    assert reply["address"] == "10.0.0.2"
     assert reply["port"] == 8123
-    assert reply["config_topic"] == "nspanel/e465b849a100/config"
+    assert reply["config_topic"] == "nspanel/aabbccddee01/config"
 
 
 def test_register_ignores_bare_default_hostname(core):
     """A compiled-default friendly_name must never re-point command topics."""
     core, published = core
-    req = {"mac_origin": "E4:65:B8:49:A1:00", "friendly_name": "NSPanelCore",
+    req = {"mac_origin": "AA:BB:CC:DD:EE:01", "friendly_name": "NSPanelCore",
            "version": "0.1.187"}
     core.handle_register_request(json.dumps(req))
-    assert core.config.panels[0].wifi_hostname == "KitchenPanel"
+    assert core.config.panels[0].wifi_hostname == "DemoPanel"
 
 
 def test_unknown_panel_autoregisters_unaccepted(core):
@@ -103,17 +103,17 @@ def test_deleted_panel_never_resurrects(core):
     every few seconds and would resurrect instantly otherwise."""
     core, published = core
     panel = core.config.panels[0]
-    core.config.deleted_macs.append("e465b849a100")
-    req = {"mac_origin": "E4:65:B8:49:A1:00", "friendly_name": "KitchenPanel",
+    core.config.deleted_macs.append("aabbccddee01")
+    req = {"mac_origin": "AA:BB:CC:DD:EE:01", "friendly_name": "DemoPanel",
            "version": "0.1.0"}
     assert core.handle_register_request(json.dumps(req)) is False
-    assert all(p.mac != "e465b849a100" for p in core.config.panels)
+    assert all(p.mac != "aabbccddee01" for p in core.config.panels)
 
 
 def test_status_report_adopts_version_and_telemetry(core):
     core, published = core
     panel = core.handle_status_report(
-        "KitchenPanel",
+        "DemoPanel",
         json.dumps({"version": "0.1.187", "rssi": -58, "temperature": "27.3",
                     "heap_used_pct": 59, "ip": "192.168.50.23",
                     "warnings": "No response from the display."}),
@@ -130,7 +130,7 @@ def test_status_report_adopts_version_and_telemetry(core):
 def test_status_report_updating_state_marks_offline(core):
     core, published = core
     panel = core.handle_status_report(
-        "KitchenPanel", json.dumps({"version": "0.1.187", "state": "updating_fs"}))
+        "DemoPanel", json.dumps({"version": "0.1.187", "state": "updating_fs"}))
     assert panel.online is False
 
 
@@ -138,7 +138,7 @@ def test_commands_route_to_verbatim_hostname_topic(core):
     core, published = core
     panel = core.config.panels[0]
     topic = core.send_reboot(panel)
-    assert topic == "nspanel/KitchenPanel/command"
+    assert topic == "nspanel/DemoPanel/command"
     assert json.loads(published[-1][1]) == {"command": "reboot"}
     assert published[-1][2] is False            # commands are NOT retained
 

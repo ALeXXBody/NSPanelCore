@@ -79,14 +79,14 @@ def test_hostname_topics_verbatim():
     contains spaces (e.g. 'Kitchen Panel')."""
     const = _const()
     assert const.panel_mqtt_topic("My Panel", "command") == "nspanel/My Panel/command"
-    assert const.panel_mqtt_topic("KitchenPanel", "command") == "nspanel/KitchenPanel/command"
+    assert const.panel_mqtt_topic("DemoPanel", "command") == "nspanel/DemoPanel/command"
 
 
 def test_panel_identity_and_topics():
     models = _models()
-    p = models.Panel(mac="E4:65:B8:49:A1:00", name="KitchenPanel", wifi_hostname="KitchenPanel")
-    assert p.command_topic() == "nspanel/KitchenPanel/command"
-    assert p.status_report_topic() == "nspanel/e465b849a100/status_report"
+    p = models.Panel(mac="AA:BB:CC:DD:EE:01", name="DemoPanel", wifi_hostname="DemoPanel")
+    assert p.command_topic() == "nspanel/DemoPanel/command"
+    assert p.status_report_topic() == "nspanel/aabbccddee01/status_report"
     d = p.to_dict()
     p2 = models.Panel.from_dict(d)
     assert p2.mac == p.mac and p2.wifi_hostname == p.wifi_hostname
