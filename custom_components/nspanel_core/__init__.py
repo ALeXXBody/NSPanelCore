@@ -10,6 +10,7 @@ from pathlib import Path
 from homeassistant.components import mqtt
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.components.http import HomeAssistantView
 
 from . import firmware_store
 from .const import (
@@ -128,58 +129,79 @@ async def _refresh_firmware(hass: HomeAssistant, core: Core) -> None:
             _LOGGER.info("Pushed firmware %s to panel %s", new.version, panel.name)
 
 
+_VIEW_HASS = {"hass": None}
+
+
+class OtaFileView(HomeAssistantView):
+    """Serves ONLY active-overlay bytes. No overlay → 503, never stale."""
+
+    requires_auth = False
+
+    _kind = ("", "")
+
+    async def get(self, request, **kwargs):
+        hass = _VIEW_HASS["hass"]
+        kind, name = self._kind
+        path = firmware_store.served_path(_current(hass), kind, name, "")
+        if not path or not Path(path).is_file():
+            return web.Response(status=503, text="No active verified firmware set")
+        return web.FileResponse(path)
+
+
+class DownloadFirmware(OtaFileView):
+    url = "/download_firmware"
+    name = "nspanel_core:ota:download_firmware"
+    _kind = ("firmware/sonoff", "firmware.bin")
+
+
+class DownloadDataFile(OtaFileView):
+    url = "/download_data_file"
+    name = "nspanel_core:ota:download_data_file"
+    _kind = ("firmware/sonoff", "data_file.bin")
+
+
+class ChecksumFirmware(OtaFileView):
+    url = "/checksum_firmware"
+    name = "nspanel_core:ota:checksum_firmware"
+    _kind = ("firmware/sonoff", "firmware.bin")
+
+    async def get(self, request, **kwargs):
+        hass = _VIEW_HASS["hass"]
+        kind, name = self._kind
+        path = firmware_store.served_path(_current(hass), kind, name, "")
+        if not path or not Path(path).is_file():
+            return web.Response(status=503, text="No active verified firmware set")
+        return web.Response(text=firmware_store.md5_of(path))
+
+
+class ChecksumDataFile(OtaFileView):
+    url = "/checksum_data_file"
+    name = "nspanel_core:ota:checksum_data_file"
+    _kind = ("firmware/sonoff", "data_file.bin")
+
+    async def get(self, request, **kwargs):
+        hass = _VIEW_HASS["hass"]
+        kind, name = self._kind
+        path = firmware_store.served_path(_current(hass), kind, name, "")
+        if not path or not Path(path).is_file():
+            return web.Response(status=503, text="No active verified firmware set")
+        return web.Response(text=firmware_store.md5_of(path))
+
+
+class DownloadTftEu(OtaFileView):
+    url = "/download_tft_eu"
+    name = "nspanel_core:ota:download_tft_eu"
+    _kind = ("tft", "gui.tft")
+
+
+class DownloadTftUs(OtaFileView):
+    url = "/download_tft_us"
+    name = "nspanel_core:ota:download_tft_us"
+    _kind = ("tft", "gui_us.tft")
+
+
 def _register_ota_views(hass: HomeAssistant, active) -> None:
-    from aiohttp import web
-
-    class OtaFileView(web.View):
-        """Serves ONLY active-overlay bytes. No overlay → 503, never stale."""
-
-        requires_auth = False
-
-        async def get(self, request):
-            kind, name = self._kind
-            data = _current(hass)
-            path = firmware_store.served_path(data, kind, name, "")
-            if not path or not Path(path).is_file():
-                return web.Response(status=503, text="No active verified firmware set")
-            return web.FileResponse(path)
-
-    class DownloadFirmware(OtaFileView):
-        url = "/download_firmware"
-        _kind = ("firmware/sonoff", "firmware.bin")
-
-    class DownloadDataFile(OtaFileView):
-        url = "/download_data_file"
-        _kind = ("firmware/sonoff", "data_file.bin")
-
-    class ChecksumFirmware(OtaFileView):
-        url = "/checksum_firmware"
-        _kind = ("firmware/sonoff", "firmware.bin")
-
-    class ChecksumDataFile(OtaFileView):
-        url = "/checksum_data_file"
-        _kind = ("firmware/sonoff", "data_file.bin")
-
-    class DownloadTftEu(OtaFileView):
-        url = "/download_tft_eu"
-        _kind = ("tft", "gui.tft")
-
-    class DownloadTftUs(OtaFileView):
-        url = "/download_tft_us"
-        _kind = ("tft", "gui_us.tft")
-
-    class _ChecksumMixin:
-        async def get(self, request):
-            kind, name = self._kind
-            data = _current(hass)
-            path = firmware_store.served_path(data, kind, name, "")
-            if not path or not Path(path).is_file():
-                return web.Response(status=503, text="No active verified firmware set")
-            return web.Response(text=firmware_store.md5_of(path))
-
-    for cls in (ChecksumFirmware, ChecksumDataFile):
-        cls.get = _ChecksumMixin.get
-
+    _VIEW_HASS["hass"] = hass
     for cls in (DownloadFirmware, DownloadDataFile, ChecksumFirmware,
                 ChecksumDataFile, DownloadTftEu, DownloadTftUs):
         hass.http.register_view(cls())
