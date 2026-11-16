@@ -1,18 +1,18 @@
 {
-  "version": "0.1.2",
-  "notes": "CUTOVER build: native fw v0.1.2 \u2014 the boot-crash fix (AP-path netif init) + the OTA self-confirm (the rollback loop is fixed). WiFi auto-recovers; MQTT once at nspanelcore.local.",
+  "version": "0.0.2",
+  "notes": "MIGRATION firmware: seeds the panel's existing settings (WiFi, MQTT, manager, buttons) into the NVS namespace the native IDF line reads \u2014 the bridge between the 0.0.x and 0.1.x lines. Also carries the hardened OTA (60s HTTP timeout, 5 attempts). After this firmware boots once, the panel can be updated to the native line WITHOUT losing its settings.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.2.bin",
-      "md5": "398379e8fded2f7fc1b2a59c3ca1d877"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-firmware.bin",
+      "md5": "adfd0a7f5ddbe130ce1fbdb467fb5071"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.2.bin",
-      "md5": "398379e8fded2f7fc1b2a59c3ca1d877"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-firmware.bin",
+      "md5": "adfd0a7f5ddbe130ce1fbdb467fb5071"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
