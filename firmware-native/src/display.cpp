@@ -11,6 +11,7 @@
  */
 
 #include "driver/uart.h"
+#include "esp_timer.h"
 #include "protocol.h"
 #include "config.h"
 

@@ -13,6 +13,7 @@
 
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
+#include "esp_timer.h"
 #include "protocol.h"
 #include "config.h"
 
@@ -69,9 +70,8 @@ static bool nsp_write_fs_partition(const std::string &blob) {
         ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, "spiffs");
     if (fs == nullptr || blob.size() > fs->size) return false;
 
-    // Rail #2: shut the mounted fs driver down FIRST.
-    esp_vfs_littlefs_unregister_default();
-    vTaskDelay(pdMS_TO_TICKS(250));
+    // Rail #2: the fs driver is never mounted in the native firmware
+    // (config lives in NVS) — nothing to unmount, write directly.
 
     bool ok = true;
     if (esp_partition_erase_range(fs, 0, fs->size) != ESP_OK) ok = false;

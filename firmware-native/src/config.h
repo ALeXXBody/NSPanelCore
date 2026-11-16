@@ -75,3 +75,7 @@ inline void nsp_config_set_md5s(const std::string &fw, const std::string &fs) {
     g_cfg.md5_data_file = fs;
     nsp_config_save();
 }
+
+/* Shared runtime globals (set once in app_main). */
+inline std::string g_mac;
+inline std::string g_ip;

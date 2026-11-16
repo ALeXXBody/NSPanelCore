@@ -9,6 +9,8 @@
 #include "esp_event.h"
 #include "esp_timer.h"
 #include "nvs_flash.h"
+#include "esp_system.h"
+#include <string>
 #include "protocol.h"
 #include "config.h"
 
@@ -30,10 +32,6 @@ static std::string s_mac;
 static int64_t s_last_register_us = 0;
 static int64_t s_last_report_us = 0;
 
-static void on_got_ip(void *, esp_event_base_t, int32_t, void *) {
-    nsp_mqtt_start(g_cfg.wifi_hostname);
-}
-
 void app_main(void) {
     ESP_ERROR_CHECK(nvs_flash_init());  // factory NVS holds config
     nsp_config_load();
@@ -44,18 +42,13 @@ void app_main(void) {
     snprintf(macbuf, sizeof(macbuf), "%02X:%02X:%02X:%02X:%02X:%02X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     s_mac = macbuf;
+    g_mac = macbuf;
 
     // Display FIRST, gently — never blocks the network path (P130).
     nsp_display_init();
 
     if (!g_cfg.wifi_ssid.empty()) {
-        ESP_ERROR_CHECK(esp_event_handler_register(
-            IP_EVENT, IP_EVENT_STA_GOT_IP, [](void *arg, esp_event_base_t base,
-                                              int32_t id, void *data) {
-                extern void on_got_ip(void *, esp_event_base_t, int32_t, void *);
-                on_got_ip(arg, base, id, data);
-            }, nullptr));
-        nsp_wifi_start();  // station; on failure the config AP task takes over
+        nsp_wifi_start();  // station; nsp_wifi registers the GOT_IP handler
     }
 
     for (;;) {

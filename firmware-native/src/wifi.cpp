@@ -29,10 +29,13 @@ static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *da
     }
 }
 
+extern void nsp_mqtt_start(const std::string &hostname);
+
 static void on_ip_event(void *arg, esp_event_base_t base, int32_t id, void *data) {
     ip_event_got_ip_t *ev = (ip_event_got_ip_t *)data;
     snprintf(s_ip, sizeof(s_ip), IPSTR, IP2STR(&ev->ip_info.ip));
     s_connected = true;
+    nsp_mqtt_start(g_cfg.wifi_hostname);
     esp_wifi_sta_get_ap_info(nullptr);  // triggers RSSI cache
     wifi_ap_record_t ap;
     if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) s_rssi = ap.rssi;
