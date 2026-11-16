@@ -59,7 +59,7 @@ def test_register_request_adopts_and_accepts(core):
         "md5_firmware": "a" * 32,
         "md5_data_file": "b" * 32,
         "md5_tft_file": "c" * 32,
-        "address": "192.168.50.23",
+        "address": "10.0.0.2",
     }
     assert core.handle_register_request(json.dumps(req)) is True
     panel = core.config.panels[0]
@@ -115,7 +115,7 @@ def test_status_report_adopts_version_and_telemetry(core):
     panel = core.handle_status_report(
         "DemoPanel",
         json.dumps({"version": "0.1.187", "rssi": -58, "temperature": "27.3",
-                    "heap_used_pct": 59, "ip": "192.168.50.23",
+                    "heap_used_pct": 59, "ip": "10.0.0.2",
                     "warnings": "No response from the display."}),
     )
     assert panel is not None
@@ -123,7 +123,7 @@ def test_status_report_adopts_version_and_telemetry(core):
     assert panel.rssi == -58
     assert panel.temperature == 27.3
     assert panel.heap_used_pct == 59
-    assert panel.ip == "192.168.50.23"
+    assert panel.ip == "10.0.0.2"
     assert panel.online is True
 
 
