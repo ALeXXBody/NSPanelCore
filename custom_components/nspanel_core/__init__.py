@@ -87,6 +87,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await mqtt.async_subscribe(hass, "nspanel/+/r2_state", on_relay_state),
     ]
     _register_ota_views(hass, active)
+    # The dashboard views resolve hass from the request's app (v1 pattern).
+    hass.http.app["hass"] = hass
 
     # P159: time/date/ampm publishing (v1 ScreensaverPage contract — the
     # panel's clock lives off these retained topics; every 60 s + at start)

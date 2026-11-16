@@ -24,8 +24,19 @@ _DASHBOARD_VERSION = "v0.1.0"
 _VIEW_HASS = {"hass": None, "core": None}
 
 
-def _core():
-    return _VIEW_HASS["core"]
+def _core_from_request(request):
+    """Resolve the core AT REQUEST TIME — a registration-time snapshot goes
+    stale (P170: the 'Core not ready' state)."""
+    hass = request.app["hass"]
+    return _core_from_hass(hass)
+
+
+def _core_from_hass(hass):
+    data = hass.data.get(DOMAIN) or {}
+    if not data:
+        return None
+    entry_id = next(iter(data))
+    return data[entry_id].get("core")
 
 
 _PAGE_HEAD = """<!DOCTYPE html><html><head><meta charset=utf-8>
@@ -50,8 +61,7 @@ currently-activated verified build (set: Home Assistant → device → configure
 """
 
 
-def _render_panels() -> str:
-    core = _core()
+def _render_panels(core) -> str:
     if core is None:
         return "<tr><td colspan=5>Core not ready</td></tr>"
     rows = []
@@ -113,9 +123,11 @@ class DashboardPage(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        core = _core_from_request(request)
+        _VIEW_HASS["core"] = core
         page = (
             _PAGE_HEAD.replace("__VERSION__", _DASHBOARD_VERSION)
-            + _render_panels()
+            + _render_panels(core)
             + "</table>"
             + (_PAGE_SCRIPT % URL_BASE)
             + "</body></html>"
@@ -131,7 +143,7 @@ class PanelAction(HomeAssistantView):
     requires_auth = True
 
     async def post(self, request, **kwargs):
-        core = _core()
+        core = _core_from_request(request)
         if core is None:
             return web.Response(text="Core not ready", status=503)
         panel_id = kwargs.get("panel_id", "")
@@ -163,8 +175,10 @@ class PanelAction(HomeAssistantView):
 
 def register_dashboard(hass: HomeAssistant) -> None:
     """Register static assets, the UI page, the action endpoint and the sidebar."""
+    # v1 pattern: the views resolve hass from the request's app.
+    hass.http.app["hass"] = hass
     _VIEW_HASS["hass"] = hass
-    _VIEW_HASS["core"] = _get_core(hass)
+    _VIEW_HASS["core"] = _core_from_hass(hass)
 
     async def _register() -> None:
         from homeassistant.components.frontend import async_remove_panel
@@ -201,9 +215,4 @@ def register_dashboard(hass: HomeAssistant) -> None:
     hass.async_create_task(_register())
 
 
-def _get_core(hass: HomeAssistant):
-    data = hass.data.get(DOMAIN) or {}
-    if not data:
-        return None
-    entry_id = next(iter(data))
-    return data[entry_id].get("core")
+

@@ -6,6 +6,7 @@ verification. Every setup-path change must keep this file green."""
 
 from __future__ import annotations
 
+import json
 from contextlib import ExitStack
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -60,6 +61,12 @@ def _apply_patches(stack: ExitStack, wire: "Wire | None" = None) -> "Wire | None
 
 class Wire:
     """Captures MQTT publishes + subscriptions, feeds messages to handlers."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
 
     def __init__(self):
         self.published: list[tuple[str, str, bool]] = []
@@ -239,3 +246,38 @@ async def test_setup_fails_gracefully_when_subscribe_raises(runtime):
     result = await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     assert result is False or result is None, "must fail without raising to the caller"
+
+
+async def test_dashboard_page_renders_registered_panels(runtime):
+    """P170: the dashboard page must reflect the LIVE core at request time
+    — a panel registered AFTER setup appears in the rendered HTML."""
+    hass, stub_http, stack = runtime
+    wire = Wire()
+    wire = _apply_patches(stack, wire)
+    stack.enter_context(patch(
+        "homeassistant.components.mqtt.async_wait_for_mqtt_client", new=AsyncMock()
+    ))
+    entry = _register_entry(hass)
+
+    with wire:
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        await wire.feed("nspanel/mqttmanager/command", json.dumps({
+            "command": "register_request",
+            "mac_origin": "aa:bb:cc:dd:ee:09",
+            "friendly_name": "RenderPanel",
+            "version": "0.1.1",
+        }))
+        await hass.async_block_till_done()
+
+    import custom_components.nspanel_core.dashboard as dash
+    page_view = dash.DashboardPage()
+    core = hass.data[DOMAIN][entry.entry_id]["core"]
+    core.config.panels[0].accepted = True
+
+    req = MagicMock()
+    req.app = {"hass": hass}
+    resp = await page_view.get(req)
+    body = resp.text
+    assert "RenderPanel" in body, "the registered panel must render on the page"
+    assert "0.1.1" in body
