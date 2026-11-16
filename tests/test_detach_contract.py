@@ -244,7 +244,7 @@ def test_stomp_log_topics_mac_safe():
 
 def test_v2_app_has_entity_platform_parity():
     """P147: installing v2 on the live HA must not lose sensors/switches."""
-    v2 = ROOT / "rewrite" / "nspanel_core_v2"
+    v2 = INT   # single-tree: the rewrite IS the component
     assert (v2 / "sensor.py").is_file()
     assert (v2 / "switch.py").is_file()
     sensor = (v2 / "sensor.py").read_text()
@@ -253,5 +253,5 @@ def test_v2_app_has_entity_platform_parity():
         assert f'"{kind}"' in (v2 / "platforms.py").read_text()
     assert "RelaySwitch" in switch
     assert "async_turn_on" in (v2 / "platforms.py").read_text()
-    src = _py(INT / "__init__.py") if False else (ROOT / "rewrite" / "nspanel_core_v2" / "__init__.py").read_text()
+    src = _py(v2 / "__init__.py")
     assert '["sensor", "switch"]' in src

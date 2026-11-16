@@ -6,8 +6,8 @@ Two independent release trains. Version numbers never collide across them:
 |---|---|---|---|
 | **App** (HA integration) | `vX.Y.Z` | v0.0.1 (epoch baseline) | GitHub release `app-*` + HACS |
 | **Panel firmware** (Arduino line, live) | `0.0.Y` | v0.0.1 (epoch baseline) | evergreen `firmware-latest` + manifest.json |
-| **Panel firmware** (native line) | `0.1.Y` | fw-v0.1.0-alpha | GitHub pre-release `fw-*` |
-| **App** (native-line rewrite) | `0.1.Y` | app-v0.1.0-alpha (pairs with fw-v0.1.0 — the rewrite ships as a PAIR) | GitHub pre-release `app-*` |
+| **Panel firmware** (current line) | `0.1.Y` | fw-v0.1.0 (pairs with app-v0.1.0) | GitHub pre-release `fw-*` |
+| **App** (current line) | `0.1.Y` | app-v0.1.0 (pairs with fw-v0.1.0) | GitHub release `app-*` |
 
 Rules:
 1. Every firmware release tag carries the `fw-` prefix (pre-releases use

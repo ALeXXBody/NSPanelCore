@@ -13,7 +13,7 @@ import sys
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-V2 = ROOT / "rewrite" / "nspanel_core_v2"
+V2 = ROOT / "custom_components" / "nspanel_core"
 
 
 def _pkg():
