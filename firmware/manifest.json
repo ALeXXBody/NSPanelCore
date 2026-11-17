@@ -4,7 +4,7 @@
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "http://192.168.50.200:8000/sonoff-fw",
-      "md5": "0840a7cfbe47dbe4dafdf90d4b6cbc65"
+      "md5": "9172cdae01d27eb61fd10dcb526474c4"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "http://192.168.50.200:8000/sonoff-data",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "http://192.168.50.200:8000/custom-fw",
-      "md5": "0840a7cfbe47dbe4dafdf90d4b6cbc65"
+      "md5": "9172cdae01d27eb61fd10dcb526474c4"
     },
     "firmware/custom/data_file.bin": {
       "url": "http://192.168.50.200:8000/custom-data",
@@ -20,11 +20,11 @@
     },
     "tft/gui.tft": {
       "url": "http://192.168.50.200:8000/tft_eu",
-      "md5": "6db1a04d5ba71d3aa1cabb6ad167c8e8"
+      "md5": "f2539275ad4b1209e027d1b66694bd27"
     },
     "tft/gui_us.tft": {
       "url": "http://192.168.50.200:8000/tft_eu",
-      "md5": "6db1a04d5ba71d3aa1cabb6ad167c8e8"
+      "md5": "f2539275ad4b1209e027d1b66694bd27"
     }
   }
 }
