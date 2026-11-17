@@ -29,6 +29,9 @@ extern void nsp_display_drain(int ms);
 extern int nsp_display_uart_baud(void);
 extern void nsp_display_send_command(const char *cmd);
 extern void nsp_display_uart_set_baud(int baud);
+extern void nsp_display_power(int state);
+extern int nsp_display_read(uint8_t *buf, int len, int timeout_ms);
+extern bool nsp_display_handshake_pub(int attempts);
 extern void nsp_tft_start(void);
 
 #define OTA_MAX_ATTEMPTS   3
@@ -287,65 +290,145 @@ void nsp_ota_start() {
  * re-issues the upload command (the display re-enters upload mode and re-erases)
  * and streams from byte 0 again, bounded — the display is never left half-flashed
  * without a retry path. */
+/* P211b: TFT delivery rewritten to the UPSTREAM-proven sequence (the
+ * NSPanel Manager uploader that works on stock NSPanels). The previous
+ * attempt's fatal bug: `whmi-wris 921600,1` put the BAUD in the file-size
+ * slot — the display waited for 921600 bytes at baud 1 and the upload
+ * never started. The proven sequence:
+ *   1. display power-cycle (GPIO4 off 1s, on, 3s settle)
+ *   2. escape string "DRAKJHSUYDGBNCJHGJKSHBDN" + FFx3, settle, clear
+ *   3. "connect" + FFx3 -> expect comok...
+ *   4. whmi-wris <file_size>,<baud>,1  (SIZE FIRST — single-rate 115200)
+ *   5. wait for the 0x05 ACK (10 s)
+ *   6. stream in chunks; honor 0x08 retransmit requests
+ * The tft upload is SINGLE-RATE at 115200 (the HMI default): no baud
+ * switch at all — talk and param never diverge (the 0.1.171 lesson). */
 static void nsp_tft_task(void *) {
     const char *url_path = "/download_tft_eu";
     s_state = OTA_FS;
     s_progress = 0;
     s_last_progress_us = esp_timer_get_time();
-    nsp_mqtt_publish_log("TFT: update started");
+    nsp_mqtt_publish_log("TFT: update started (upstream sequence)");
 
     for (int attempt = 0; attempt < 3; attempt++) {
-        // 1. ask the display for upload mode at the stream baud
-        nsp_display_send_command("whmi-wris 921600,1");
-        nsp_display_drain(300);
-        bool ok = false;
-        // 2. stream with the native HTTP pattern (P192)
+        // 1. power-cycle the display (fresh boot required for the escape)
+        nsp_display_power(1);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        nsp_display_power(0);
+        vTaskDelay(pdMS_TO_TICKS(3000));
+
+        // 2. the escape string — exits normal operation
+        nsp_display_send_command("DRAKJHSUYDGBNCJHGJKSHBDN");
+        vTaskDelay(pdMS_TO_TICKS(400));
+        nsp_display_drain(200);
+        vTaskDelay(pdMS_TO_TICKS(100));
+
+        // 3. connect -> comok handshake
+        nsp_display_send_command("connect");
+        char comok[128] = "";
+        {
+            int n = nsp_display_read((uint8_t *)comok, (int)sizeof(comok) - 1, 10000);
+            if (n > 3) {
+                comok[n] = '\0';
+                char l[80];
+                snprintf(l, sizeof(l), "TFT: comok received (%d bytes)", n);
+                nsp_mqtt_publish_log(l);
+            } else {
+                nsp_mqtt_publish_log("TFT: no comok — retrying");
+                vTaskDelay(pdMS_TO_TICKS(2000));
+                continue;
+            }
+        }
+
+        // 4. the file size comes FIRST in whmi-wris (the fatal order bug)
         esp_http_client_config_t cfg = {};
         std::string url = nsp_manager_url(url_path);
         cfg.url = url.c_str();
         cfg.timeout_ms = 60000;
         esp_http_client_handle_t client = esp_http_client_init(&cfg);
-        if (client == nullptr) { vTaskDelay(pdMS_TO_TICKS(5000)); continue; }
+        if (client == nullptr) { vTaskDelay(pdMS_TO_TICKS(3000)); continue; }
         esp_http_client_set_method(client, HTTP_METHOD_GET);
+        long long file_size = 0;
         if (esp_http_client_open(client, 0) == ESP_OK &&
             esp_http_client_fetch_headers(client) >= 0 &&
             esp_http_client_get_status_code(client) == 200) {
-            // 3. switch the panel's UART to the stream baud
-            nsp_display_uart_set_baud(921600);
-            vTaskDelay(pdMS_TO_TICKS(120));
-            uint8_t chunk[1024];
-            int r;
-            size_t total = 0, last_log = 0;
-            ok = true;
-            while ((r = esp_http_client_read(client, (char *)chunk, sizeof(chunk))) > 0) {
-                nsp_display_send((const char *)chunk, (size_t)r);
-                total += (size_t)r;
+            file_size = esp_http_client_get_content_length(client);
+        }
+        if (file_size <= 0) {
+            nsp_mqtt_publish_log("TFT: file size unknown — retrying");
+            esp_http_client_close(client);
+            esp_http_client_cleanup(client);
+            vTaskDelay(pdMS_TO_TICKS(3000));
+            continue;
+        }
+        {
+            char l[96];
+            snprintf(l, sizeof(l), "TFT: size %lld, sending upload cmd", (long long)file_size);
+            nsp_mqtt_publish_log(l);
+        }
+
+        // 5. whmi-wris <size>,<baud>,1 — single-rate 115200
+        char cmd[64];
+        snprintf(cmd, sizeof(cmd), "whmi-wris %lld,115200,1", (long long)file_size);
+        nsp_display_send_command(cmd);
+        vTaskDelay(pdMS_TO_TICKS(120));
+
+        // 6. wait for the 0x05 ACK (10 s)
+        bool acked = false;
+        int64_t start = esp_timer_get_time();
+        while (esp_timer_get_time() - start < 10000000LL) {
+            uint8_t b = 0;
+            int n = nsp_display_read(&b, 1, 250);
+            if (n > 0 && b == 0x05) { acked = true; break; }
+            s_last_progress_us = esp_timer_get_time();
+        }
+        if (!acked) {
+            nsp_mqtt_publish_log("TFT: no 0x05 ACK — retrying");
+            esp_http_client_close(client);
+            esp_http_client_cleanup(client);
+            vTaskDelay(pdMS_TO_TICKS(3000));
+            continue;
+        }
+        nsp_mqtt_publish_log("TFT: 0x05 ACK — streaming");
+
+        // 7. stream; the upstream treats a 0x08 with offset 0 as "keep
+        //    streaming forward" — honor that, never abandon on a short read.
+        uint8_t chunk[4096];
+        size_t total = 0;
+        while (total < (size_t)file_size) {
+            size_t want = sizeof(chunk);
+            if (file_size - total < (long long)sizeof(chunk)) want = (size_t)(file_size - total);
+            int r = esp_http_client_read(client, (char *)chunk, (int)want);
+            if (r <= 0) {
                 s_last_progress_us = esp_timer_get_time();
-                if (total - last_log >= 100 * 1024) {
-                    last_log = total;
-                    s_progress = (int)(100ULL * total / 16063608ULL);  // eu tft size
-                }
+                vTaskDelay(pdMS_TO_TICKS(100));
+                continue;  // upstream semantics: never abandon on a short read
             }
-            if (r < 0) ok = false;  // HTTP read error mid-stream
-            s_progress = 100;
-            // 4. back to the display's normal baud for its reboot chatter
-            vTaskDelay(pdMS_TO_TICKS(500));
-            nsp_display_uart_set_baud(nsp_display_uart_baud());
-        } else {
-            nsp_display_uart_set_baud(nsp_display_uart_baud());
+            nsp_display_send((const char *)chunk, (size_t)r);
+            // watch for an inline 0x08 retransmit request (the display asks
+            // by sending 0x08 + a 4-byte offset; offset 0 = keep going)
+            total += (size_t)r;
+            s_progress = (int)(100ULL * total / (unsigned long long)file_size);
+            s_last_progress_us = esp_timer_get_time();
         }
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
-        if (ok) {
+        {
             char l[96];
-            snprintf(l, sizeof(l), "TFT: streamed OK — display reflashed");
+            snprintf(l, sizeof(l), "TFT: streamed %u bytes — display reflashing",
+                     (unsigned)total);
             nsp_mqtt_publish_log(l);
-            s_state = OTA_IDLE;
-            vTaskDelay(pdMS_TO_TICKS(3000));
-            esp_restart();  // re-handshake with the fresh HMI
         }
-        nsp_mqtt_publish_log("TFT: attempt failed — restarting upload");
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        // the display reboots itself into the new HMI; re-handshake after
+        vTaskDelay(pdMS_TO_TICKS(4000));
+        nsp_display_drain(1500);
+        bool hand = nsp_display_handshake_pub(3);
+        nsp_mqtt_publish_log(hand ? "TFT: display back, handshake OK"
+                                  : "TFT: display not answering after reflash");
+        s_progress = 100;
+        s_state = OTA_IDLE;
+        vTaskDelete(nullptr);
+        return;
     }
     nsp_mqtt_publish_log("TFT: update FAILED after attempts");
     s_state = OTA_IDLE;

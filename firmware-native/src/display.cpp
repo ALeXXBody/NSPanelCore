@@ -234,7 +234,24 @@ void nsp_display_relay(int relay, bool state) {
 
 int nsp_display_uart_baud(void) { return DISPLAY_BAUD; }
 
-/* P210: the TFT streamer needs the UART baud changes from ota.cpp. */
+/* P211b: the TFT streamer needs the UART baud changes from ota.cpp. */
 void nsp_display_uart_set_baud(int baud) {
     uart_set_baudrate(DISPLAY_UART, baud);
+}
+
+/* P211b: display power control for the upload sequence (the proven
+ * upstream flow power-cycles the display before the escape string). */
+void nsp_display_power(int state) {
+    // P122 lesson: HIGH = OFF on this board (power-cycling browns out weak
+    // supplies at boot — but in the UPLOAD flow the display is explicitly
+    // restarted, which is the upstream-proven requirement).
+    gpio_set_level(DISPLAY_POWER_PIN, state ? 1 : 0);
+}
+
+/* P211b: exports for the TFT uploader (ota.cpp) — single access point. */
+int nsp_display_read(uint8_t *buf, int len, int timeout_ms) {
+    return uart_read_bytes(DISPLAY_UART, buf, (size_t)len, pdMS_TO_TICKS(timeout_ms));
+}
+bool nsp_display_handshake_pub(int attempts) {
+    return nsp_display_handshake(attempts);
 }
