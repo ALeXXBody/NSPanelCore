@@ -36,11 +36,14 @@ extern void nsp_relay_init(void);
 extern void nsp_button_scan(void);  // file scope — an in-body
     // declaration inside extern "C" app_main would get C linkage (P160)
 extern float nsp_temperature(void);
+extern void nsp_ota_start(void);  // P187: FILE scope — the extern-"C"-
+    // inside-app_main linkage trap (third time — always declare at file scope)
 extern bool nsp_web_start(bool ap_mode);  // P184: FILE scope — the
     // extern-"C"-inside-app_main linkage trap (hit again, P160 lesson)
 
 static std::string s_mac;
 static int64_t s_last_register_us = 0;
+static int64_t s_last_otacheck_us = 0;
 static int64_t s_last_report_us = 0;
 
 void nsp_setup_ap_start(void);  // declared at FILE scope — inside the
@@ -103,6 +106,14 @@ extern "C" void app_main(void) {
                 extern void nsp_mqtt_send_register(void);
                 nsp_mqtt_send_register();
                 s_last_register_us = now;
+            }
+            // P187: SELF-DRIVEN update check — the panel fetches the manager's
+            // checksum itself every 5 min (bounded retry inside the task).
+            // No MQTT command dependency: a flapping link cannot strand updates.
+            if (nsp_wifi_connected() && !g_cfg.manager_address.empty() &&
+                now - s_last_otacheck_us > (int64_t)REREGISTRATION_PERIOD_MS * 1000) {
+                nsp_ota_start();
+                s_last_otacheck_us = now;
             }
             // Status report every 30s, version included
             if (now - s_last_report_us > (int64_t)STATUS_REPORT_PERIOD_MS * 1000) {

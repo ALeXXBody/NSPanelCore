@@ -154,7 +154,6 @@ static bool nsp_write_fs_partition(const std::string &checksum) {
 
 /* Rail #1: firmware first, REBOOT, fs later under the new firmware. */
 static void nsp_ota_fw_task(void *) {
-    s_state = OTA_FW;
     s_progress = 0;
     s_last_progress_us = esp_timer_get_time();
     nsp_mqtt_publish_log("OTA: task started");
@@ -185,7 +184,10 @@ static void nsp_ota_fw_task(void *) {
     }
 
     if (g_cfg.md5_firmware.compare(0, 32, checksum, 0, 32) == 0) {
-        // same firmware — skip the app flash, fs may still be needed (below)
+        // P187: the fetch WORKED and the panel is current — say it on the wire
+        char l[96];
+        snprintf(l, sizeof(l), "OTA: up to date (%.8s)", checksum.c_str());
+        nsp_mqtt_publish_log(l);
     } else {
         bool flashed = false;
         for (int attempt = 0; attempt < OTA_MAX_ATTEMPTS && !flashed; attempt++) {
@@ -251,8 +253,23 @@ static void nsp_ota_fw_task(void *) {
 }
 
 void nsp_ota_start() {
-    if (s_state != OTA_IDLE) return;  // re-entrancy guard (P175)
-    xTaskCreatePinnedToCore(nsp_ota_fw_task, "ota", 8192, nullptr, 1, nullptr, 0);
+    if (s_state != OTA_IDLE) {
+        // P187 fail-safe: a silent guard rejection cost a day of diagnosis —
+        // busy states are now VISIBLE.
+        char l[80];
+        snprintf(l, sizeof(l), "OTA: request ignored, state=%d (busy)", (int)s_state);
+        nsp_mqtt_publish_log(l);
+        return;
+    }
+    s_state = OTA_FW;  // claim BEFORE spawn: no race window
+    BaseType_t ok = xTaskCreatePinnedToCore(nsp_ota_fw_task, "ota", 8192, nullptr, 1, nullptr, 0);
+    if (ok != pdPASS) {
+        // P187 fail-safe: spawn failures were SILENT — now logged.
+        nsp_mqtt_publish_log("OTA: task spawn FAILED (memory?)");
+        s_state = OTA_IDLE;
+        return;
+    }
+    nsp_mqtt_publish_log("OTA: task started");
 }
 
 /* Rail #4: watchdog — call from the 1s housekeeping loop. */
