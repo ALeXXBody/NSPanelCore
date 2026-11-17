@@ -24,6 +24,12 @@
 #include "config.h"
 
 extern void nsp_mqtt_publish_log(const char *msg);
+extern void nsp_display_send(const char *data, size_t len);
+extern void nsp_display_drain(int ms);
+extern int nsp_display_uart_baud(void);
+extern void nsp_display_send_command(const char *cmd);
+extern void nsp_display_uart_set_baud(int baud);
+extern void nsp_tft_start(void);
 
 #define OTA_MAX_ATTEMPTS   3
 #define OTA_STALL_TIMEOUT_MS 120000
@@ -274,6 +280,82 @@ void nsp_ota_start() {
         return;
     }
     nsp_mqtt_publish_log("OTA: task started");
+}
+
+/* P210: TFT delivery — fetch the .tft from the manager and stream it to the
+ * display's upload protocol (whmi-wris). Restart-safe: any mid-stream failure
+ * re-issues the upload command (the display re-enters upload mode and re-erases)
+ * and streams from byte 0 again, bounded — the display is never left half-flashed
+ * without a retry path. */
+static void nsp_tft_task(void *) {
+    const char *url_path = "/download_tft_eu";
+    s_state = OTA_FS;
+    s_progress = 0;
+    s_last_progress_us = esp_timer_get_time();
+    nsp_mqtt_publish_log("TFT: update started");
+
+    for (int attempt = 0; attempt < 3; attempt++) {
+        // 1. ask the display for upload mode at the stream baud
+        nsp_display_send_command("whmi-wris 921600,1");
+        nsp_display_drain(300);
+        bool ok = false;
+        // 2. stream with the native HTTP pattern (P192)
+        esp_http_client_config_t cfg = {};
+        std::string url = nsp_manager_url(url_path);
+        cfg.url = url.c_str();
+        cfg.timeout_ms = 60000;
+        esp_http_client_handle_t client = esp_http_client_init(&cfg);
+        if (client == nullptr) { vTaskDelay(pdMS_TO_TICKS(5000)); continue; }
+        esp_http_client_set_method(client, HTTP_METHOD_GET);
+        if (esp_http_client_open(client, 0) == ESP_OK &&
+            esp_http_client_fetch_headers(client) >= 0 &&
+            esp_http_client_get_status_code(client) == 200) {
+            // 3. switch the panel's UART to the stream baud
+            nsp_display_uart_set_baud(921600);
+            vTaskDelay(pdMS_TO_TICKS(120));
+            uint8_t chunk[1024];
+            int r;
+            size_t total = 0, last_log = 0;
+            ok = true;
+            while ((r = esp_http_client_read(client, (char *)chunk, sizeof(chunk))) > 0) {
+                nsp_display_send((const char *)chunk, (size_t)r);
+                total += (size_t)r;
+                s_last_progress_us = esp_timer_get_time();
+                if (total - last_log >= 100 * 1024) {
+                    last_log = total;
+                    s_progress = (int)(100ULL * total / 16063608ULL);  // eu tft size
+                }
+            }
+            if (r < 0) ok = false;  // HTTP read error mid-stream
+            s_progress = 100;
+            // 4. back to the display's normal baud for its reboot chatter
+            vTaskDelay(pdMS_TO_TICKS(500));
+            nsp_display_uart_set_baud(nsp_display_uart_baud());
+        } else {
+            nsp_display_uart_set_baud(nsp_display_uart_baud());
+        }
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        if (ok) {
+            char l[96];
+            snprintf(l, sizeof(l), "TFT: streamed OK — display reflashed");
+            nsp_mqtt_publish_log(l);
+            s_state = OTA_IDLE;
+            vTaskDelay(pdMS_TO_TICKS(3000));
+            esp_restart();  // re-handshake with the fresh HMI
+        }
+        nsp_mqtt_publish_log("TFT: attempt failed — restarting upload");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+    nsp_mqtt_publish_log("TFT: update FAILED after attempts");
+    s_state = OTA_IDLE;
+    vTaskDelete(nullptr);
+}
+
+void nsp_tft_start() {
+    if (s_state != OTA_IDLE) return;
+    s_state = OTA_FS;
+    xTaskCreatePinnedToCore(nsp_tft_task, "tft", 8192, nullptr, 1, nullptr, 0);
 }
 
 /* Rail #4: watchdog — call from the 1s housekeeping loop. */

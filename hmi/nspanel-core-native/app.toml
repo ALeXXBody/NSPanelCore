@@ -6,10 +6,25 @@ rotation = 270
 encoding = "iso-8859-1"
 pages = [
     "page0",
+    "screensaver",
+    "home",
+    "mini",
+    "room",
+    "spare",
+    "scenes",
 ]
 pictures = [
     "splash_boot",
+    "bg_home",
+    "bg_plain",
+    "bg_room",
+    "bg_scenes",
+    "btn_off",
+    "btn_on",
+    "btn_room",
+    "btn_scenes",
 ]
 fonts = [
     "NotoSans24",
+    "NotoSans64",
 ]

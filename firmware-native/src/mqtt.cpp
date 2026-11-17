@@ -112,7 +112,8 @@ void nsp_mqtt_handle_command(const std::string &payload) {
     } else if (payload.find(CMD_FIRMWARE_UPDATE) != std::string::npos) {
         nsp_ota_start();
     } else if (payload.find(CMD_TFT_UPDATE) != std::string::npos) {
-        // TFT streaming handled by the display module (baked-in offset guard)
+        extern void nsp_tft_start(void);  // P210: real OTA TFT delivery
+        nsp_tft_start();
     }
 }
 

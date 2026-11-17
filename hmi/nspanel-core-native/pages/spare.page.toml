@@ -1,0 +1,16 @@
+[page]
+name = "spare"
+type = "page"
+x = 0
+y = 0
+w = 480
+h = 320
+
+[[component]]
+name = "bg"
+type = "picture"
+x = 0
+y = 0
+w = 480
+h = 320
+pic = "bg_plain"

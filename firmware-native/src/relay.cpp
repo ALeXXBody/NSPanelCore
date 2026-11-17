@@ -65,6 +65,8 @@ void nsp_relay_set(int relay, bool state) {
     gpio_set_level((gpio_num_t)nsp_relay_gpio(relay), state ? 1 : 0);
     if (relay == 1) s_relay1 = state; else s_relay2 = state;
     nsp_mqtt_publish_relay_state(map_relay(relay) == relay ? relay : relay, state);
+    extern void nsp_display_relay(int relay, bool state);  // P210: buttons follow
+    nsp_display_relay(relay, state);
 }
 
 /* Handle an incoming r{N}_cmd payload ("1"/"0"). */
@@ -107,4 +109,10 @@ void nsp_button_scan(void) {
         }
         s_btn2_state = b2;
     }
+}
+
+/* P210: the display's touch buttons toggle relays directly. */
+extern "C" void nsp_relay_toggle_pub(int relay) {
+    bool new_state = !nsp_relay_state(relay);
+    nsp_relay_set(relay, new_state);
 }

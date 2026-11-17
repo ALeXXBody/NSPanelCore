@@ -37,7 +37,7 @@ const char *nsp_display_warning(void) {
     return s_display_ready ? "" : "No response from the display.";
 }
 
-static void nsp_display_send(const char *data, size_t len) {
+void nsp_display_send(const char *data, size_t len) {  // P210: shared with the TFT streamer
     uart_write_bytes(DISPLAY_UART, data, len);
 }
 
@@ -46,7 +46,7 @@ void nsp_display_send_command(const char *cmd) {
     nsp_display_send(END_SEQ, 3);
 }
 
-static void nsp_display_drain(int ms) {
+void nsp_display_drain(int ms) {  // P210: shared
     uint8_t buf[64];
     int64_t start = esp_timer_get_time();
     while (esp_timer_get_time() - start < (int64_t)ms * 1000) {
@@ -125,7 +125,7 @@ void nsp_display_start_tft_update(int new_baud) {
  * Touch events arrive as 0x65 <page> <component> <event> FF FF FF. */
 
 static const char *SCREENSAVER_PAGE = "screensaver";
-static const char *SCREENSAVER_MINIMAL_PAGE = "screensaver_minimal";
+static const char *SCREENSAVER_MINIMAL_PAGE = "mini";
 
 void nsp_display_show_screensaver(void) {
     if (!s_display_ready) return;
@@ -157,17 +157,27 @@ void nsp_display_set_ampm(const std::string &ampm_str) {
 /* Touch listener: decode 0x65 events, wake the screen on touch. */
 void nsp_display_touch_task(void *);
 
+extern "C" void nsp_relay_toggle_pub(int relay);  // P210: file scope (P160 rule)
 void nsp_display_touch_task_start(void) {
     xTaskCreatePinnedToCore(nsp_display_touch_task, "touch", 4096, nullptr, 0, nullptr, 0);
 }
 
-/* HMI map (v1 TftDefines parity) */
+/* HMI map — the authored NSPanel Core UI (P210, component ids verified by
+ * decompiling the compiled TFT: page2=home, page4=room, page6=scenes). */
 #define HMI_HOME_PAGE_ID 2
 #define HMI_ROOM_PAGE_ID 4
 #define HMI_SCENES_PAGE_ID 6
-#define HMI_COMPONENT_ROOM_SWITCH 10
-#define HMI_COMPONENT_ROOM_BUTTON 5
-#define HMI_COMPONENT_SCENES_BUTTON 17
+/* home: 1=bg, 2=rel1, 3=rel2, 4=room hotspot, 6=scenes hotspot */
+#define HMI_HOME_REL1 2
+#define HMI_HOME_REL2 3
+#define HMI_HOME_ROOM 4
+#define HMI_HOME_SCENES 6
+/* room: 1=bg, 2=rel1, 3=rel2, 4=back hotspot */
+#define HMI_ROOM_REL1 2
+#define HMI_ROOM_REL2 3
+#define HMI_ROOM_BACK 4
+/* scenes: 1=bg, 2=back hotspot */
+#define HMI_SCENES_BACK 2
 
 void nsp_display_touch_task(void *) {
     /* P184: decode extracted to touch_decode.cpp (HOST-UNIT-TESTED) —
@@ -181,19 +191,40 @@ void nsp_display_touch_task(void *) {
             bool pressed = (event == 1);
             if (pressed) {
                 // Any press wakes the panel from the screensaver to home.
-                std::string wake = "page home";
-                nsp_display_send_command(wake.c_str());
-            } else if (page == HMI_HOME_PAGE_ID) {
-                // v1 HomePage dispatch — navigation (config-free parts)
-                if (component == HMI_COMPONENT_ROOM_BUTTON ||
-                    component == HMI_COMPONENT_ROOM_SWITCH) {
-                    nsp_display_send_command("page Room");
-                } else if (component == HMI_COMPONENT_SCENES_BUTTON) {
-                    nsp_display_send_command("page Scenes");
+                nsp_display_send_command("page home");
+            } else if (event == 0) {  // releases act (P210)
+                if (page == HMI_HOME_PAGE_ID) {
+                    if (component == HMI_HOME_REL1) nsp_relay_toggle_pub(1);
+                    else if (component == HMI_HOME_REL2) nsp_relay_toggle_pub(2);
+                    else if (component == HMI_HOME_ROOM) nsp_display_send_command("page room");
+                    else if (component == HMI_HOME_SCENES) nsp_display_send_command("page scenes");
+                } else if (page == HMI_ROOM_PAGE_ID) {
+                    if (component == HMI_ROOM_REL1) nsp_relay_toggle_pub(1);
+                    else if (component == HMI_ROOM_REL2) nsp_relay_toggle_pub(2);
+                    else if (component == HMI_ROOM_BACK) nsp_display_send_command("page home");
+                } else if (page == HMI_SCENES_PAGE_ID) {
+                    if (component == HMI_SCENES_BACK) nsp_display_send_command("page home");
                 }
             }
             extern void nsp_mqtt_publish_touch(int page, int component, int event);
             nsp_mqtt_publish_touch(page, component, event);
         }
     }
+}
+
+/* P210: keep the display buttons in step with the relays (dual-state val). */
+void nsp_display_relay(int relay, bool state) {
+    if (!nsp_display_ready()) return;
+    char cmd[64];
+    snprintf(cmd, sizeof(cmd), "home.rel%d.val=%d", relay, state ? 1 : 0);
+    nsp_display_send_command(cmd);
+    snprintf(cmd, sizeof(cmd), "room.rel%d.val=%d", relay, state ? 1 : 0);
+    nsp_display_send_command(cmd);
+}
+
+int nsp_display_uart_baud(void) { return DISPLAY_BAUD; }
+
+/* P210: the TFT streamer needs the UART baud changes from ota.cpp. */
+void nsp_display_uart_set_baud(int baud) {
+    uart_set_baudrate(DISPLAY_UART, baud);
 }
