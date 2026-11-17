@@ -31,6 +31,8 @@
 
 static volatile bool s_display_ready = false;
 static char s_warnings[64] = "";
+void nsp_display_show_screensaver(void);  // P211: defined below (file scope, P160 rule)
+void nsp_display_relay(int relay, bool state);  // P211
 
 bool nsp_display_ready(void) { return s_display_ready; }
 const char *nsp_display_warning(void) {
@@ -94,6 +96,14 @@ void nsp_display_init(void) {
         s_display_ready = false;
         snprintf(s_warnings, sizeof(s_warnings), "No response from the display.");
         // Continue WITHOUT the display — WiFi/MQTT/sensors stay alive (P130).
+    } else {
+        /* P211: navigate OFF the splash into the screensaver — the authored
+         * splash has no auto-page code, so without this the display sits on
+         * a static image forever (the user's report after the TFT update). */
+        nsp_display_show_screensaver();
+        extern int nsp_relay_state(int relay);
+        nsp_display_relay(1, nsp_relay_state(1));
+        nsp_display_relay(2, nsp_relay_state(2));
     }
 }
 
