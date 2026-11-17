@@ -30,6 +30,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if "mqtt" not in hass.config.components:
         raise ConfigEntryNotReady("The MQTT integration is required")
 
+    # P208#11: single-instance guard — two entries both answer
+    # nspanel/mqttmanager/command and the panels adopt alternating
+    # manager addresses every 5 minutes (the accept-flicker symptom).
+    existing = hass.data.get(DOMAIN)
+    if existing:
+        _LOGGER.error(
+            "NSPanel Core is already set up (entry %s); refusing a second "
+            "instance — two managers answering register requests makes the "
+            "panels flip between manager addresses",
+            list(existing.keys()),
+        )
+        raise ConfigEntryNotReady("NSPanel Core is already configured")
+
     manager = NSPanelCoreManager(hass, entry)
     await manager.async_start()
 

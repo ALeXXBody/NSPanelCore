@@ -37,11 +37,46 @@ static void nsp_mqtt_connected(void *handler_args, esp_event_base_t base,
     nsp_mqtt_send_register(s_mqtt);
 }
 
+/* P208#24: fragmented payloads — esp-mqtt delivers large messages in
+ * multiple DATA events; a single-event payload truncated commands. */
+static std::string s_frag_topic, s_frag_data;
+static bool s_frag_active = false;
+
+void nsp_mqtt_dispatch(const std::string &topic, const std::string &payload);
+
 static void nsp_mqtt_data(void *handler_args, esp_event_base_t base,
                           int32_t event_id, void *event_data) {
     esp_mqtt_event_handle_t ev = (esp_mqtt_event_handle_t)event_data;
-    std::string topic(ev->topic, ev->topic_len);
+    std::string topic(ev->topic_len ? ev->topic : "", ev->topic_len);
+    if (ev->current_data_offset == 0 && ev->total_data_len > ev->data_len) {
+        s_frag_topic = topic;
+        s_frag_data.assign(ev->data, ev->data_len);
+        s_frag_active = true;
+        return;  // first fragment of a fragmented message
+    }
+    if (s_frag_active) {
+        if (topic != s_frag_topic) { s_frag_active = false; return; }
+        if (ev->current_data_offset + ev->data_len < ev->total_data_len) {
+            s_frag_data.append(ev->data, ev->data_len);
+            return;  // still fragmenting
+        }
+        s_frag_data.append(ev->data, ev->data_len);
+        topic = s_frag_topic;
+        std::string payload = s_frag_data;
+        s_frag_active = false;
+        s_frag_data.clear();
+        /* fall through to dispatch with the assembled payload */
+        std::string assembled = payload;
+        payload.swap(assembled);
+        extern void nsp_mqtt_dispatch(const std::string &topic, const std::string &payload);
+        nsp_mqtt_dispatch(topic, payload);
+        return;
+    }
     std::string payload(ev->data, ev->data_len);
+    nsp_mqtt_dispatch(topic, payload);
+}
+
+void nsp_mqtt_dispatch(const std::string &topic, const std::string &payload) {
     if (topic == TOPIC_MANAGER_COMMAND) {
         // register_request arrives here FROM panels; the manager handles it.
         return;

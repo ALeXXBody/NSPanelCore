@@ -74,21 +74,39 @@ esp_err_t nsp_handle_config_save(httpd_req_t *req) {
     // must be tested, not trusted).
     std::map<std::string, std::string> f;
     nsp_parse_form(body, f);
-    const std::string &ssid = f.count("ssid") ? f["ssid"] : std::string();
-    const std::string &psk = f.count("psk") ? f["psk"] : std::string();
-    const std::string &hostname = f.count("hostname") ? f["hostname"] : std::string();
-    const std::string &server = f.count("mqtt_server") ? f["mqtt_server"] : std::string();
-    const std::string &port = f.count("mqtt_port") ? f["mqtt_port"] : std::string();
-    const std::string &user = f.count("mqtt_user") ? f["mqtt_user"] : std::string();
-    const std::string &pass = f.count("mqtt_pass") ? f["mqtt_pass"] : std::string();
+    /* P208: copies, not const refs — the values are sanitized in place
+     * below (hostname charset, port bounds), so they must be mutable. */
+    std::string ssid = f.count("ssid") ? f["ssid"] : std::string();
+    std::string psk = f.count("psk") ? f["psk"] : std::string();
+    std::string hostname = f.count("hostname") ? f["hostname"] : std::string();
+    std::string server = f.count("mqtt_server") ? f["mqtt_server"] : std::string();
+    std::string port = f.count("mqtt_port") ? f["mqtt_port"] : std::string();
+    std::string user = f.count("mqtt_user") ? f["mqtt_user"] : std::string();
+    std::string pass = f.count("mqtt_pass") ? f["mqtt_pass"] : std::string();
 
+    /* P208: hostname charset enforced (the form hints A-Z a-z 0-9 - _);
+     * a hostname flows verbatim into MQTT topics — no slashes/spaces. */
+    if (!hostname.empty()) {
+        bool host_ok = true;
+        for (char c : hostname) {
+            if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') ||
+                  (c >= 'a' && c <= 'z') || c == '-' || c == '_')) {
+                host_ok = false;
+                break;
+            }
+        }
+        if (!host_ok || hostname.size() > 32) hostname.clear();
+    }
     if (!ssid.empty() && !server.empty()) {  // fresh setup (AP mode)
         g_cfg.wifi_ssid = ssid;
         g_cfg.wifi_psk = psk;
         if (!hostname.empty()) g_cfg.wifi_hostname = hostname;
         // STA completion path: empty ssid keeps the recovered WiFi config
         g_cfg.mqtt_server = server;
-        if (!port.empty()) g_cfg.mqtt_port = atoi(port.c_str());
+        {
+            int p = atoi(port.c_str());  // P208: bounds — port 0/garbage kills MQTT silently
+            if (p > 0 && p < 65536) g_cfg.mqtt_port = p;
+        }
         g_cfg.mqtt_user = user;
         g_cfg.mqtt_pass = pass;
         nsp_config_save();

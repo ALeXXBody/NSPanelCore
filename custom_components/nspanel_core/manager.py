@@ -477,6 +477,10 @@ class NSPanelCoreManager:
             self._ota_md5[f"{kind}/{name}"] = digest
         except (AttributeError, TypeError):
             self._ota_md5 = {f"{kind}/{name}": digest}
+        # P208#3: the cache write is now serialized on the loop (this whole
+        # path runs async); the lost-update race came from invalidate+note
+        # around an executor-side refresh — refresh_ota_cache now REPLACES
+        # the dict, so keep writes on the loop only (no executor mutation).
         s = self.config.settings
         # Record proof PER KIND. The old code wrote every upload into the
         # TFT fields: an ESP firmware upload overwrote custom_tft_md5 with

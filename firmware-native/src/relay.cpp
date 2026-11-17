@@ -36,12 +36,12 @@ static int map_relay(int relay) {
 }
 
 int nsp_relay_gpio(int relay) {
-    relay = map_relay(relay);
+    /* P208#7: callers pass the mapped relay — no second map here. */
     return relay == 1 ? (gpio_num_t)RELAY1_PIN : (gpio_num_t)RELAY2_PIN;
 }
 
 bool nsp_relay_state(int relay) {
-    relay = map_relay(relay);
+    /* P208#7: callers pass the mapped relay — no second map here. */
     return relay == 1 ? s_relay1 : s_relay2;
 }
 
@@ -61,12 +61,15 @@ void nsp_relay_init(void) {
 }
 
 void nsp_relay_set(int relay, bool state) {
-    relay = map_relay(relay);
-    gpio_set_level((gpio_num_t)nsp_relay_gpio(relay), state ? 1 : 0);
-    if (relay == 1) s_relay1 = state; else s_relay2 = state;
-    nsp_mqtt_publish_relay_state(map_relay(relay) == relay ? relay : relay, state);
+    /* P208#7: map ONCE — the old code mapped here, then again inside
+     * nsp_relay_gpio, driving the WRONG pin when reverse_relays=true and
+     * publishing via a dead ternary. One map, one truth. */
+    int mapped = map_relay(relay);
+    gpio_set_level((gpio_num_t)nsp_relay_gpio(mapped), state ? 1 : 0);
+    if (mapped == 1) s_relay1 = state; else s_relay2 = state;
+    nsp_mqtt_publish_relay_state(mapped, state);
     extern void nsp_display_relay(int relay, bool state);  // P210: buttons follow
-    nsp_display_relay(relay, state);
+    nsp_display_relay(mapped, state);
 }
 
 /* Handle an incoming r{N}_cmd payload ("1"/"0"). */

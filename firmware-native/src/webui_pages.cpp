@@ -190,19 +190,20 @@ std::string nsp_web_status_page(const NspWebStatus &s, const std::string &logdum
     + "<pre id=console_pre style=\"white-space:pre-wrap;word-break:break-all;font:12px/1.45 ui-monospace,monospace;margin:8px 0 0\">"
     + html_escape(logdump.empty() ? "(no events yet)" : logdump)
     + "</pre></section>"
-    + "<p class=hint><a href=/log>Full log page</a> \u00b7 status refreshes every 5 s</p>"
-    + "<script>function act(a){fetch('/action',{method:'POST',body:'action='+a})"
+    + "<p class=hint><a href=/log>Full log page</a> \u00b7 console refreshes every 5 s while the toggle is on</p>"
+    + "<script>function act(a){fetch('/action',{method:'POST',headers:{'X-NSPanel':'1','Content-Type':'application/x-www-form-urlencoded'},body:'action='+a})"
       ".then(r=>r.text()).then(t=>alert(t)).catch(e=>alert('failed: '+e));"
       "setTimeout(()=>location.reload(),1500);}</script>"
     /* P207 console script: state persisted, live /log_text polling while on. */
     + "<script>function console_active(){try{return localStorage.getItem('nspanel-console')==='on';}catch(e){return false;}}"
-      "function toggle_console(on){var c=document.getElementById('console_card');"
-      "c.style.display=on?'block':'none';try{localStorage.setItem('nspanel-console',on?'on':'off');}catch(e){}"
-      "if(on)refresh_console();}"
       "function refresh_console(){fetch('/log_text').then(r=>r.text()).then(t=>{"
       "document.getElementById('console_pre').textContent=t;}).catch(e=>{});}"
-      "(function(){var on=console_active();toggle_console(on);"
-      "if(on)setInterval(refresh_console,5000);})();</script>"
+      "var _civ=null;"
+      "function toggle_console(on){var c=document.getElementById('console_card');"
+      "c.style.display=on?'block':'none';try{localStorage.setItem('nspanel-console',on?'on':'off');}catch(e){}"
+      "if(_civ){clearInterval(_civ);_civ=null;}"
+      "if(on){refresh_console();_civ=setInterval(refresh_console,5000);}}"
+      "(function(){var on=console_active();toggle_console(on);})();</script>"
     + "<footer>NSPanel <span class=core>Core</span> — panel UI</footer></body></html>";
 }
 

@@ -139,7 +139,24 @@ static void nsp_factory_reset(void) {
     }
 }
 
+/* P208#1 (web audit): CSRF guard — a cross-site no-cors fetch cannot set
+ * custom headers; requiring one blocks drive-by factory resets. */
+static bool nsp_web_post_ok(httpd_req_t *req) {
+    if (req->content_len <= 0 || req->content_len > 1024) return false;
+    char ct[64] = "";
+    if (httpd_req_get_hdr_value_str(req, "Content-Type", ct, sizeof(ct)) != ESP_OK) {
+        return false;
+    }
+    if (strstr(ct, "application/x-www-form-urlencoded") == nullptr) return false;
+    char hdr[8] = "";
+    return httpd_req_get_hdr_value_str(req, "X-NSPanel", hdr, sizeof(hdr)) == ESP_OK;
+}
+
 static esp_err_t on_post_action(httpd_req_t *req) {
+    if (!nsp_web_post_ok(req)) {
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden");
+        return ESP_OK;
+    }
     std::string body;
     int len = req->content_len;
     if (len > 0 && len < 256) {
@@ -188,6 +205,10 @@ static esp_err_t on_post_action(httpd_req_t *req) {
 }
 
 static esp_err_t on_post_save(httpd_req_t *req) {
+    if (!nsp_web_post_ok(req)) {
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden");
+        return ESP_OK;
+    }
     // The config form — same handler as the setup portal (shared module).
     extern esp_err_t nsp_handle_config_save(httpd_req_t *req);
     return nsp_handle_config_save(req);

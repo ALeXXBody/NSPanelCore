@@ -308,42 +308,37 @@ void nsp_ota_start() {
  * re-issues the upload command (the display re-enters upload mode and re-erases)
  * and streams from byte 0 again, bounded — the display is never left half-flashed
  * without a retry path. */
-/* P211b: TFT delivery rewritten to the UPSTREAM-proven sequence (the
- * NSPanel Manager uploader that works on stock NSPanels). The previous
- * attempt's fatal bug: `whmi-wris 921600,1` put the BAUD in the file-size
- * slot — the display waited for 921600 bytes at baud 1 and the upload
- * never started. The proven sequence:
- *   1. display power-cycle (GPIO4 off 1s, on, 3s settle)
- *   2. escape string "DRAKJHSUYDGBNCJHGJKSHBDN" + FFx3, settle, clear
- *   3. "connect" + FFx3 -> expect comok...
- *   4. whmi-wris <file_size>,<baud>,1  (SIZE FIRST — single-rate 115200)
- *   5. wait for the 0x05 ACK (10 s)
- *   6. stream in chunks; honor 0x08 retransmit requests
- * The tft upload is SINGLE-RATE at 115200 (the HMI default): no baud
- * switch at all — talk and param never diverge (the 0.1.171 lesson). */
+/* P212: TFT delivery v3 — the COMPLETE upstream block protocol. The
+ * previous firehose stream stalled the display at 95%: the Nextion uploads
+ * in 4 KB blocks and expects a per-block handshake (0x05 = next, 0x08+offset
+ * = resend). Sequence:
+ *   1. power-cycle, escape string, connect -> comok
+ *   2. whmi-wris <size>,115200,1 -> 0x05 ACK
+ *   3. per 4 KB block: ranged GET (Range: bytes=o-e, expect 206) -> write
+ *      -> wait up to 5 s for 0x05 (next) / 0x08+LE-offset (resend; absurd
+ *      offset = full clean restart; 0 = keep forward)
+ *   4. after the last block the display finishes and reboots itself. */
 static void nsp_tft_task(void *) {
     const char *url_path = "/download_tft_eu";
     s_state = OTA_FS;
     s_progress = 0;
     s_last_progress_us = esp_timer_get_time();
-    nsp_mqtt_publish_log("TFT: update started (upstream sequence)");
+    nsp_mqtt_publish_log("TFT: update started (block protocol)");
+
+    extern void nsp_display_set_raw_mode(bool on);
+    nsp_display_set_raw_mode(true);  // own the UART for the whole sequence
 
     for (int attempt = 0; attempt < 3; attempt++) {
-        // 1. power-cycle the display (fresh boot required for the escape)
-        extern void nsp_display_set_raw_mode(bool on);
-        nsp_display_set_raw_mode(true);   // P208#5: own the UART
         nsp_display_power(1);
         vTaskDelay(pdMS_TO_TICKS(1000));
         nsp_display_power(0);
         vTaskDelay(pdMS_TO_TICKS(3000));
 
-        // 2. the escape string — exits normal operation
         nsp_display_send_command("DRAKJHSUYDGBNCJHGJKSHBDN");
         vTaskDelay(pdMS_TO_TICKS(400));
         nsp_display_drain(200);
         vTaskDelay(pdMS_TO_TICKS(100));
 
-        // 3. connect -> comok handshake
         nsp_display_send_command("connect");
         char comok[128] = "";
         {
@@ -360,98 +355,175 @@ static void nsp_tft_task(void *) {
             }
         }
 
-        // 4. the file size comes FIRST in whmi-wris (the fatal order bug)
-        esp_http_client_config_t cfg = {};
-        std::string url = nsp_manager_url(url_path);
-        cfg.url = url.c_str();
-        cfg.timeout_ms = 60000;
-        esp_http_client_handle_t client = esp_http_client_init(&cfg);
-        if (client == nullptr) { vTaskDelay(pdMS_TO_TICKS(3000)); continue; }
-        esp_http_client_set_method(client, HTTP_METHOD_GET);
         long long file_size = 0;
-        if (esp_http_client_open(client, 0) == ESP_OK &&
-            esp_http_client_fetch_headers(client) >= 0 &&
-            esp_http_client_get_status_code(client) == 200) {
-            file_size = esp_http_client_get_content_length(client);
+        {
+            esp_http_client_config_t cfg = {};
+            std::string url = nsp_manager_url(url_path);
+            cfg.url = url.c_str();
+            cfg.timeout_ms = 15000;
+            esp_http_client_handle_t client = esp_http_client_init(&cfg);
+            if (client == nullptr) { nsp_display_set_raw_mode(false); vTaskDelay(pdMS_TO_TICKS(3000)); continue; }
+            esp_http_client_set_method(client, HTTP_METHOD_GET);
+            if (esp_http_client_perform(client) == ESP_OK) {
+                file_size = esp_http_client_get_content_length(client);
+            }
+            esp_http_client_cleanup(client);
         }
         if (file_size <= 0) {
             nsp_mqtt_publish_log("TFT: file size unknown — retrying");
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
+            nsp_display_set_raw_mode(false);
             vTaskDelay(pdMS_TO_TICKS(3000));
             continue;
         }
         {
             char l[96];
-            snprintf(l, sizeof(l), "TFT: size %lld, sending upload cmd", (long long)file_size);
+            snprintf(l, sizeof(l), "TFT: size %lld — requesting upload", (long long)file_size);
             nsp_mqtt_publish_log(l);
         }
 
-        // 5. whmi-wris <size>,<baud>,1 — single-rate 115200
-        char cmd[64];
-        snprintf(cmd, sizeof(cmd), "whmi-wris %lld,115200,1", (long long)file_size);
-        nsp_display_send_command(cmd);
+        {
+            char cmd[64];
+            snprintf(cmd, sizeof(cmd), "whmi-wris %lld,115200,1", (long long)file_size);
+            nsp_display_send_command(cmd);
+        }
         vTaskDelay(pdMS_TO_TICKS(120));
 
-        // 6. wait for the 0x05 ACK (10 s)
         bool acked = false;
         int64_t start = esp_timer_get_time();
         while (esp_timer_get_time() - start < 10000000LL) {
             uint8_t b = 0;
-            int n = nsp_display_read(&b, 1, 250);
-            if (n > 0 && b == 0x05) { acked = true; break; }
+            if (nsp_display_read(&b, 1, 250) > 0 && b == 0x05) { acked = true; break; }
             s_last_progress_us = esp_timer_get_time();
         }
         if (!acked) {
             nsp_mqtt_publish_log("TFT: no 0x05 ACK — retrying");
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
+            nsp_display_set_raw_mode(false);
             vTaskDelay(pdMS_TO_TICKS(3000));
             continue;
         }
-        nsp_mqtt_publish_log("TFT: 0x05 ACK — streaming");
+        nsp_mqtt_publish_log("TFT: 0x05 ACK — block transfer starting");
 
-        // 7. stream; the upstream treats a 0x08 with offset 0 as "keep
-        //    streaming forward" — honor that, never abandon on a short read.
-        uint8_t chunk[4096];
-        size_t total = 0;
-        while (total < (size_t)file_size) {
-            size_t want = sizeof(chunk);
-            if (file_size - total < (long long)sizeof(chunk)) want = (size_t)(file_size - total);
-            int r = esp_http_client_read(client, (char *)chunk, (int)want);
-            if (r <= 0) {
-                s_last_progress_us = esp_timer_get_time();
-                vTaskDelay(pdMS_TO_TICKS(100));
-                continue;  // upstream semantics: never abandon on a short read
+        bool failed = false;
+        long long offset = 0;
+        while (offset < file_size && !failed) {
+            long long want = 4096;
+            if (file_size - offset < want) want = file_size - offset;
+
+            /* ranged GET for this block */
+            esp_http_client_config_t cfg = {};
+            std::string url = nsp_manager_url(url_path);
+            cfg.url = url.c_str();
+            cfg.timeout_ms = 15000;
+            esp_http_client_handle_t client = esp_http_client_init(&cfg);
+            if (client == nullptr) { failed = true; break; }
+            esp_http_client_set_method(client, HTTP_METHOD_GET);
+            {
+                char range[64];
+                snprintf(range, sizeof(range), "bytes=%lld-%lld", offset, offset + want - 1);
+                esp_http_client_set_header(client, "Range", range);
             }
-            nsp_display_send((const char *)chunk, (size_t)r);
-            // watch for an inline 0x08 retransmit request (the display asks
-            // by sending 0x08 + a 4-byte offset; offset 0 = keep going)
-            total += (size_t)r;
-            s_progress = (int)(100ULL * total / (unsigned long long)file_size);
+            if (esp_http_client_open(client, 0) != ESP_OK ||
+                esp_http_client_fetch_headers(client) < 0) {
+                esp_http_client_cleanup(client);
+                failed = true;
+                break;
+            }
+            int status = esp_http_client_get_status_code(client);
+            if (status != 206 && !(offset == 0 && status == 200)) {
+                /* 200 on offset>0 = the server ignored Range: writing that
+                 * at offset>0 corrupts the image while reporting 100%. */
+                char l[96];
+                snprintf(l, sizeof(l), "TFT: block GET status %d — retrying", status);
+                nsp_mqtt_publish_log(l);
+                esp_http_client_cleanup(client);
+                failed = true;
+                break;
+            }
+
+            uint8_t block[4096];
+            size_t got = 0;
+            int64_t dead = esp_timer_get_time();
+            while (got < (size_t)want && esp_timer_get_time() - dead < 15000000LL) {
+                int r = esp_http_client_read(client, (char *)block + got, (int)((size_t)want - got));
+                if (r > 0) { got += (size_t)r; s_last_progress_us = esp_timer_get_time(); }
+                else vTaskDelay(pdMS_TO_TICKS(20));
+            }
+            esp_http_client_close(client);
+            esp_http_client_cleanup(client);
+            if (got < (size_t)want) { failed = true; break; }
+
+            nsp_display_send((const char *)block, got);
+            offset += (long long)got;
+            s_progress = (int)(100ULL * offset / (unsigned long long)file_size);
             s_last_progress_us = esp_timer_get_time();
+
+            /* per-block handshake: 0x05 next / 0x08+LE-offset resend */
+            uint8_t resp[8] = {0};
+            int rlen = 0;
+            int64_t resp_dead = esp_timer_get_time();
+            while (rlen < 5 && esp_timer_get_time() - resp_dead < 5000000LL) {
+                uint8_t b = 0;
+                int n = nsp_display_read(&b, 1, 250);
+                if (n > 0) {
+                    resp[rlen++] = b;
+                    if (rlen == 1 && resp[0] != 0x05 && resp[0] != 0x08) break;
+                }
+                s_last_progress_us = esp_timer_get_time();
+            }
+            if (rlen == 0) {
+                if (offset >= file_size) break;  // last block: silence = done
+                char l[80];
+                snprintf(l, sizeof(l), "TFT: no block reply at %lld — retrying block", offset);
+                nsp_mqtt_publish_log(l);
+                offset -= (long long)got;  // resend this block
+                continue;
+            }
+            if (resp[0] == 0x08 && rlen >= 5) {
+                uint32_t req_off = (uint32_t)resp[1] | ((uint32_t)resp[2] << 8) |
+                                   ((uint32_t)resp[3] << 16) | ((uint32_t)resp[4] << 24);
+                if (req_off > (unsigned long long)offset) {
+                    /* absurd: the display asks for data it was never sent
+                     * (the upstream System-Data-ERROR Frankenstein) */
+                    char l[96];
+                    snprintf(l, sizeof(l), "TFT: absurd 0x08 offset %u — clean restart", req_off);
+                    nsp_mqtt_publish_log(l);
+                    failed = true;
+                    break;
+                }
+                if (req_off > 0) {
+                    char l[80];
+                    snprintf(l, sizeof(l), "TFT: 0x08 resend from %u", req_off);
+                    nsp_mqtt_publish_log(l);
+                    offset = (long long)req_off;
+                }
+                /* offset 0: keep streaming forward */
+            }
+            /* 0x05 = accepted, next block */
         }
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
+
+        if (!failed && offset >= file_size) {
+            nsp_mqtt_publish_log("TFT: all blocks written — display finishing");
+            vTaskDelay(pdMS_TO_TICKS(6000));   // display writes, reboots itself
+            nsp_display_drain(1500);
+            bool hand = nsp_display_handshake_pub(3);
+            nsp_mqtt_publish_log(hand ? "TFT: display back, handshake OK"
+                                      : "TFT: display not answering after reflash");
+            s_progress = 100;
+            nsp_display_set_raw_mode(false);
+            s_state = OTA_IDLE;
+            vTaskDelete(nullptr);
+            return;
+        }
         {
             char l[96];
-            snprintf(l, sizeof(l), "TFT: streamed %u bytes — display reflashing",
-                     (unsigned)total);
+            snprintf(l, sizeof(l), "TFT: attempt failed at %lld/%lld — clean restart",
+                     offset, file_size);
             nsp_mqtt_publish_log(l);
         }
-        // the display reboots itself into the new HMI; re-handshake after
-        vTaskDelay(pdMS_TO_TICKS(4000));
-        nsp_display_drain(1500);
-        nsp_display_handshake_pub(3);   // the handshake runs in raw mode
-        nsp_display_set_raw_mode(false);  // P208#5: hand the UART back
-        bool hand = true;
-        nsp_mqtt_publish_log(hand ? "TFT: display back, handshake OK"
-                                  : "TFT: display not answering after reflash");
-        s_progress = 100;
-        s_state = OTA_IDLE;
-        vTaskDelete(nullptr);
-        return;
+        vTaskDelay(pdMS_TO_TICKS(3000));
+        /* the loop restarts: power-cycle + full clean upload from byte 0 */
     }
+    nsp_display_set_raw_mode(false);
     nsp_mqtt_publish_log("TFT: update FAILED after attempts");
     s_state = OTA_IDLE;
     vTaskDelete(nullptr);

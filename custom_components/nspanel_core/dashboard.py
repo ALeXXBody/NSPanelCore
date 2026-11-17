@@ -1095,16 +1095,11 @@ class SaveFirmwareView(OtaUploadView):
         if err is not None:
             return err
         await manager.hass.async_add_executor_job(
-            manager.invalidate_ota_cache, "firmware", f"{model}/firmware.bin", dest
-        )
-        # Pin the exact uploaded bytes over any overlay shadow copy and
-        # record proof — without this the panel keeps downloading the old
-        # release bytes while nothing records what was uploaded.
-        proof = await manager.hass.async_add_executor_job(
             manager.note_custom_file, "firmware", f"{model}/firmware.bin", "manual upload"
         )
-        _LOGGER.info("Custom firmware pinned for serving: %s", proof["md5"])
-        await manager.async_save()
+        # P208#3: one awaited re-hash as the LAST step — cache replacement
+        # and re-hash are serialized on the loop (no lost-update race).
+        await manager.refresh_ota_cache()
         return _redirect(request, f"{URL_BASE}/settings")
 
 
@@ -1123,15 +1118,10 @@ class SaveDataFileView(OtaUploadView):
         if err is not None:
             return err
         await manager.hass.async_add_executor_job(
-            manager.invalidate_ota_cache, "firmware", f"{model}/data_file.bin", dest
-        )
-        # Same pinning as firmware uploads (see SaveFirmwareView): without
-        # this an overlay silently shadows the upload and no proof exists.
-        proof = await manager.hass.async_add_executor_job(
             manager.note_custom_file, "firmware", f"{model}/data_file.bin", "manual upload"
         )
-        _LOGGER.info("Custom data file pinned for serving: %s", proof["md5"])
-        await manager.async_save()
+        # P208#3: one awaited re-hash as the LAST step (serialized on the loop).
+        await manager.refresh_ota_cache()
         return _redirect(request, f"{URL_BASE}/settings")
 
 
@@ -1153,14 +1143,13 @@ class SaveTftFileView(OtaUploadView):
         err = await self._save_upload(request, "tft_file", dest)
         if err is not None:
             return err
-        await manager.hass.async_add_executor_job(
-            manager.invalidate_ota_cache, "tft", filename, dest
-        )
         # Pin the exact uploaded bytes: mirror into any overlay copy that
         # would otherwise shadow the upload, and record proof metadata.
-        proof = await manager.hass.async_add_executor_job(
+        await manager.hass.async_add_executor_job(
             manager.note_custom_tft, filename
         )
+        # P208#3: one awaited re-hash as the LAST step (serialized on the loop).
+        await manager.refresh_ota_cache()
         await manager.async_save()
         _LOGGER.info("Custom TFT pinned for serving: %s", proof)
         return _redirect(request, f"{URL_BASE}/settings")
