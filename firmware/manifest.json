@@ -19,11 +19,11 @@
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "tft/gui.tft": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/nspanel-core-ui.tft",
+      "url": "http://192.168.50.200:8000/tft_eu",
       "md5": "2b6391c0f80c28c81346bff7388119af"
     },
     "tft/gui_us.tft": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/nspanel-core-ui.tft",
+      "url": "http://192.168.50.200:8000/tft_eu",
       "md5": "2b6391c0f80c28c81346bff7388119af"
     }
   }
