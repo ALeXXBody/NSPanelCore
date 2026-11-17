@@ -428,7 +428,15 @@ class NSPanelCoreManager:
             self.config.settings.firmware_active_version = version
         except Exception:  # noqa: BLE001
             pass
-        self.hass.async_create_task(self.async_save())
+        # P208#4: the overlay MUST be persisted before the panels are pushed
+        # the update — a fire-and-forget save lost it on a fast restart and
+        # the panels then looped against stale bundled checksums.
+        self.hass.async_create_task(self._persist_overlay_now())
+
+    async def _persist_overlay_now(self) -> None:
+        """P208#4: await the save so an activation is durable before the
+        OTA push (the fire-and-forget save was lost on fast restarts)."""
+        await self.async_save()
 
     def note_custom_file(self, kind: str, name: str, label: str) -> dict:
         """Pin a manually uploaded file so it is served EXACTLY.
@@ -1114,6 +1122,15 @@ class NSPanelCoreManager:
                 "md5_littlefs": preport.get("md5_littlefs", ""),
                 "md5_tft_file": preport.get("md5_tft_gui", "") or preport.get("md5_tft_file", ""),
             }
+            # P208#2: persist the report md5s onto the panel — the legacy
+            # path never did, so the fail-streak incremented on SUCCESS
+            # (the brake latched for connected panels after any update).
+            if md5s["md5_firmware"]:
+                panel.firmware_md5 = md5s["md5_firmware"]
+            if md5s["md5_littlefs"]:
+                panel.littlefs_md5 = md5s["md5_littlefs"]
+            if md5s["md5_tft_file"]:
+                panel.tft_md5 = md5s["md5_tft_file"]
         was_online = panel.online
         panel.online = report.get("state", "") not in ("updating_tft", "updating_fw", "updating_fs")
         caps_changed = False
@@ -1185,14 +1202,20 @@ class NSPanelCoreManager:
         if now - last < 1800:
             return
         # P184: failure streak — compare against the last attempt's record.
-        attempt = getattr(self, "_ota_attempt_md5", {}).get(mac)
-        if attempt is not None:
-            before, target = attempt
+        # P208: kind-aware — the TFT has its own streak (the panel never
+        # reported a tft md5, so firmware-only checks were blind to the
+        # perpetual TFT reflash loop).
+        streaks = getattr(self, "_ota_fail_streak", {})
+        attempts = getattr(self, "_ota_attempt_md5", {})
+        fw_attempt = attempts.get(mac)
+        tft_attempt = attempts.get(mac + ":tft")
+        if fw_attempt is not None:
+            before, target = fw_attempt
             if panel.firmware_md5 == target:
-                self._ota_fail_streak[mac] = 0
+                streaks[mac] = 0
             elif panel.firmware_md5 == before:
-                streak = self._ota_fail_streak.get(mac, 0) + 1
-                self._ota_fail_streak[mac] = streak
+                streak = streaks.get(mac, 0) + 1
+                streaks[mac] = streak
                 if streak >= 3:
                     _LOGGER.warning(
                         "OTA auto-trigger disabled for %s after %s consecutive failed attempts (manual trigger only)",
@@ -1200,13 +1223,33 @@ class NSPanelCoreManager:
                     self._last_ota_trigger[mac] = now
                     return
             else:
-                self._ota_fail_streak[mac] = 0
+                streaks[mac] = 0
+        # P208#1: TFT loop brake — if a TFT attempt was made and the panel's
+        # reported tft md5 still doesn't match the served one, count it.
+        if tft_attempt is not None:
+            tft_before, tft_target = tft_attempt
+            if panel.tft_md5 == tft_target:
+                streaks[mac + ":tft"] = 0
+            elif panel.tft_md5 == tft_before:
+                tstreak = streaks.get(mac + ":tft", 0) + 1
+                streaks[mac + ":tft"] = tstreak
+                if tstreak >= 2:
+                    _LOGGER.warning(
+                        "TFT auto-update disabled for %s after %s consecutive failed attempts (manual trigger only)",
+                        panel.name, tstreak)
+                    self._last_ota_trigger[mac] = now
+                    return
+            else:
+                streaks[mac + ":tft"] = 0
         await self._maybe_trigger_firmware_ota(panel, report)
         self._last_ota_trigger[mac] = now
         if not hasattr(self, "_ota_attempt_md5"):
             self._ota_attempt_md5 = {}
         model = panel.model if panel.model in ("sonoff", "custom") else "sonoff"
         self._ota_attempt_md5[mac] = (panel.firmware_md5, self.ota_md5("firmware", f"{model}/firmware.bin"))
+        # P208#1: record the served tft md5 for the TFT streak on tft triggers
+        if report.get("md5_tft_file") is not None and getattr(self, "_ota_tft_served", None):
+            self._ota_attempt_md5[mac + ":tft"] = (panel.tft_md5, self._ota_tft_served)
 
     @staticmethod
     def _normalize_ota_report(data: dict) -> dict:

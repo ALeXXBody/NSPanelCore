@@ -30,9 +30,13 @@
 #define END_SEQ "\xFF\xFF\xFF"
 
 static volatile bool s_display_ready = false;
+static volatile bool s_display_raw_mode = false;  // P208#5: touch/UART ownership
 static char s_warnings[64] = "";
+void nsp_display_set_raw_mode(bool on);  // P208#5: defined below
 void nsp_display_show_screensaver(void);  // P211: defined below (file scope, P160 rule)
 void nsp_display_relay(int relay, bool state);  // P211
+extern "C" void nsp_relay_toggle_pub(int relay);  // P210
+void nsp_display_set_raw_mode(bool on);  // P208#5
 
 bool nsp_display_ready(void) { return s_display_ready; }
 const char *nsp_display_warning(void) {
@@ -92,7 +96,11 @@ void nsp_display_init(void) {
     uart_set_pin(DISPLAY_UART, DISPLAY_TX_PIN, DISPLAY_RX_PIN, -1, -1);
 
     vTaskDelay(pdMS_TO_TICKS(1500));  // let the display finish its own boot
-    if (!nsp_display_handshake(3)) {
+    /* P208#5: the touch task must not consume the handshake replies. */
+    s_display_raw_mode = true;
+    bool hand = nsp_display_handshake(3);
+    s_display_raw_mode = false;
+    if (!hand) {
         s_display_ready = false;
         snprintf(s_warnings, sizeof(s_warnings), "No response from the display.");
         // Continue WITHOUT the display — WiFi/MQTT/sensors stay alive (P130).
@@ -110,6 +118,8 @@ void nsp_display_init(void) {
 /* Manual recovery: power-cycle + handshake. ONLY from the "display_restart"
  * command, never at boot (stable power assumed). */
 bool nsp_display_restart(void) {
+    /* P208#5: raw mode during the power-cycle + re-handshake. */
+    s_display_raw_mode = true;
     gpio_set_level(DISPLAY_POWER_PIN, 1);
     vTaskDelay(pdMS_TO_TICKS(1000));
     gpio_set_level(DISPLAY_POWER_PIN, 0);
@@ -143,25 +153,41 @@ void nsp_display_show_screensaver(void) {
     nsp_display_send_command(cmd.c_str());
 }
 
-void nsp_display_set_text(const char *object, const char *value) {
+/* P208#1: Nextion text objects take .txt= — the v1 did exactly this;
+ * without it every clock/date write is silently ignored (the static
+ * screen). P208#4: the value is sanitized — MQTT-supplied text could
+ * otherwise terminate the command and inject display script (v1 had
+ * the same guard). */
+static void nsp_display_set_text(const char *object, const char *value) {
     if (!s_display_ready) return;
-    std::string cmd = std::string(object) + "=\"" + value + "\"";
+    char clean[24] = "";
+    size_t ci = 0;
+    for (const char *p = value; *p && ci + 1 < sizeof(clean); p++) {
+        char c = *p;
+        if ((c >= '0' && c <= '9') || c == ':' || c == ' ' || c == '/' ||
+            (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '-' ||
+            c == '.') {
+            clean[ci++] = c;
+        }
+    }
+    clean[ci] = '\0';
+    std::string cmd = std::string(object) + ".txt=\"" + clean + "\"";
     nsp_display_send_command(cmd.c_str());
 }
 
 void nsp_display_set_clock(const std::string &time_str) {
     nsp_display_set_text("screensaver.curTime", time_str.c_str());
-    nsp_display_set_text("screensaver_minimal.curTime", time_str.c_str());
+    nsp_display_set_text("mini.curTime", time_str.c_str());
 }
 
 void nsp_display_set_date(const std::string &date_str) {
     nsp_display_set_text("screensaver.curDay", date_str.c_str());
-    nsp_display_set_text("screensaver_minimal.curDay", date_str.c_str());
+    nsp_display_set_text("mini.curDay", date_str.c_str());
 }
 
 void nsp_display_set_ampm(const std::string &ampm_str) {
     nsp_display_set_text("screensaver.curAMPM", ampm_str.c_str());
-    nsp_display_set_text("screensaver_minimal.curAMPM", ampm_str.c_str());
+    nsp_display_set_text("mini.curAMPM", ampm_str.c_str());
 }
 
 /* Touch listener: decode 0x65 events, wake the screen on touch. */
@@ -189,18 +215,27 @@ void nsp_display_touch_task_start(void) {
 /* scenes: 1=bg, 2=back hotspot */
 #define HMI_SCENES_BACK 2
 
+/* P208#5: the touch task races the handshake/TFT uploader for the same
+ * UART — it swallows reply bytes (comok, 0x05) and desyncs sequences.
+ * The flag lives at file scope (declared above); the setter is here. */
+void nsp_display_set_raw_mode(bool on) { s_display_raw_mode = on; }
+
 void nsp_display_touch_task(void *) {
-    /* P184: decode extracted to touch_decode.cpp (HOST-UNIT-TESTED) —
-     * partial frames, garbage prefixes and multi-frame buffers covered. */
+    /* P184: decode extracted to touch_decode.cpp (HOST-UNIT-TESTED). */
     uint8_t buf[64];
     for (;;) {
         int n = uart_read_bytes(DISPLAY_UART, buf, sizeof(buf), pdMS_TO_TICKS(200));
+        /* P208#6: a negative UART result cast to size_t scanned out of
+         * bounds; also skip while another sequence owns the UART (P208#5). */
+        if (n <= 0 || s_display_raw_mode) continue;
         auto frames = nsp_touch_decode(buf, (size_t)n);
         for (const auto &f : frames) {
             int page = f.page, component = f.component, event = f.event;
             bool pressed = (event == 1);
-            if (pressed) {
-                // Any press wakes the panel from the screensaver to home.
+            /* P208#4: wake on release from the screensaver pages only —
+             * the old code navigated on press from EVERY page (mid-
+             * interaction jumps) and ignored screensaver releases. */
+            if ((page == 1 || page == 3) && !pressed) {
                 nsp_display_send_command("page home");
             } else if (event == 0) {  // releases act (P210)
                 if (page == HMI_HOME_PAGE_ID) {

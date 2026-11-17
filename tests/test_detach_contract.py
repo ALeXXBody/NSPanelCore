@@ -193,7 +193,7 @@ def test_firmware_ota_rails_all_present():
     assert upd.find("LittleFS.end();") < upd.find("Update.begin(")
     # bounded retries
     task = src[src.index("void WebManager::_taskPerformOTAUpdate"):]
-    assert task.count("of 3.") == 2
+    assert task.count("of 5.") == 2
     assert "save_attempt < 10" in task
     # watchdog
     main_src = _src(FW / "src" / "main.cpp")
@@ -239,7 +239,7 @@ def test_recovery_page_serves_full_ours_image():
     inst = ROOT / "firmware" / ".pio" / "build" / "esp32dev_idf5"
     fw = inst / "firmware.bin"
     if fw.exists():
-        assert b"0.0.1" in fw.read_bytes(), "built image must match the published version"
+        assert (b"0.0.1" in fw.read_bytes()) or (b"0.0.2" in fw.read_bytes()), "built image must match a published migration-era version"
 
 
 # --------------------------------------------------------------------------

@@ -389,7 +389,7 @@ def test_fs_ota_unmounts_littlefs_and_bounded_retries():
     assert "while (true)" not in task_body[:task_body.index("void WebManager::", task_i + 10)] if "void WebManager::" in task_body[task_i+10:] else True, (
         "no infinite loops allowed in the OTA task"
     )
-    assert task_body.count("of 3.") == 2, "fw and fs retries must be bounded to 3"
+    assert task_body.count("of 5.") == 2, "fw and fs retries must be bounded (P176 raised them to 5)"
     assert "save_attempt < 10" in task_body, "config save retries must be bounded"
 
 

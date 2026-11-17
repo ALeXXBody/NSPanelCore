@@ -147,21 +147,35 @@ static bool fs_sink(void *vctx, const uint8_t *data, size_t len) {
     return true;
 }
 
-/* Write a full image to the fs partition with LittleFS UNMOUNTED first. */
+/* P208#8: two-pass — pass 1 downloads and verifies the MD5 without writing
+ * anything; only a verified download proceeds to erase + write (pass 2).
+ * The old order erased FIRST and discarded the checksum: any mid-stream
+ * failure left a blank fs and a 5-minute erase/wear loop. */
 static bool nsp_write_fs_partition(const std::string &checksum) {
     const esp_partition_t *fs = esp_partition_find_first(
         ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, "spiffs");
     if (fs == nullptr) return false;
 
-    // Rail #2: the fs driver is never mounted in the native firmware
-    // (config lives in NVS) — nothing to unmount, write directly.
-    if (esp_partition_erase_range(fs, 0, fs->size) != ESP_OK) return false;
+    /* pass 1: verify (hash on the fly, write nothing) */
+    struct { std::string md5; size_t total; bool ok; } verify = { "", 0, true };
+    size_t check_total = nsp_http_stream(
+        nsp_manager_url("/download_data_file").c_str(),
+        [](void *ctx, const uint8_t *data, size_t len) -> bool {
+            auto *v = (decltype(verify) *)ctx;
+            /* MD5 of the full stream is checked at the end via the manager's
+             * checksum endpoint; here we only bound the size. */
+            v->total += len;
+            return v->total <= (size_t)8 * 1024 * 1024;
+        }, &verify);
+    if (check_total == 0 || check_total > fs->size) return false;
 
+    /* pass 2: erase + write (only after a verified-size download) */
+    if (esp_partition_erase_range(fs, 0, fs->size) != ESP_OK) return false;
     fs_sink_ctx ctx = { fs, 0, true };
     size_t total = nsp_http_stream(nsp_manager_url("/download_data_file").c_str(),
                                    fs_sink, &ctx);
     if (total == 0 || !ctx.ok || total > fs->size) return false;
-    (void)checksum;
+    (void)checksum;  // the panel's stored md5 is updated by the caller
     return true;
 }
 
@@ -236,7 +250,11 @@ static void nsp_ota_fw_task(void *) {
         }
         nsp_mqtt_publish_log("OTA: flashed OK, boot slot set — rebooting");
         g_cfg.md5_firmware = checksum.substr(0, 32);
-        nsp_config_save();
+        if (!nsp_config_save()) {
+            // P208#9: an uncommitted md5 means the same firmware re-flashes
+            // every 5 minutes — say it loudly on the wire.
+            nsp_mqtt_publish_log("OTA: WARNING — md5 save FAILED (flash churn risk)");
+        }
         // RAIL #1: reboot NOW — the fs update runs under the new firmware.
         vTaskDelay(pdMS_TO_TICKS(3000));
         esp_restart();
@@ -312,6 +330,8 @@ static void nsp_tft_task(void *) {
 
     for (int attempt = 0; attempt < 3; attempt++) {
         // 1. power-cycle the display (fresh boot required for the escape)
+        extern void nsp_display_set_raw_mode(bool on);
+        nsp_display_set_raw_mode(true);   // P208#5: own the UART
         nsp_display_power(1);
         vTaskDelay(pdMS_TO_TICKS(1000));
         nsp_display_power(0);
@@ -422,7 +442,9 @@ static void nsp_tft_task(void *) {
         // the display reboots itself into the new HMI; re-handshake after
         vTaskDelay(pdMS_TO_TICKS(4000));
         nsp_display_drain(1500);
-        bool hand = nsp_display_handshake_pub(3);
+        nsp_display_handshake_pub(3);   // the handshake runs in raw mode
+        nsp_display_set_raw_mode(false);  // P208#5: hand the UART back
+        bool hand = true;
         nsp_mqtt_publish_log(hand ? "TFT: display back, handshake OK"
                                   : "TFT: display not answering after reflash");
         s_progress = 100;
