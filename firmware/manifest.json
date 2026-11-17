@@ -1,18 +1,18 @@
 {
   "version": "0.1.0",
-  "notes": "Native fw v0.1.0 \u2014 self-driven update checks (5 min), link-stability fix, panel web UI (v1 design), instrumented OTA, 103 host tests.",
+  "notes": "Native fw v0.1.0 \u2014 P192 HTTP fetch root-cause fix (native open/fetch_headers/read pattern per Espressif IDFGH-5983) + self-update checks + web UI + 103 host tests.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.0-selfupd.bin",
-      "md5": "38317ca9669b3566978876477c4a0d6c"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.0-httpfix.bin",
+      "md5": "81743fb4de8a2977fe6c6c7e3cee90a4"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.0-selfupd.bin",
-      "md5": "38317ca9669b3566978876477c4a0d6c"
+      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.0-httpfix.bin",
+      "md5": "81743fb4de8a2977fe6c6c7e3cee90a4"
     },
     "firmware/custom/data_file.bin": {
       "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
