@@ -38,7 +38,7 @@ static NspWebStatus sample() {
 int main() {
     NspWebStatus s = sample();
 
-    std::string page = nsp_web_status_page(s);
+    std::string page = nsp_web_status_page(s, "boot ok\nOTA: served=x");
     CHECK(page.find("0.1.0") != std::string::npos, "status page: version shown");
     CHECK(page.find("KitchenPanel") != std::string::npos, "status page: hostname shown");
     CHECK(page.find("28.7") != std::string::npos, "status page: temperature shown");
@@ -56,6 +56,16 @@ int main() {
     CHECK(page.find("NSPANEL_V1_CSS") == std::string::npos, "css embedded as code, not literal");
     CHECK(page.find("--accent:#39c8e8") != std::string::npos, "v1 brand cyan embedded");
     CHECK(page.find("\u2014") != std::string::npos, "empty fields show a dash");
+    // P207: toggle-gated console
+    CHECK(page.find("id=console_card") != std::string::npos, "console card present");
+    CHECK(page.find("style=\"display:none\"") != std::string::npos, "console card hidden by default");
+    CHECK(page.find("id=console_toggle") != std::string::npos, "console toggle present");
+    CHECK(page.find("toggle_console") != std::string::npos, "toggle function wired");
+    CHECK(page.find("/log_text") != std::string::npos, "live polling endpoint referenced");
+    CHECK(page.find("nspanel-console") != std::string::npos, "toggle state persisted");
+    CHECK(page.find("boot ok") != std::string::npos, "log text embedded server-side");
+    CHECK(nsp_web_log_text("") == "(no events yet)", "log text empty placeholder");
+    CHECK(nsp_web_log_text("l1") == "l1", "log text passthrough");
     // setup page: v1 form layout
     std::string sp = nsp_web_setup_page(s);
     CHECK(sp.find("name=hostname") != std::string::npos, "setup: hostname field");
@@ -67,7 +77,7 @@ int main() {
     // XSS safety: a hostile field value must be escaped
     NspWebStatus x = sample();
     x.hostname = "<script>alert(1)</script>";
-    std::string xp = nsp_web_status_page(x);
+    std::string xp = nsp_web_status_page(x, "");
     CHECK(xp.find("<script>alert") == std::string::npos, "hostile hostname NOT raw in page");
     CHECK(xp.find("&lt;script&gt;alert(1)") != std::string::npos, "hostile hostname escaped");
 

@@ -102,7 +102,7 @@ static esp_err_t on_get_root(httpd_req_t *req) {
         httpd_resp_send(req, page.c_str(), page.size());
         return ESP_OK;
     }
-    std::string page = nsp_web_status_page(s);
+    std::string page = nsp_web_status_page(s, s_logbuf.dump());
     httpd_resp_send(req, page.c_str(), page.size());
     return ESP_OK;
 }
@@ -117,6 +117,14 @@ static esp_err_t on_get_status_json(httpd_req_t *req) {
 static esp_err_t on_get_log(httpd_req_t *req) {
     std::string page = nsp_web_log_page(s_logbuf.dump());
     httpd_resp_send(req, page.c_str(), page.size());
+    return ESP_OK;
+}
+
+/* P207: raw log text for the console card's live polling. */
+static esp_err_t on_get_log_text(httpd_req_t *req) {
+    std::string text = nsp_web_log_text(s_logbuf.dump());
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_send(req, text.c_str(), text.size());
     return ESP_OK;
 }
 
@@ -202,12 +210,14 @@ bool nsp_web_start(bool ap_mode) {
     httpd_uri_t root = {"/", HTTP_GET, on_get_root, nullptr};
     httpd_uri_t status = {"/status.json", HTTP_GET, on_get_status_json, nullptr};
     httpd_uri_t log = {"/log", HTTP_GET, on_get_log, nullptr};
+    httpd_uri_t logtext = {"/log_text", HTTP_GET, on_get_log_text, nullptr};
     httpd_uri_t scan = {"/scan", HTTP_GET, on_get_scan, nullptr};
     httpd_uri_t save = {"/save", HTTP_POST, on_post_save, nullptr};
     httpd_uri_t action = {"/action", HTTP_POST, on_post_action, nullptr};
     httpd_register_uri_handler(server, &root);
     httpd_register_uri_handler(server, &status);
     httpd_register_uri_handler(server, &log);
+    httpd_register_uri_handler(server, &logtext);
     httpd_register_uri_handler(server, &scan);
     httpd_register_uri_handler(server, &save);
     httpd_register_uri_handler(server, &action);

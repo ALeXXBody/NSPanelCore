@@ -35,12 +35,15 @@ struct NspWebStatus {
     std::string mqtt_user_value;
 };
 
-/* Status page (human) */
-std::string nsp_web_status_page(const NspWebStatus &s);
+/* Status page (human). logdump = the panel log text, embedded in the
+ * toggle-gated console card (P207: visible only while the toggle is on). */
+std::string nsp_web_status_page(const NspWebStatus &s, const std::string &logdump);
 /* Machine-readable status */
 std::string nsp_web_status_json(const NspWebStatus &s);
 /* Log view page */
 std::string nsp_web_log_page(const std::string &logdump);
+/* Raw log text for the console card's live polling (P207). */
+std::string nsp_web_log_text(const std::string &logdump);
 /* Setup/config form (AP root and station reconfig — v1 look) */
 std::string nsp_web_setup_page(const NspWebStatus &s);
 

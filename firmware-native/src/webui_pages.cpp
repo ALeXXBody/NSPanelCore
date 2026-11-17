@@ -163,7 +163,7 @@ static std::string brandbar(const NspWebStatus &s) {
     "</header>";
 }
 
-std::string nsp_web_status_page(const NspWebStatus &s) {
+std::string nsp_web_status_page(const NspWebStatus &s, const std::string &logdump) {
     auto rowv = [](const char *k, const std::string &v) {
         return std::string("<tr><th>") + k + "</th><td>" + html_escape(v.empty() ? "\u2014" : v) + "</td></tr>";
     };
@@ -181,11 +181,28 @@ std::string nsp_web_status_page(const NspWebStatus &s) {
     + "<button class=\"btn btn-ghost\" onclick=\"act('reboot')\">Reboot</button>"
     + "<button class=\"btn btn-ghost\" onclick=\"act('firmware_update')\">FW update</button>"
     + "<button class=\"btn btn-ghost\" onclick=\"act('display_restart')\">Display restart</button>"
-    + "</div><div class=actions><button class=\"btn btn-danger\" onclick=\"if(confirm('Factory reset? The panel restarts into its setup AP.'))act('factory_reset')\">Factory reset</button></div></section>"
-    + "<p class=hint><a href=/log>Panel log</a> \u00b7 status refreshes every 5 s</p>"
+    + "</div><div class=actions><button class=\"btn btn-danger\" onclick=\"if(confirm('Factory reset? The panel restarts into its setup AP.'))act('factory_reset')\">Factory reset</button></div>"
+    /* P207: debug console — hidden until the toggle is on (localStorage). */
+    + "<label class=\"field\"><span>Debug console</span>"
+    + "<label class=\"theme-switch compact\"><input type=checkbox id=console_toggle onchange=\"toggle_console(this.checked)\"><span class=track aria-hidden=\"true\"></span></label></label>"
+    + "</section>"
+    + "<section class=card id=console_card style=\"display:none\"><h2>Console (last 64 events)</h2>"
+    + "<pre id=console_pre style=\"white-space:pre-wrap;word-break:break-all;font:12px/1.45 ui-monospace,monospace;margin:8px 0 0\">"
+    + html_escape(logdump.empty() ? "(no events yet)" : logdump)
+    + "</pre></section>"
+    + "<p class=hint><a href=/log>Full log page</a> \u00b7 status refreshes every 5 s</p>"
     + "<script>function act(a){fetch('/action',{method:'POST',body:'action='+a})"
       ".then(r=>r.text()).then(t=>alert(t)).catch(e=>alert('failed: '+e));"
       "setTimeout(()=>location.reload(),1500);}</script>"
+    /* P207 console script: state persisted, live /log_text polling while on. */
+    + "<script>function console_active(){try{return localStorage.getItem('nspanel-console')==='on';}catch(e){return false;}}"
+      "function toggle_console(on){var c=document.getElementById('console_card');"
+      "c.style.display=on?'block':'none';try{localStorage.setItem('nspanel-console',on?'on':'off');}catch(e){}"
+      "if(on)refresh_console();}"
+      "function refresh_console(){fetch('/log_text').then(r=>r.text()).then(t=>{"
+      "document.getElementById('console_pre').textContent=t;}).catch(e=>{});}"
+      "(function(){var on=console_active();toggle_console(on);"
+      "if(on)setInterval(refresh_console,5000);})();</script>"
     + "<footer>NSPanel <span class=core>Core</span> — panel UI</footer></body></html>";
 }
 
@@ -220,6 +237,11 @@ std::string nsp_web_log_page(const std::string &logdump) {
     + html_escape(logdump.empty() ? "(no events yet)" : logdump)
     + "</pre></section><p class=hint><a href=/>&larr; back to status</a></p>"
     + "<footer>NSPanel <span class=core>Core</span> — panel UI</footer></body></html>";
+}
+
+/* P207: raw log text — the console card's live-polling endpoint. */
+std::string nsp_web_log_text(const std::string &logdump) {
+    return logdump.empty() ? std::string("(no events yet)") : logdump;
 }
 
 /* Setup/config form — the v1 index.html layout (Device / WiFi / MQTT cards). */
