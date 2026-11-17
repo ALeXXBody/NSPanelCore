@@ -47,7 +47,17 @@ extern "C" void nsp_ota_confirm(void) {
 }
 OtaState nsp_ota_state(void) { return s_state; }
 
-/* Small responses only (checksums, manifest fragments) — 16 KB cap. */
+/* Small responses only (checksums, manifest fragments) — 16 KB cap.
+ *
+ * P192 ROOT-CAUSE FIX (my bug, proven three ways): the old code called
+ * esp_http_client_perform() and then esp_http_client_read(). Espressif
+ * documents this combination as UNSUPPORTED since v4.1.2 (IDFGH-5983):
+ * perform() disables body caching ("data will be processed by event
+ * handler"), so a later read() returns 0 — every fetch failed on every
+ * server, every shape, ~300 attempts. Our IDF 5.5.5 source says it
+ * verbatim ("cache data ... will be used in esp_http_client_read API
+ * only. For esp_http_perform we shall disable this"). The native pattern
+ * below (open -> fetch_headers -> read) keeps caching ON, so read() works. */
 static bool nsp_http_get_small(const char *url, std::string &out) {
     esp_http_client_config_t cfg = {};
     cfg.url = url;
@@ -55,28 +65,26 @@ static bool nsp_http_get_small(const char *url, std::string &out) {
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (client == nullptr) return false;
     esp_http_client_set_method(client, HTTP_METHOD_GET);
-    if (esp_http_client_perform(client) != ESP_OK) {
-        esp_http_client_cleanup(client);
-        return false;
+    bool ok = false;
+    if (esp_http_client_open(client, 0) == ESP_OK &&
+        esp_http_client_fetch_headers(client) >= 0 &&
+        esp_http_client_get_status_code(client) == 200) {
+        char chunk[512];
+        int r;
+        while ((r = esp_http_client_read(client, chunk, sizeof(chunk))) > 0) {
+            out.append(chunk, r);
+            if (out.size() > 16 * 1024) break;  // small-response cap
+        }
+        ok = out.size() > 0;
     }
-    int status = esp_http_client_get_status_code(client);
-    if (status != 200) {
-        esp_http_client_cleanup(client);
-        return false;
-    }
-    char chunk[512];
-    int r;
-    while ((r = esp_http_client_read(client, chunk, sizeof(chunk))) > 0) {
-        out.append(chunk, r);
-        if (out.size() > 16 * 1024) break;  // small-response cap
-    }
+    esp_http_client_close(client);
     esp_http_client_cleanup(client);
-    return out.size() > 0;
+    return ok;
 }
 
-/* STREAMING download (P179): the body is handed to `sink` as it arrives;
- * nothing larger than one chunk (1 KB) is ever held in RAM.
- * Returns total bytes streamed (0 = failure). */
+/* STREAMING download (P179: no whole-image RAM buffer) + P192 native
+ * pattern (open -> fetch_headers -> read loop). Nothing larger than one
+ * 1 KB chunk is ever held in RAM. Returns total bytes streamed. */
 typedef bool (*nsp_stream_sink)(void *ctx, const uint8_t *data, size_t len);
 static size_t nsp_http_stream(const char *url, nsp_stream_sink sink, void *ctx) {
     esp_http_client_config_t cfg = {};
@@ -85,26 +93,22 @@ static size_t nsp_http_stream(const char *url, nsp_stream_sink sink, void *ctx) 
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (client == nullptr) return 0;
     esp_http_client_set_method(client, HTTP_METHOD_GET);
-    if (esp_http_client_perform(client) != ESP_OK) {
-        esp_http_client_cleanup(client);
-        return 0;
-    }
-    int status = esp_http_client_get_status_code(client);
-    if (status != 200) {
-        esp_http_client_cleanup(client);
-        return 0;
-    }
-    uint8_t chunk[1024];
     size_t total = 0;
-    int r;
-    while ((r = esp_http_client_read(client, (char *)chunk, sizeof(chunk))) > 0) {
-        if (!sink(ctx, chunk, (size_t)r)) {
-            total = 0;
-            break;
+    if (esp_http_client_open(client, 0) == ESP_OK &&
+        esp_http_client_fetch_headers(client) >= 0 &&
+        esp_http_client_get_status_code(client) == 200) {
+        uint8_t chunk[1024];
+        int r;
+        while ((r = esp_http_client_read(client, (char *)chunk, sizeof(chunk))) > 0) {
+            if (!sink(ctx, chunk, (size_t)r)) {
+                total = 0;
+                break;
+            }
+            total += (size_t)r;
+            s_last_progress_us = esp_timer_get_time();
         }
-        total += (size_t)r;
-        s_last_progress_us = esp_timer_get_time();
     }
+    esp_http_client_close(client);
     esp_http_client_cleanup(client);
     return total;
 }
