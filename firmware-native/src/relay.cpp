@@ -7,6 +7,7 @@
  *          CUSTOM_MQTT (publish to the configured button topic).
  */
 
+#include "relay_cmd.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
 #include "protocol.h"
@@ -68,8 +69,13 @@ void nsp_relay_set(int relay, bool state) {
 
 /* Handle an incoming r{N}_cmd payload ("1"/"0"). */
 void nsp_relay_handle_cmd(int relay, const std::string &payload) {
-    bool state = payload == "1" || payload == "on";
-    nsp_relay_set(relay, state);
+    /* P184: parse extracted to relay_cmd.cpp (HOST-UNIT-TESTED). Fail-safe:
+     * invalid payloads are IGNORED — the old code treated any non-"1"/"on"
+     * payload as OFF, so a stray "1 " (trailing space) would drop a live
+     * relay instead of being rejected. */
+    int v = nsp_relay_parse(payload);
+    if (v < 0) return;  // ignore garbage; never drive the GPIO from it
+    nsp_relay_set(relay, v == 1);
 }
 
 /* Physical button press (debounced, active-low buttons). */

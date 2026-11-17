@@ -100,3 +100,7 @@ inline void nsp_config_set_md5s(const std::string &fw, const std::string &fs) {
 /* Shared runtime globals (set once in app_main). */
 inline std::string g_mac;
 inline std::string g_ip;
+
+/* P184: web UI mode switch (setup AP vs station root page) */
+bool nsp_wifi_is_ap_mode(void);
+void nsp_wifi_set_ap_mode(bool v);

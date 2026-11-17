@@ -36,6 +36,8 @@ extern void nsp_relay_init(void);
 extern void nsp_button_scan(void);  // file scope — an in-body
     // declaration inside extern "C" app_main would get C linkage (P160)
 extern float nsp_temperature(void);
+extern bool nsp_web_start(bool ap_mode);  // P184: FILE scope — the
+    // extern-"C"-inside-app_main linkage trap (hit again, P160 lesson)
 
 static std::string s_mac;
 static int64_t s_last_register_us = 0;
@@ -62,9 +64,9 @@ float nsp_temperature() {
         s_adc_init = true;
     }
     int raw = 0;
-    if (adc_oneshot_read(s_adc, ADC_CHANNEL_2, &raw) != ESP_OK || raw <= 1) return 0.0f;
-    float r = 10000.0f * raw / (4095.0f - raw);
-    return 1.0f / (1.0f / 298.15f + logf(r / 10000.0f) / 3950.0f) - 273.15f;
+    if (adc_oneshot_read(s_adc, ADC_CHANNEL_2, &raw) != ESP_OK) return 0.0f;
+    extern float nsp_ntc_temp(int raw);  // pure, host-tested (temp_math.cpp)
+    return nsp_ntc_temp(raw);
 }
 
 
@@ -90,6 +92,7 @@ extern "C" void app_main(void) {
         nsp_setup_ap_start();
     } else {
         nsp_wifi_start();  // station; nsp_wifi registers the GOT_IP handler
+        nsp_web_start(false);  // P184: the panel's own web UI
     }
 
     for (;;) {

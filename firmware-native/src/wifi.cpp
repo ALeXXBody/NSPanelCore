@@ -12,6 +12,9 @@ static bool s_connected = false;
 static int s_rssi = 0;
 static char s_ip[16] = "";
 static bool s_ap_up = false;
+static bool s_ap_mode_flag = false;
+bool nsp_wifi_is_ap_mode(void) { return s_ap_mode_flag; }
+void nsp_wifi_set_ap_mode(bool v) { s_ap_mode_flag = v; }
 
 bool nsp_wifi_connected(void) { return s_connected; }
 int nsp_wifi_rssi(void) { return s_rssi; }
@@ -53,6 +56,7 @@ static void on_ip_event(void *arg, esp_event_base_t base, int32_t id, void *data
 }
 
 void nsp_wifi_start(void) {
+    s_ap_mode_flag = false;  // P184: station mode — the web UI root switches on this
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();

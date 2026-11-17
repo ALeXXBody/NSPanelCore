@@ -5,6 +5,7 @@
 #include "mqtt_client.h"
 #include "protocol.h"
 #include "config.h"
+#include "accept_parse.h"
 
 static esp_mqtt_client_handle_t s_mqtt = nullptr;
 static std::string s_hostname;
@@ -14,9 +15,13 @@ void nsp_mqtt_handle_command(const std::string &payload);
 void nsp_mqtt_publish_log(const char *msg);
 void nsp_ota_start();
 
+static volatile bool s_mqtt_up = false;
+bool nsp_mqtt_connected(void) { return s_mqtt_up; }
+
 static void nsp_mqtt_connected(void *handler_args, esp_event_base_t base,
                                int32_t event_id, void *event_data) {
     if (s_mqtt == nullptr) return;
+    s_mqtt_up = true;  // P184: the web UI status shows the real link state
     // Subscribe to the command topic (hostname verbatim) + manager command
     std::string cmd = topic_panel_cmd(s_hostname);
     esp_mqtt_client_subscribe(s_mqtt, cmd.c_str(), 1);
@@ -82,27 +87,23 @@ void nsp_mqtt_handle_command(const std::string &payload) {
      * manager address + port 8000, and every native OTA silently failed on
      * http://:8000/... Handle the accept exactly like v1: adopt address+port. */
     if (payload.find("register_accept") != std::string::npos) {
-        size_t a = payload.find("\"address\"");
-        if (a != std::string::npos) {
-            a = payload.find('"', a + 9);
-            size_t b = (a == std::string::npos) ? std::string::npos : payload.find('"', a + 1);
-            if (a != std::string::npos && b != std::string::npos) {
-                std::string addr = payload.substr(a + 1, b - a - 1);
-                int port = 8123;
-                size_t p = payload.find("\"port\"");
-                if (p != std::string::npos) {
-                    p = payload.find(':', p + 6);
-                    if (p != std::string::npos) port = atoi(payload.c_str() + p + 1);
-                }
-                if (!addr.empty() && (addr != g_cfg.manager_address || port != g_cfg.manager_port)) {
-                    g_cfg.manager_address = addr;
-                    g_cfg.manager_port = port;
-                    nsp_config_save();
-                    char l[128];
-                    snprintf(l, sizeof(l), "manager address adopted: %s:%d", addr.c_str(), port);
-                    nsp_mqtt_publish_log(l);
-                }
+        /* P184: parsing extracted to accept_parse.cpp (HOST-UNIT-TESTED).
+         * P184 fail-safe: a "no change" accept is logged too — the missing
+         * adoption evidence cost us a boot loop investigation. */
+        std::string addr; int port = 8123;
+        if (nsp_parse_register_accept(payload, addr, port)) {
+            if (addr != g_cfg.manager_address || port != g_cfg.manager_port) {
+                g_cfg.manager_address = addr;
+                g_cfg.manager_port = port;
+                nsp_config_save();
+                char l[128];
+                snprintf(l, sizeof(l), "manager address adopted: %s:%d", addr.c_str(), port);
+                nsp_mqtt_publish_log(l);
+            } else {
+                nsp_mqtt_publish_log("manager accept: address already adopted (no change)");
             }
+        } else {
+            nsp_mqtt_publish_log("manager accept: malformed payload ignored");
         }
         return;
     }
@@ -136,6 +137,8 @@ void nsp_mqtt_send_register(esp_mqtt_client_handle_t client) {
 /* P179 diagnostic: OTA milestones on the panel log topic — the same channel
  * the v1 line used; wire-visible evidence of where the OTA stops. */
 void nsp_mqtt_publish_log(const char *msg) {
+    extern void nsp_web_log(const std::string &);
+    nsp_web_log(msg);  // P184: every OTA/manager event is visible on the panel web UI
     if (s_mqtt == nullptr) return;
     esp_mqtt_client_publish(s_mqtt, topic_log(s_hostname).c_str(), msg, 0, 0, false);
 }
@@ -169,6 +172,10 @@ void nsp_mqtt_start(const std::string &hostname) {
     cfg.network.reconnect_timeout_ms = 5000;
     s_mqtt = esp_mqtt_client_init(&cfg);
     esp_mqtt_client_register_event(s_mqtt, MQTT_EVENT_CONNECTED, nsp_mqtt_connected, nullptr);
+    esp_mqtt_client_register_event(s_mqtt, MQTT_EVENT_DISCONNECTED,
+                                   [](void *, esp_event_base_t, int32_t, void *) {
+                                       s_mqtt_up = false;  // P184 fail-safe: the status page reflects reality
+                                   }, nullptr);
     esp_mqtt_client_register_event(s_mqtt, MQTT_EVENT_DATA, nsp_mqtt_data, nullptr);
     esp_mqtt_client_start(s_mqtt);
 }

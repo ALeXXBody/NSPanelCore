@@ -83,6 +83,8 @@ class NSPanelCoreManager:
         self._last_telemetry: dict[str, dict] = {}
         self._log_backlog: dict[str, list] = {}
         self._last_ota_trigger: dict[str, float] = {}
+        self._ota_fail_streak: dict[str, int] = {}
+        self._ota_attempt_md5: dict[str, tuple] = {}
         self._save_timer = None
         self._weather_unsubs: list = []
         self._ota_md5: dict[str, str] | None = None
@@ -1165,17 +1167,46 @@ class NSPanelCoreManager:
         flight — re-triggering mid-flash corrupts it). The cooldown stamp is
         written AFTER evaluation so a startup-window registration (md5 cache
         not ready) is not blacked out for the next 30 minutes.
+
+        P184 fail-safe: consecutive-failure streak — if a panel was triggered
+        toward an md5 and its NEXT registration still reports the OLD md5
+        (nothing flashed), the streak grows; at 3 the auto-trigger stops for
+        that panel until it reports a DIFFERENT md5 or the streak is cleared
+        by a manual trigger. This is the anti-reboot-loop brake: a panel whose
+        OTA path wedges must not be re-crashed forever.
         """
         import time as _time
 
         if report.get("state") in ("updating_tft", "updating_fw", "updating_fs"):
             return
+        mac = panel.mac
         now = _time.monotonic()
-        last = self._last_ota_trigger.get(panel.mac, 0)
+        last = self._last_ota_trigger.get(mac, 0)
         if now - last < 1800:
             return
+        # P184: failure streak — compare against the last attempt's record.
+        attempt = getattr(self, "_ota_attempt_md5", {}).get(mac)
+        if attempt is not None:
+            before, target = attempt
+            if panel.firmware_md5 == target:
+                self._ota_fail_streak[mac] = 0
+            elif panel.firmware_md5 == before:
+                streak = self._ota_fail_streak.get(mac, 0) + 1
+                self._ota_fail_streak[mac] = streak
+                if streak >= 3:
+                    _LOGGER.warning(
+                        "OTA auto-trigger disabled for %s after %s consecutive failed attempts (manual trigger only)",
+                        panel.name, streak)
+                    self._last_ota_trigger[mac] = now
+                    return
+            else:
+                self._ota_fail_streak[mac] = 0
         await self._maybe_trigger_firmware_ota(panel, report)
-        self._last_ota_trigger[panel.mac] = _time.monotonic()
+        self._last_ota_trigger[mac] = now
+        if not hasattr(self, "_ota_attempt_md5"):
+            self._ota_attempt_md5 = {}
+        model = panel.model if panel.model in ("sonoff", "custom") else "sonoff"
+        self._ota_attempt_md5[mac] = (panel.firmware_md5, self.ota_md5("firmware", f"{model}/firmware.bin"))
 
     @staticmethod
     def _normalize_ota_report(data: dict) -> dict:

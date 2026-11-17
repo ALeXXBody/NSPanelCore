@@ -11,6 +11,7 @@
  */
 
 #include "driver/uart.h"
+#include "touch_decode.h"
 #include "driver/gpio.h"
 #include <cstring>
 #include <cstdio>
@@ -169,30 +170,30 @@ void nsp_display_touch_task_start(void) {
 #define HMI_COMPONENT_SCENES_BUTTON 17
 
 void nsp_display_touch_task(void *) {
+    /* P184: decode extracted to touch_decode.cpp (HOST-UNIT-TESTED) —
+     * partial frames, garbage prefixes and multi-frame buffers covered. */
     uint8_t buf[64];
     for (;;) {
         int n = uart_read_bytes(DISPLAY_UART, buf, sizeof(buf), pdMS_TO_TICKS(200));
-        for (int i = 0; i + 7 <= n; i++) {
-            if (buf[i] == 0x65 && buf[i + 4] == 0xFF && buf[i + 5] == 0xFF && buf[i + 6] == 0xFF) {
-                int page = buf[i + 1], component = buf[i + 2], event = buf[i + 3];
-                bool pressed = (event == 1);
-                if (pressed) {
-                    // Any press wakes the panel from the screensaver to home.
-                    std::string wake = "page home";
-                    nsp_display_send_command(wake.c_str());
-                } else if (page == HMI_HOME_PAGE_ID) {
-                    // v1 HomePage dispatch — navigation (config-free parts)
-                    if (component == HMI_COMPONENT_ROOM_BUTTON ||
-                        component == HMI_COMPONENT_ROOM_SWITCH) {
-                        nsp_display_send_command("page Room");
-                    } else if (component == HMI_COMPONENT_SCENES_BUTTON) {
-                        nsp_display_send_command("page Scenes");
-                    }
+        auto frames = nsp_touch_decode(buf, (size_t)n);
+        for (const auto &f : frames) {
+            int page = f.page, component = f.component, event = f.event;
+            bool pressed = (event == 1);
+            if (pressed) {
+                // Any press wakes the panel from the screensaver to home.
+                std::string wake = "page home";
+                nsp_display_send_command(wake.c_str());
+            } else if (page == HMI_HOME_PAGE_ID) {
+                // v1 HomePage dispatch — navigation (config-free parts)
+                if (component == HMI_COMPONENT_ROOM_BUTTON ||
+                    component == HMI_COMPONENT_ROOM_SWITCH) {
+                    nsp_display_send_command("page Room");
+                } else if (component == HMI_COMPONENT_SCENES_BUTTON) {
+                    nsp_display_send_command("page Scenes");
                 }
-                extern void nsp_mqtt_publish_touch(int page, int component, int event);
-                nsp_mqtt_publish_touch(page, component, event);
-                i += 6;
             }
+            extern void nsp_mqtt_publish_touch(int page, int component, int event);
+            nsp_mqtt_publish_touch(page, component, event);
         }
     }
 }

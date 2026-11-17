@@ -162,8 +162,15 @@ static void nsp_ota_fw_task(void *) {
     std::string checksum;
     for (int i = 0; i < 60 && checksum.empty(); i++) {
         s_last_progress_us = esp_timer_get_time();  // legit waiting, not stalled
-        if (nsp_http_get_small(nsp_manager_url("/checksum_firmware").c_str(), checksum)
-            && checksum.size() >= 32) break;
+        if (i < 3) {  // P184: the first three attempts log the URL being used
+            char l[160];
+            snprintf(l, sizeof(l), "OTA: checksum attempt %d url=%s", i + 1,
+                     nsp_manager_url("/checksum_firmware").c_str());
+            nsp_mqtt_publish_log(l);
+        }
+        bool ok = nsp_http_get_small(nsp_manager_url("/checksum_firmware").c_str(), checksum);
+        if (!ok && i < 3) nsp_mqtt_publish_log("OTA: checksum attempt failed");
+        if (ok && checksum.size() >= 32) break;
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
     if (checksum.size() < 32) {
@@ -189,6 +196,7 @@ static void nsp_ota_fw_task(void *) {
                 continue;
             }
             nsp_mqtt_publish_log("OTA: downloading firmware (streaming)");
+            s_last_progress_us = esp_timer_get_time();
             fw_sink_ctx ctx = { handle, true };
             size_t total = nsp_http_stream(nsp_manager_url("/download_firmware").c_str(),
                                            fw_sink, &ctx);
@@ -252,6 +260,10 @@ void nsp_ota_watchdog_feed_check() {
     if (s_state == OTA_IDLE) return;
     if (esp_timer_get_time() - s_last_progress_us >
         (int64_t)OTA_STALL_TIMEOUT_MS * 1000) {
+        // P184 fail-safe: announce the stall and FLUSH before restarting —
+        // a silent watchdog reboot cost us the whole first investigation.
+        nsp_mqtt_publish_log("OTA: STALL — no progress, restarting");
+        vTaskDelay(pdMS_TO_TICKS(1000));  // let the queued publish flush
         esp_restart();  // mid-write safe: inactive slot / config fs
     }
 }
