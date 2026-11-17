@@ -3,19 +3,19 @@
   "notes": "Native fw v0.1.0 \u2014 P192 HTTP fetch fix + P207 toggle-gated debug console + self-update checks + web UI (v1 design) + 112 host tests.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.0-httpfix.bin",
+      "url": "http://192.168.50.200:8000/sonoff-fw",
       "md5": "677520cd309e470065367b7268841f83"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/sonoff-data_file.bin",
+      "url": "http://192.168.50.200:8000/sonoff-data",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/native-firmware-0.1.0-httpfix.bin",
+      "url": "http://192.168.50.200:8000/custom-fw",
       "md5": "677520cd309e470065367b7268841f83"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://github.com/ALeXXBody/NSPanelCore/releases/download/firmware-latest/custom-data_file.bin",
+      "url": "http://192.168.50.200:8000/custom-data",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "tft/gui.tft": {
