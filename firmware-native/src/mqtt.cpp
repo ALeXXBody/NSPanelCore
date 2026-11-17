@@ -115,19 +115,47 @@ void nsp_mqtt_publish_touch(int page, int component, int event) {
     esp_mqtt_client_publish(s_mqtt, topic_touch(s_hostname).c_str(), buf, 0, 0, false);
 }
 
+/* P208: extract the "command" field properly — substring matching let any
+ * payload MENTIONING a command word trigger it. */
+static bool nsp_json_command(const std::string &payload, std::string &out) {
+    size_t k = payload.find("\"command\"");
+    if (k == std::string::npos) return false;
+    size_t colon = payload.find(':', k + 10);
+    if (colon == std::string::npos) return false;
+    size_t q1 = payload.find('"', colon + 1);
+    if (q1 == std::string::npos) return false;
+    size_t q2 = payload.find('"', q1 + 1);
+    if (q2 == std::string::npos) return false;
+    out = payload.substr(q1 + 1, q2 - q1 - 1);
+    return true;
+}
+
 void nsp_mqtt_handle_command(const std::string &payload) {
     /* P180: the manager address is NEVER persisted by the v1 line — it is
      * set at runtime from the register_accept (NSPMConfig.cpp:49 wipes it
      * on every load). The migration's NVS seed therefore captured an EMPTY
      * manager address + port 8000, and every native OTA silently failed on
      * http://:8000/... Handle the accept exactly like v1: adopt address+port. */
-    if (payload.find("register_accept") != std::string::npos) {
+    std::string cmd_field;
+    if (nsp_json_command(payload, cmd_field)) {
+        if (cmd_field == "register_accept") {
         /* P184: parsing extracted to accept_parse.cpp (HOST-UNIT-TESTED).
          * P184 fail-safe: a "no change" accept is logged too — the missing
          * adoption evidence cost us a boot loop investigation. */
         std::string addr; int port = 8123;
         if (nsp_parse_register_accept(payload, addr, port)) {
-            if (addr != g_cfg.manager_address || port != g_cfg.manager_port) {
+            auto valid_quad = [](const std::string &a) {
+                int parts = 0, dots = 0;
+                for (char c : a) {
+                    if (c == '.') { dots++; if (parts == 0 || parts > 3) return false; parts = 0; continue; }
+                    if (c < '0' || c > '9') return false;
+                    if (parts >= 3) return false;
+                    parts++;
+                }
+                return dots == 3 && parts > 0;
+            };
+            if (!addr.empty() && valid_quad(addr) &&
+                (addr != g_cfg.manager_address || port != g_cfg.manager_port)) {
                 g_cfg.manager_address = addr;
                 g_cfg.manager_port = port;
                 nsp_config_save();
@@ -140,13 +168,16 @@ void nsp_mqtt_handle_command(const std::string &payload) {
         } else {
             nsp_mqtt_publish_log("manager accept: malformed payload ignored");
         }
-        return;
+            return;
+        }
+        /* register_accept with a broken payload: fall through, nothing matches */
     }
-    if (payload.find(CMD_REBOOT) != std::string::npos) {
+    if (!nsp_json_command(payload, cmd_field)) return;
+    if (cmd_field == CMD_REBOOT) {
         esp_restart();
-    } else if (payload.find(CMD_FIRMWARE_UPDATE) != std::string::npos) {
+    } else if (cmd_field == CMD_FIRMWARE_UPDATE) {
         nsp_ota_start();
-    } else if (payload.find(CMD_TFT_UPDATE) != std::string::npos) {
+    } else if (cmd_field == CMD_TFT_UPDATE) {
         extern void nsp_tft_start(void);  // P210: real OTA TFT delivery
         nsp_tft_start();
     }
