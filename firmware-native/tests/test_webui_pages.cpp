@@ -26,6 +26,12 @@ static NspWebStatus sample() {
     s.ota_state = "idle";
     s.ota_progress = "0";
     s.uptime_s = "120";
+    s.wifi_known = true;
+    s.wifi_ssid_value = "MyNet";
+    s.hostname_value = "KitchenPanel";
+    s.mqtt_server_value = "192.168.50.20";
+    s.mqtt_port_value = "1883";
+    s.mqtt_user_value = "panel";
     return s;
 }
 
@@ -42,7 +48,21 @@ int main() {
     CHECK(page.find("act('display_restart')") != std::string::npos, "display restart wired");
     CHECK(page.find("factory_reset") != std::string::npos, "factory reset wired");
     CHECK(page.find("href=/log") != std::string::npos, "log link present");
-    CHECK(page.find("—") != std::string::npos, "empty fields show a dash");
+    // v1 design reused: brandbar + brandmark + theme toggle + cards + v1 CSS
+    CHECK(page.find("brandbar") != std::string::npos, "v1 brandbar present");
+    CHECK(page.find("brandmark") != std::string::npos, "v1 brandmark present");
+    CHECK(page.find("theme_toggle") != std::string::npos, "v1 theme toggle present");
+    CHECK(page.find("class=card") != std::string::npos, "v1 cards present");
+    CHECK(page.find("NSPANEL_V1_CSS") == std::string::npos, "css embedded as code, not literal");
+    CHECK(page.find("--accent:#39c8e8") != std::string::npos, "v1 brand cyan embedded");
+    CHECK(page.find("\u2014") != std::string::npos, "empty fields show a dash");
+    // setup page: v1 form layout
+    std::string sp = nsp_web_setup_page(s);
+    CHECK(sp.find("name=hostname") != std::string::npos, "setup: hostname field");
+    CHECK(sp.find("name=ssid") != std::string::npos, "setup: ssid field");
+    CHECK(sp.find("name=mqtt_server") != std::string::npos, "setup: mqtt server field");
+    CHECK(sp.find("btn btn-ghost") != std::string::npos, "setup: v1 scan button");
+    CHECK(sp.find("btn btn-primary") != std::string::npos, "setup: v1 save button");
 
     // XSS safety: a hostile field value must be escaped
     NspWebStatus x = sample();

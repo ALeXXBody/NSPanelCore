@@ -89,14 +89,20 @@ static NspWebStatus nsp_web_gather_status(void) {
 static bool s_ap_mode = false;  // root page switches by mode
 
 static esp_err_t on_get_root(httpd_req_t *req) {
+    NspWebStatus s = nsp_web_gather_status();
     if (s_ap_mode) {
-        // Fresh/unconfigured: the setup form is the root.
-        extern std::string nsp_build_setup_page(void);
-        std::string page = nsp_build_setup_page();
+        // Fresh/unconfigured: the setup form (v1 design) is the root.
+        s.wifi_known = !g_cfg.wifi_ssid.empty();
+        s.wifi_ssid_value = g_cfg.wifi_ssid;
+        s.hostname_value = g_cfg.wifi_hostname;
+        s.mqtt_server_value = g_cfg.mqtt_server;
+        s.mqtt_port_value = std::to_string(g_cfg.mqtt_port);
+        s.mqtt_user_value = g_cfg.mqtt_user;
+        std::string page = nsp_web_setup_page(s);
         httpd_resp_send(req, page.c_str(), page.size());
         return ESP_OK;
     }
-    std::string page = nsp_web_status_page(nsp_web_gather_status());
+    std::string page = nsp_web_status_page(s);
     httpd_resp_send(req, page.c_str(), page.size());
     return ESP_OK;
 }

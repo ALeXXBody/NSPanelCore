@@ -22,50 +22,8 @@
 #include <cstdlib>
 #include <arpa/inet.h>
 
-std::string nsp_build_setup_page() {
-    bool wifi_known = !g_cfg.wifi_ssid.empty();
-    std::string ssid_attr = wifi_known ? ("value=\"" + g_cfg.wifi_ssid + "\"") : "";
-    std::string wifi_note = wifi_known
-        ? "<p class=note>WiFi is already configured — leave blank to keep it.</p>"
-        : "";
-    std::string page =
-    "<!DOCTYPE html><html><head><meta charset=utf-8>"
-    "<meta name=viewport content='width=device-width,initial-scale=1'>"
-    "<title>NSPanel Core setup</title><style>"
-    "body{font:14px/1.5 system-ui;max-width:420px;margin:24px auto;padding:0 16px;"
-    "background:#0d1016;color:#c8cbce}h1{font-size:18px}h1 span{color:#39c8e8}"
-    "input,select{width:100%;padding:8px;margin:4px 0 12px;background:#141a24;"
-    "border:1px solid #232c3b;border-radius:6px;color:#c8cbce;box-sizing:border-box}"
-    "button{width:100%;padding:10px;background:#2277aa;color:#fff;border:0;"
-    "border-radius:6px;font-size:15px}button.sc{background:#182031;color:#7fb8d8;"
-    "border:1px solid #232c3b;padding:6px;font-size:13px;width:auto}"
-    "label{color:#8b93a1;font-size:12px}"
-    ".note{color:#8b93a1;font-size:12px}</style></head>"
-    "<body><h1>NSPanel <span>Core</span> setup</h1>"
-    "<form method=POST action=/save>"
-    "<label>WiFi SSID</label><input name=ssid " + ssid_attr + (wifi_known ? "" : " required") + ">"
-    + wifi_note +
-    "<button type=button class=sc onclick='scan()' id=scb>Scan for networks</button>"
-    "<select id=sclist onchange=\"document.forms[0].ssid.value=this.value\" style=display:none></select>"
-    "<label>WiFi password</label><input name=psk type=password>"
-    "<label>Panel name (hostname)</label><input name=hostname value='" + g_cfg.wifi_hostname + "'>"
-    "<label>MQTT server</label><input name=mqtt_server required>"
-    "<label>MQTT port</label><input name=mqtt_port value='1883'>"
-    "<label>MQTT username</label><input name=mqtt_user>"
-    "<label>MQTT password</label><input name=mqtt_pass type=password>"
-    "<button>Save &amp; restart</button></form>"
-    "<script>"
-    "function scan(){var b=document.getElementById('scb');b.textContent='Scanning…';b.disabled=true;"
-    "fetch('/scan').then(r=>r.json()).then(function(l){var s=document.getElementById('sclist');"
-    "s.innerHTML='';l.forEach(function(n){var o=document.createElement('option');"
-    "o.value=n.ssid;o.textContent=n.ssid+' ('+n.rssi+' dBm)';s.appendChild(o);});"
-    "if(l.length){s.style.display='block';document.forms[0].ssid.value=l[0].ssid;}"
-    "else{s.style.display='block';s.innerHTML='<option>(no networks found)</option>';}"
-    "b.textContent='Scan again';b.disabled=false;})"
-    ".catch(function(){b.textContent='Scan failed — type SSID manually';b.disabled=false;});}"
-    "</script></body></html>";
-    return page;
-}
+// P185: the setup form builder moved to webui_pages.cpp (pure, host-tested,
+// v1 design) — nsp_web_setup_page().
 
 static bool s_server_up = false;
 

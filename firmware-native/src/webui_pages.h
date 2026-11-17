@@ -1,7 +1,11 @@
 /* NSPanel Core — web UI page builders + action routing (pure, host-testable).
  *
- * The pages take a plain status struct — no ESP types — so every byte of
- * HTML/JSON logic runs under the host test suite (R1).
+ * P185: the pages reuse the PROVEN v1 WebManager design verbatim — the
+ * same hand-written CSS (embedded below, byte-identical to the repo's
+ * data/static/main.css), the same brandbar/brandmark/theme-toggle
+ * classes, the same card/button vocabulary the user already knows.
+ * The builders take a plain status struct — no ESP types — so every byte
+ * of HTML/JSON logic runs under the host test suite (R1).
  */
 
 #pragma once
@@ -23,6 +27,12 @@ struct NspWebStatus {
     std::string ota_state;
     std::string ota_progress;
     std::string uptime_s;
+    bool wifi_known;          // setup form prefill state
+    std::string wifi_ssid_value;
+    std::string hostname_value;
+    std::string mqtt_server_value;
+    std::string mqtt_port_value;
+    std::string mqtt_user_value;
 };
 
 /* Status page (human) */
@@ -31,6 +41,8 @@ std::string nsp_web_status_page(const NspWebStatus &s);
 std::string nsp_web_status_json(const NspWebStatus &s);
 /* Log view page */
 std::string nsp_web_log_page(const std::string &logdump);
+/* Setup/config form (AP root and station reconfig — v1 look) */
+std::string nsp_web_setup_page(const NspWebStatus &s);
 
 /* POST /action body parse. Returns:
  * 0 = none/unknown, 1 = reboot, 2 = firmware_update,
