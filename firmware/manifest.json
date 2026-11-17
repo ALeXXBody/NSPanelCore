@@ -4,7 +4,7 @@
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "http://192.168.50.200:8000/sonoff-fw",
-      "md5": "05b582bcbacd4e9557b72a30ea8bf7ab"
+      "md5": "b909e42d596271b8340ce23e32787640"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "http://192.168.50.200:8000/sonoff-data",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "http://192.168.50.200:8000/custom-fw",
-      "md5": "05b582bcbacd4e9557b72a30ea8bf7ab"
+      "md5": "b909e42d596271b8340ce23e32787640"
     },
     "firmware/custom/data_file.bin": {
       "url": "http://192.168.50.200:8000/custom-data",
