@@ -1,10 +1,10 @@
 {
-  "version": "0.1.0",
-  "notes": "Native fw v0.1.0 \u2014 P192 HTTP fetch fix + P207 toggle-gated debug console + self-update checks + web UI (v1 design) + 112 host tests.",
+  "version": "0.1.1",
+  "notes": "fw v0.1.1 \u2014 the audited repairs: exact command dispatch, address validation, display text fix, touch fixes, fs two-pass, TFT block protocol.",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "http://192.168.50.200:8000/sonoff-fw",
-      "md5": "74f644d1befdd1a450ebca41f02f6f28"
+      "md5": "0063aa91828369eed6d2221717e11c1a"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "http://192.168.50.200:8000/sonoff-data",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "http://192.168.50.200:8000/custom-fw",
-      "md5": "74f644d1befdd1a450ebca41f02f6f28"
+      "md5": "0063aa91828369eed6d2221717e11c1a"
     },
     "firmware/custom/data_file.bin": {
       "url": "http://192.168.50.200:8000/custom-data",
