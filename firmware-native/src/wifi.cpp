@@ -65,6 +65,10 @@ void nsp_wifi_start(void) {
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, on_wifi_event, nullptr));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_ip_event, nullptr));
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+    // P186 fail-safe: modem power-save OFF — the panel is mains-powered and
+    // the link was flapping every few minutes (manager marked it offline,
+    // live MQTT commands landed in the dark). Stability over power draw.
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
     wifi_config_t wcfg = {};
     strncpy((char *)wcfg.sta.ssid, g_cfg.wifi_ssid.c_str(), sizeof(wcfg.sta.ssid) - 1);
     strncpy((char *)wcfg.sta.password, g_cfg.wifi_psk.c_str(), sizeof(wcfg.sta.password) - 1);
