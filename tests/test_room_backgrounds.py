@@ -126,3 +126,21 @@ def test_compile_with_the_photo_succeeds():
         out = os.path.join(wd, "panel.tft")
         hg.compile_tft(wd, out)
         assert os.path.getsize(out) > 200_000
+
+
+# -- the cache-busted manifest fetch (P257) --------------------------------
+
+def test_manifest_url_fresh_busts_the_cache():
+    from nspanel_core.firmware_store import manifest_url_fresh
+    base = "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/manifest.json"
+    u1 = manifest_url_fresh(base)
+    u2 = manifest_url_fresh(base)
+    assert u1.startswith(base + "?fetch=")
+    assert u1 != u2, "every fetch must be a unique URL — the CDN cannot serve a stale copy"
+    assert "manifest.json" in u1
+
+
+def test_manifest_url_fresh_with_existing_query():
+    from nspanel_core.firmware_store import manifest_url_fresh
+    u = manifest_url_fresh("https://example.com/manifest.json?mirror=lan")
+    assert "mirror=lan" in u and "&fetch=" in u

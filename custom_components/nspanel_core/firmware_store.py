@@ -81,12 +81,27 @@ def is_newer(candidate: str, current: str) -> bool:
     return _version_tuple(candidate) > _version_tuple(current)
 
 
+def manifest_url_fresh(url: str) -> str:
+    """A cache-busted manifest URL (P257): the manifest is the ONE URL that
+    repeats across releases, so a CDN edge can serve stale bytes for its
+    TTL — the activation then re-activates the OLD release and the panels
+    never update. A unique query per fetch makes every read fresh; GitHub
+    ignores the parameter."""
+    import time
+
+    sep = "&" if "?" in url else "?"
+    manifest_url_fresh._n = getattr(manifest_url_fresh, "_n", 0) + 1
+    return f"{url}{sep}fetch={int(time.time() * 1000)}-{manifest_url_fresh._n}"
+
+
 async def fetch_manifest(hass, url: str) -> dict | None:
     """Download + minimally validate the firmware manifest. Runs in executor."""
     import urllib.request
 
+    fetch_url = manifest_url_fresh(url)
+
     def _get():
-        req = urllib.request.Request(url, headers={"User-Agent": "NSPanelCore/1.0"})
+        req = urllib.request.Request(fetch_url, headers={"User-Agent": "NSPanelCore/1.0"})
         with urllib.request.urlopen(req, timeout=30) as resp:
             if resp.status != 200:
                 raise ValueError(f"HTTP {resp.status}")
