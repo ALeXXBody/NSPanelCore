@@ -41,6 +41,7 @@ extern void nsp_tft_start(void);
 enum OtaState { OTA_IDLE, OTA_FW, OTA_FS };
 static volatile OtaState s_state = OTA_IDLE;
 static int s_progress = 0;
+static int s_no_reply_strikes = 0;  // P242: per-transfer no-reply counter
 static int64_t s_last_progress_us = 0;
 
 int nsp_ota_progress(void) { return s_progress; }
@@ -339,6 +340,7 @@ static void nsp_tft_task(void *) {
     nsp_display_set_raw_mode(true);  // own the UART for the whole sequence
 
     for (int attempt = 0; attempt < 3; attempt++) {
+        s_no_reply_strikes = 0;  // P242: fresh count per clean attempt
         nsp_display_power(1);
         vTaskDelay(pdMS_TO_TICKS(1000));
         nsp_display_power(0);
@@ -501,13 +503,28 @@ static void nsp_tft_task(void *) {
             }
             if (rlen == 0) {
                 if (offset >= file_size) break;  // last block: silence = done
+                /* P242: cap the no-reply retries — the display stopping
+                 * mid-write must NOT hang the task forever (progress
+                 * frozen, watchdog fed by the wait loop, new commands
+                 * swallowed as "busy": the user's only escape was the
+                 * power plug). 3 tries per block, then fail the attempt
+                 * — the attempt loop power-cycles the display (which
+                 * clears a System-Data-ERROR state) and restarts clean. */
+                s_no_reply_strikes++;
                 char l[80];
-                snprintf(l, sizeof(l), "TFT: no block reply at %lld — retrying block", offset);
+                snprintf(l, sizeof(l), "TFT: no block reply at %lld (strike %d)",
+                         offset, s_no_reply_strikes);
                 nsp_mqtt_publish_log(l);
+                if (s_no_reply_strikes >= 3) {
+                    nsp_mqtt_publish_log("TFT: display not answering — restarting attempt");
+                    failed = true;
+                    break;
+                }
                 offset -= (long long)got;  // resend this block
                 resent = true;
                 continue;
             }
+            s_no_reply_strikes = 0;
             if (resp[0] == 0x08 && rlen >= 5) {
                 uint32_t req_off = (uint32_t)resp[1] | ((uint32_t)resp[2] << 8) |
                                    ((uint32_t)resp[3] << 16) | ((uint32_t)resp[4] << 24);
@@ -576,7 +593,11 @@ static void nsp_tft_task(void *) {
 }
 
 void nsp_tft_start() {
-    if (s_state != OTA_IDLE) return;
+    if (s_state != OTA_IDLE) {
+        /* P242: a swallowed command is invisible — say so. */
+        nsp_mqtt_publish_log("TFT: update request ignored (already running)");
+        return;
+    }
     s_state = OTA_FS;
     xTaskCreatePinnedToCore(nsp_tft_task, "tft", 8192, nullptr, 1, nullptr, 0);
 }

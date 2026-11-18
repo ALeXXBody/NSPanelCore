@@ -1,35 +1,36 @@
 {
-  "version": "0.1.5",
+  "version": "0.1.6",
   "notes": "fw v0.1.2 \u2014 the zero-typing provisioning firmware: WiFi-only first-boot form, POST /provision, + all audit repairs + the TFT block protocol.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/native-firmware-0.1.5.bin",
-      "md5": "69ceaa0fb79f1bc51c1d24aa9e63bd3f"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/native-firmware-0.1.6.bin",
+      "md5": "bca9d8b79c87d95e122c75e6f976a889"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/native-firmware-0.1.5.bin",
-      "md5": "69ceaa0fb79f1bc51c1d24aa9e63bd3f"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/native-firmware-0.1.6.bin",
+      "md5": "bca9d8b79c87d95e122c75e6f976a889"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "tft/gui.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/gui.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/gui.tft",
       "md5": "0a205300a5006c6964a5e879fc4103f4"
     },
     "tft/gui_us.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/gui_us.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/gui_us.tft",
       "md5": "0a205300a5006c6964a5e879fc4103f4"
     }
   },
   "changes": {
     "bug_fixes": [
-      "THE TOUCHSCREEN: the interface rendered but touch did nothing - the display only reports touches when a component's sendkey is set, and no page had it. Every button and hotspot now sends press + release events"
+      "A display that stopped answering mid-upload hung the update forever (progress frozen, further commands swallowed): no-reply retries are now capped at 3 per block, then the attempt restarts cleanly (the display power-cycle clears its error state)",
+      "An update request arriving while one is running is now logged instead of silently ignored"
     ],
     "features": [],
     "breaking": []
