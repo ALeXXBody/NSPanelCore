@@ -17,6 +17,7 @@
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
 #include "esp_timer.h"
+#include "mbedtls/md5.h"
 #include <cstring>
 #include <cstdio>
 #include <string>
@@ -412,6 +413,16 @@ static void nsp_tft_task(void *) {
         }
         nsp_mqtt_publish_log("TFT: 0x05 ACK — block transfer starting");
 
+        /* P238: hash every byte we hand the display (resends excluded) —
+         * on completion the digest is recorded as the panel's TFT md5, so
+         * the manager's compare works and auto display updates fire.
+         * The bug: the panel reported a never-written field, so the
+         * manager saw empty-vs-served forever and never triggered. */
+        mbedtls_md5_context tft_md5;
+        mbedtls_md5_init(&tft_md5);
+        mbedtls_md5_starts(&tft_md5);
+        bool resent = false;
+
         bool failed = false;
         long long offset = 0;
         while (offset < file_size && !failed) {
@@ -461,6 +472,11 @@ static void nsp_tft_task(void *) {
             esp_http_client_cleanup(client);
             if (got < (size_t)want) { failed = true; break; }
 
+            if (!resent) {  // re-sent bytes were already hashed once
+                mbedtls_md5_update(&tft_md5, block, got);
+                resent = false;
+            }
+
             nsp_display_send((const char *)block, got);
             offset += (long long)got;
             s_progress = (int)(100ULL * offset / (unsigned long long)file_size);
@@ -485,6 +501,7 @@ static void nsp_tft_task(void *) {
                 snprintf(l, sizeof(l), "TFT: no block reply at %lld — retrying block", offset);
                 nsp_mqtt_publish_log(l);
                 offset -= (long long)got;  // resend this block
+                resent = true;
                 continue;
             }
             if (resp[0] == 0x08 && rlen >= 5) {
@@ -511,6 +528,22 @@ static void nsp_tft_task(void *) {
         }
 
         if (!failed && offset >= file_size) {
+            /* P238: record the delivered TFT's md5 — the manager compares
+             * this at every registration and drives auto display updates. */
+            unsigned char dig[16];
+            mbedtls_md5_finish(&tft_md5, dig);
+            mbedtls_md5_free(&tft_md5);
+            char hex[33] = {0};
+            for (int i = 0; i < 16; i++) snprintf(hex + i * 2, 3, "%02x", dig[i]);
+            if (g_cfg.md5_tft_file != hex) {
+                g_cfg.md5_tft_file = hex;
+                nsp_config_save();
+            }
+            {
+                char l[80];
+                snprintf(l, sizeof(l), "TFT: delivered md5 recorded (%s)", hex);
+                nsp_mqtt_publish_log(l);
+            }
             nsp_mqtt_publish_log("TFT: all blocks written — display finishing");
             vTaskDelay(pdMS_TO_TICKS(6000));   // display writes, reboots itself
             nsp_display_drain(1500);
