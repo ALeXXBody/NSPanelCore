@@ -420,6 +420,9 @@ class PlaceholderPageView(HomeAssistantView):
             "rooms": "Rooms",
             "relay_groups": "Relay/Light groups",
             "global_scenes": "Global scenes",
+            "weather": "Weather & Time",
+            "denied": "Denied devices",
+            "general": "Settings — General",
             "weather_and_time": "Weather & Time",
             "denied_nspanels": "Denied NSPanels",
             "settings": "Settings",
@@ -699,7 +702,7 @@ class RelayGroupsView(HomeAssistantView):
 
 
 class WeatherTimeView(HomeAssistantView):
-    url = f"{URL_BASE}/weather_and_time"
+    url = f"{URL_BASE}/settings/weather"
     name = "nspanel_core:weather_time"
     requires_auth = False
 
@@ -752,11 +755,11 @@ class WeatherTimeView(HomeAssistantView):
                 text="Weather errors: " + "; ".join(f"{k}: {v}" for k, v in errors.items()),
                 status=422,
             )
-        return _redirect(request, f"{URL_BASE}/weather_and_time")
+        return _redirect(request, f"{URL_BASE}/settings/weather")
 
 
 class DeniedPanelsView(HomeAssistantView):
-    url = f"{URL_BASE}/denied_nspanels"
+    url = f"{URL_BASE}/settings/denied"
     name = "nspanel_core:denied"
     requires_auth = False
 
@@ -799,8 +802,42 @@ class AllowIgnoredMacView(HomeAssistantView):
 
 
 class SettingsView(HomeAssistantView):
+    """P236: the Settings hub — opens on the subpages."""
+
     url = f"{URL_BASE}/settings"
     name = "nspanel_core:settings"
+    requires_auth = False
+
+    _SUBPAGES = (
+        ("general", "General",
+         "Manager address, MQTT, display behavior, screensaver, themes"),
+        ("denied", "Denied devices",
+         "Panels that were denied access — allow them back here"),
+        ("weather", "Weather & Time",
+         "Location, outside-temperature provider, time and date format"),
+    )
+
+    async def get(self, request, **kwargs):
+        manager = _manager(request)
+        return web.Response(
+            text=_render(
+                "settings.html",
+                request=request,
+                subpages=[
+                    {"slug": slug, "title": title, "desc": desc}
+                    for slug, title, desc in self._SUBPAGES
+                ],
+                page_title="Settings",
+            ),
+            content_type="text/html",
+        )
+
+
+class GeneralSettingsView(HomeAssistantView):
+    """P236: the general settings — now a SUBPAGE of /settings."""
+
+    url = f"{URL_BASE}/settings/general"
+    name = "nspanel_core:settings_general"
     requires_auth = False
 
     async def get(self, request, **kwargs):
@@ -808,7 +845,7 @@ class SettingsView(HomeAssistantView):
         s = manager.config.settings
         themes = {"nspmwip": "NSPanel Core (dark)"}
         html = _render(
-            "settings.html",
+            "settings_general.html",
             request=request,
             manager_address=s.manager_address,
             manager_port=s.manager_port,
@@ -855,7 +892,7 @@ class SettingsView(HomeAssistantView):
             ],
             themes=themes,
             theme=s.theme,
-            page_title="Settings",
+            page_title="Settings — General",
             nspanels=_panels_context(manager),
         )
         return web.Response(text=html, content_type="text/html")
@@ -2129,6 +2166,8 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         FirmwareCheckView,
         FirmwareInstallView,
         ComingSoonView,
+        SettingsView,
+        GeneralSettingsView,
         DashboardView,
         DashboardDesignView,
         DashboardSaveView,

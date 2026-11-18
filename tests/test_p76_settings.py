@@ -13,7 +13,7 @@ import sys as _sys
 
 _sys.path.insert(0, str(REPO / "custom_components"))
 SETTINGS_HTML = (REPO / "custom_components" / "nspanel_core" / "ui" /
-                 "templates" / "settings.html")
+                 "templates" / "settings_general.html")
 MANAGER = REPO / "custom_components" / "nspanel_core" / "manager.py"
 
 

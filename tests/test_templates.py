@@ -94,8 +94,23 @@ def test_edit_panel_renders_with_truthy_checks():
     assert m and "hidden" in m.group(0)  # EU panel hides US preview
 
 
-def test_settings_renders_with_auto_tft():
+def test_settings_hub_lists_subpages():
     out = ENV.get_template("settings.html").render(
+        _base(
+            subpages=[
+                {"slug": "general", "title": "General", "desc": "d"},
+                {"slug": "denied", "title": "Denied devices", "desc": "d"},
+                {"slug": "weather", "title": "Weather & Time", "desc": "d"},
+            ],
+        )
+    )
+    for slug in ("general", "denied", "weather"):
+        assert f'href="/nspanel_core/settings/{slug}"' in out
+    assert "Denied devices" in out and "Weather &amp; Time" in out
+
+
+def test_settings_renders_with_auto_tft():
+    out = ENV.get_template("settings_general.html").render(
         _base(
             default_nspanel_type="sonoff",
             auto_tft_updates=True,
