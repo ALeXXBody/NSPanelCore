@@ -339,12 +339,21 @@ static void nsp_tft_task(void *) {
     extern void nsp_display_set_raw_mode(bool on);
     nsp_display_set_raw_mode(true);  // own the UART for the whole sequence
 
+    /* P245 (user demand — no power cycles as a "solution"): the display's
+     * write pointer persists across power cycles (that's the resume
+     * mechanism), so cycling buys nothing for the protocol — attempt 1
+     * talks to the display directly; a cycle happens only when a previous
+     * attempt found the display unresponsive (its recovery role). */
+    bool power_cycle_needed = false;
     for (int attempt = 0; attempt < 3; attempt++) {
         s_no_reply_strikes = 0;  // P242: fresh count per clean attempt
-        nsp_display_power(1);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        nsp_display_power(0);
-        vTaskDelay(pdMS_TO_TICKS(3000));
+        if (power_cycle_needed) {
+            nsp_display_power(1);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            nsp_display_power(0);
+            vTaskDelay(pdMS_TO_TICKS(3000));
+            power_cycle_needed = false;
+        }
 
         nsp_display_send_command("DRAKJHSUYDGBNCJHGJKSHBDN");
         vTaskDelay(pdMS_TO_TICKS(400));
@@ -361,7 +370,8 @@ static void nsp_tft_task(void *) {
                 snprintf(l, sizeof(l), "TFT: comok received (%d bytes)", n);
                 nsp_mqtt_publish_log(l);
             } else {
-                nsp_mqtt_publish_log("TFT: no comok — retrying");
+                nsp_mqtt_publish_log("TFT: no comok — power-cycle and retry");
+                power_cycle_needed = true;
                 vTaskDelay(pdMS_TO_TICKS(2000));
                 continue;
             }
