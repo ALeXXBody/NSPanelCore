@@ -195,6 +195,7 @@ void nsp_display_set_ampm(const std::string &ampm_str) {
 void nsp_display_touch_task(void *);
 
 extern "C" void nsp_relay_toggle_pub(int relay);  // P210: file scope (P160 rule)
+extern void nsp_mqtt_publish_log(const char *line);  // P256: touch-frame logging
 void nsp_display_touch_task_start(void) {
     xTaskCreatePinnedToCore(nsp_display_touch_task, "touch", 4096, nullptr, 0, nullptr, 0);
 }
@@ -233,6 +234,14 @@ void nsp_display_touch_task(void *) {
         for (const auto &f : frames) {
             int page = f.page, component = f.component, event = f.event;
             bool pressed = (event == 1);
+            /* P256: every touch frame the panel receives is visible in the
+             * log — the relay-latency diagnosis (quick taps lost?) needs
+             * the raw frames with their arrival spacing. */
+            {
+                char l[64];
+                snprintf(l, sizeof(l), "touch: p=%d c=%d e=%d", page, component, event);
+                nsp_mqtt_publish_log(l);
+            }
             /* P208#4: wake on release from the screensaver pages only —
              * the old code navigated on press from EVERY page (mid-
              * interaction jumps) and ignored screensaver releases. */
