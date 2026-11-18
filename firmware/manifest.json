@@ -3,27 +3,27 @@
   "notes": "fw v0.1.2 \u2014 the zero-typing provisioning firmware: WiFi-only first-boot form, POST /provision, + all audit repairs + the TFT block protocol.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "http://192.168.50.200:8000/sonoff-fw",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.2/native-firmware-0.1.2.bin",
       "md5": "848bbc1c6bd156afcb9ca13b274c4889"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "http://192.168.50.200:8000/sonoff-data",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.2/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "http://192.168.50.200:8000/custom-fw",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.2/native-firmware-0.1.2.bin",
       "md5": "848bbc1c6bd156afcb9ca13b274c4889"
     },
     "firmware/custom/data_file.bin": {
-      "url": "http://192.168.50.200:8000/custom-data",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.2/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "tft/gui.tft": {
-      "url": "http://192.168.50.200:8000/tft_eu",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.2/gui.tft",
       "md5": "f2539275ad4b1209e027d1b66694bd27"
     },
     "tft/gui_us.tft": {
-      "url": "http://192.168.50.200:8000/tft_eu",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.2/gui_us.tft",
       "md5": "f2539275ad4b1209e027d1b66694bd27"
     }
   },
