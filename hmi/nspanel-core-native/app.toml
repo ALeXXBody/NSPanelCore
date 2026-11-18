@@ -15,6 +15,7 @@ pages = [
 ]
 pictures = [
     "splash_boot",
+    "bg_pad",
     "bg_home",
     "bg_plain",
     "bg_room",

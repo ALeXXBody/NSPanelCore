@@ -14,3 +14,12 @@ y = 0
 w = 480
 h = 320
 pic = "bg_plain"
+
+[[component]]
+name = "pad_pic"
+type = "picture"
+x = 0
+y = 0
+w = 200
+h = 200
+pic = "bg_pad"
