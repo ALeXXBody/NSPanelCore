@@ -6,6 +6,7 @@
 #include "protocol.h"
 #include "config.h"
 #include "accept_parse.h"
+#include "dash_cmd.h"
 
 static esp_mqtt_client_handle_t s_mqtt = nullptr;
 static std::string s_hostname;
@@ -183,6 +184,23 @@ void nsp_mqtt_handle_command(const std::string &payload) {
     } else if (cmd_field == CMD_TFT_UPDATE) {
         extern void nsp_tft_start(void);  // P210: real OTA TFT delivery
         nsp_tft_start();
+    } else if (cmd_field == "dash") {
+        /* P234: the dashboard channel — sanitized pass-through to the
+         * display (dash_cmd.cpp rejects everything but allow-listed
+         * statements). */
+        extern void nsp_display_send_command(const char *cmd);
+        std::string stmt;
+        if (nsp_dash_parse(payload, stmt) == 0) {
+            nsp_display_send_command(stmt.c_str());
+        } else {
+            nsp_mqtt_publish_log("dash: rejected payload");
+        }
+    } else if (cmd_field == "dash_map") {
+        if (nsp_dash_map_apply(payload)) {
+            nsp_mqtt_publish_log("dash: page map adopted");
+        } else {
+            nsp_mqtt_publish_log("dash_map: rejected payload");
+        }
     }
 }
 

@@ -40,9 +40,10 @@ int main() {
     CHECK(nsp_provision_field("{\"mqtt_server\":\"\"}", "mqtt_server", v) && v.empty(),
           "empty string value captured (caller validates)");
 
-    /* special chars in password */
+    /* special chars in password: json.dumps escapes inner quotes and the
+     * parser unescapes them (P235: provisioning broke on quote passwords). */
     CHECK(nsp_provision_field(
-        "{\"mqtt_pass\":\"p@\\\"ss!\"}", "mqtt_pass", v) && v == "p@\\\"ss!",
+        "{\"mqtt_pass\":\"p@\\\"ss!\"}", "mqtt_pass", v) && v == "p@\"ss!",
         "password with escaped quote");
 
     /* key substring must not match (mqtt_server2 must not return mqtt_server's value) */

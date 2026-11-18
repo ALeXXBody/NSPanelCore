@@ -18,6 +18,7 @@
 #include "esp_timer.h"
 #include "protocol.h"
 #include "config.h"
+#include "dash_cmd.h"
 
 #define DISPLAY_UART UART_NUM_1
 /* P178 fix: match the proven v1 mapping — Serial2.begin(115200, SERIAL_8N1, 17, 16)
@@ -237,6 +238,10 @@ void nsp_display_touch_task(void *) {
              * interaction jumps) and ignored screensaver releases. */
             if ((page == 1 || page == 3) && !pressed) {
                 nsp_display_send_command("page home");
+            } else if (nsp_dash_is_dash_page(page)) {
+                /* P234: dash pages publish ONLY — the manager owns every
+                 * action there (it generated the layout). No local relay
+                 * chains can misfire on a page the manager re-authored. */
             } else if (event == 0) {  // releases act (P210)
                 if (page == HMI_HOME_PAGE_ID) {
                     if (component == HMI_HOME_REL1) nsp_relay_toggle_pub(1);

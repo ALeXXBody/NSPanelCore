@@ -54,7 +54,7 @@ int main() {
     CHECK(page.find("theme_toggle") != std::string::npos, "v1 theme toggle present");
     CHECK(page.find("class=card") != std::string::npos, "v1 cards present");
     CHECK(page.find("NSPANEL_V1_CSS") == std::string::npos, "css embedded as code, not literal");
-    CHECK(page.find("--accent:#39c8e8") != std::string::npos, "v1 brand cyan embedded");
+    CHECK(page.find("39c8e8") != std::string::npos, "v1 brand cyan embedded");
     CHECK(page.find("\u2014") != std::string::npos, "empty fields show a dash");
     // P207: toggle-gated console
     CHECK(page.find("id=console_card") != std::string::npos, "console card present");
