@@ -200,6 +200,7 @@ class PanelConfig:
     tft_md5: str = ""
     littlefs_md5: str = ""
     wifi_hostname: str = ""
+    ip_address: str = ""  # P216: from status telemetry — the provisioning push target
     # Last-seen MQTT topic segment (the panel's wifi_hostname). The firmware
     # publishes/subscribes on nspanel/<wifi_hostname>/... while panel.name is
     # the user-curated display name — after any rename these differ, so all
@@ -254,6 +255,14 @@ class MessageConfig:
 class GlobalSettings:
     manager_address: str = "core"
     manager_port: int = 8000
+    # P216: the panel-broker credentials — saved ONCE on the first-run page,
+    # pushed to panels by the provisioning flow (the manager can only send
+    # what it has).
+    panel_broker_host: str = ""
+    panel_broker_port: int = 1883
+    panel_broker_user: str = ""
+    panel_broker_pass: str = ""
+    first_run_done: bool = False
     theme: str = "nspmwip"
     firmware_manifest_url: str = "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/manifest.json"
     firmware_auto_check_hours: int = 24

@@ -1072,6 +1072,9 @@ class NSPanelCoreManager:
             except (ValueError, TypeError):
                 heap = None
             ip = str(data.get("ip") or "").strip() or None
+            # P216: remember the panel's IP — the provisioning push target
+            if ip and panel.ip_address != ip:
+                panel.ip_address = ip
             raw_warnings = data.get("warnings", "")
             warnings: list = []
             if isinstance(raw_warnings, list):

@@ -196,6 +196,97 @@ def _panels_context(manager) -> list[dict]:
     return out
 
 
+class FirstRunView(HomeAssistantView):
+    """P216: the first-run page — the panel-broker credentials (and future
+    settings) are saved ONCE here; panels get them pushed during
+    provisioning. Shown before the dashboard until first_run_done."""
+
+    url = f"{URL_BASE}/first_run"
+    name = "nspanel_core:first_run"
+    requires_auth = False
+
+    async def get(self, request, **kwargs):
+        manager = _manager(request)
+        if manager.config.settings.first_run_done:
+            return _redirect(request, UI_PATH)
+        return _render(
+            "first_run.html",
+            request=request,
+        ) if False else web.Response(
+            text=_render("first_run.html", request=request),
+            content_type="text/html",
+        )
+
+
+class FirstRunSaveView(HomeAssistantView):
+    url = f"{URL_BASE}/first_run_save"
+    name = "nspanel_core:first_run_save"
+    requires_auth = False
+
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        form = await request.post()
+        s = manager.config.settings
+        s.panel_broker_host = str(form.get("panel_broker_host", "")).strip()
+        try:
+            s.panel_broker_port = int(str(form.get("panel_broker_port", "1883")) or 1883)
+        except (TypeError, ValueError):
+            s.panel_broker_port = 1883
+        s.panel_broker_user = str(form.get("panel_broker_user", ""))
+        s.panel_broker_pass = str(form.get("panel_broker_pass", ""))
+        s.first_run_done = True
+        await manager.async_save()
+        _LOGGER.info("First-run settings saved — the dashboard is now available")
+        return _redirect(request, UI_PATH)
+
+
+class ProvisionPushView(HomeAssistantView):
+    """P216: POST {panel_id} — push the first-run broker credentials to the
+    panel over its web UI (/provision). The zero-typing provisioning step."""
+
+    url = f"{URL_BASE}/api/panel/{{panel_id}}/provision"
+    name = "nspanel_core:api:panel_provision"
+    requires_auth = True
+
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        try:
+            panel_id = int(request.match_info["panel_id"])
+        except (KeyError, ValueError, TypeError):
+            return web.Response(text="Bad panel id", status=400)
+        panel = next((p for p in manager.config.panels if p.id == panel_id), None)
+        if panel is None:
+            return web.Response(text="Panel not found", status=404)
+        s = manager.config.settings
+        if not s.panel_broker_host:
+            return web.Response(text="First-run settings missing", status=409)
+        base = f"http://{panel.ip_address}" if panel.ip_address else ""
+        if not base:
+            return web.Response(text="Panel has no IP yet", status=409)
+        import json as _json
+        body = _json.dumps({
+            "mqtt_server": s.panel_broker_host,
+            "mqtt_port": s.panel_broker_port,
+            "mqtt_user": s.panel_broker_user,
+            "mqtt_pass": s.panel_broker_pass,
+        })
+
+        def _push():
+            import urllib.request
+            req = urllib.request.Request(
+                f"{base}/provision", data=body.encode(),
+                headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return resp.read().decode("utf-8", "replace")
+
+        try:
+            text = await manager.hass.async_add_executor_job(_push)
+        except Exception as err:  # noqa: BLE001
+            return web.Response(text=f"Provision push failed: {err}", status=502)
+        _LOGGER.info("Provisioned %s over HTTP: %s", panel.name, text)
+        return web.Response(text="Provisioned — the panel is rebooting into the broker")
+
+
 class MainPageView(HomeAssistantView):
     """The NSPanels page — original templates, live via STOMP."""
 
@@ -205,6 +296,11 @@ class MainPageView(HomeAssistantView):
 
     async def get(self, request, **kwargs):
         manager = _manager(request)
+        # P216: the first-run gate — before the broker credentials exist,
+        # the dashboard cannot provision panels, so show the setup page.
+        s = manager.config.settings
+        if not s.first_run_done:
+            return _redirect(request, f"{URL_BASE}/first_run")
         html = _render(
             "index_htmx.html",
             nspanels=_panels_context(manager),

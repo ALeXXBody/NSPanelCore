@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-xl mx-auto mt-8">
+  <div class="card">
+    <h1 class="text-xl font-bold mb-2">NSPanel <span class="text-accent">Core</span> — first-time setup</h1>
+    <p class="hint mb-2">One-time settings. The panels get their MQTT credentials
+    <strong>from here</strong> during provisioning — you never type them on a panel.</p>
+  </div>
+
+  <form method="POST" action="{{ url_path }}/first_run_save" class="space-y-3">
+    <section class="card">
+      <h2>MQTT broker (for the panels)</h2>
+      <label class="field"><span>Server</span>
+        <input type="text" name="panel_broker_host" placeholder="e.g. 192.168.50.20 or homeassistant.local" required>
+      </label>
+      <label class="field"><span>Port</span>
+        <input type="number" name="panel_broker_port" value="1883" required>
+      </label>
+      <label class="field"><span>Username</span>
+        <input type="text" name="panel_broker_user" placeholder="broker user for the panels">
+      </label>
+      <label class="field"><span>Password</span>
+        <input type="password" name="panel_broker_pass" placeholder="broker password">
+      </label>
+      <p class="hint">These credentials are pushed to panels during provisioning.
+      Create a dedicated broker user for the panels if your broker supports ACLs.</p>
+    </section>
+
+    <section class="card">
+      <h2>Future settings</h2>
+      <p class="hint">More panels-side settings will appear here as they are added.</p>
+    </section>
+
+    <div class="actions sticky">
+      <button class="btn btn-primary" type="submit">Save &amp; open the dashboard</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
