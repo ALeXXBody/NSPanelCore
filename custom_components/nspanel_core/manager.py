@@ -708,7 +708,22 @@ class NSPanelCoreManager:
             current = self._ota_active_version or await self.hass.async_add_executor_job(
                 _fs.bundled_version, os.path.dirname(__file__)
             )
-            update_available = _fs.is_newer(latest, current) if latest else False
+            # P252: the activation signal is CHECKSUM-BASED, not
+            # number-based — a reused release number (the user's numbering
+            # model frees and reuses them) must still activate when the
+            # served bytes differ from the manifest's. The numbers are
+            # labels; the checksums are the truth (rule B).
+            active_md5s = getattr(self.config.settings, "firmware_active_md5s", None) or {}
+            manifest_md5s = {
+                key: (entry.get("md5") or "") if isinstance(entry, dict) else str(entry)
+                for key, entry in (manifest.get("files") or {}).items()
+            }
+            md5_differs = any(
+                manifest_md5s.get(key) and active_md5s.get(key) != md5
+                for key, md5 in manifest_md5s.items()
+            )
+            version_differs = _fs.is_newer(latest, current) if latest else False
+            update_available = md5_differs or version_differs
             self._firmware_status = {
                 "checking": False,
                 "error": "",
