@@ -1,36 +1,37 @@
 {
-  "version": "0.1.10",
+  "version": "0.1.11",
   "notes": "fw v0.1.2 \u2014 the zero-typing provisioning firmware: WiFi-only first-boot form, POST /provision, + all audit repairs + the TFT block protocol.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/native-firmware-0.1.10.bin",
-      "md5": "8a0a8e17cc210277783c7c0c1c167cfc"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/native-firmware-0.1.11.bin",
+      "md5": "910ee2e229786b2ce894c84ad743b449"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/native-firmware-0.1.10.bin",
-      "md5": "8a0a8e17cc210277783c7c0c1c167cfc"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/native-firmware-0.1.11.bin",
+      "md5": "910ee2e229786b2ce894c84ad743b449"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "tft/gui.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/gui.tft",
-      "md5": "c3658906eb25823cf764f1284984818e"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/gui.tft",
+      "md5": "4c36180d2b8356c36b98f657925ef5da"
     },
     "tft/gui_us.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/gui_us.tft",
-      "md5": "c3658906eb25823cf764f1284984818e"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/gui_us.tft",
+      "md5": "4c36180d2b8356c36b98f657925ef5da"
     }
   },
   "changes": {
     "bug_fixes": [],
     "features": [
-      "Boot animation: the NSPanel Core logo fades in over ~1.4 seconds at every panel boot, inside the existing splash window"
+      "New branding: the logo mark now stands free (the square card behind it is gone) and the SMART WALL OS tagline sits tight under the wordmark, matching the preferred lockup",
+      "The boot animation plays with the new branding"
     ],
     "breaking": []
   }
