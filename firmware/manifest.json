@@ -26,5 +26,23 @@
       "url": "http://192.168.50.200:8000/tft_eu",
       "md5": "f2539275ad4b1209e027d1b66694bd27"
     }
+  },
+  "changes": {
+    "bug_fixes": [
+      "Display commands now use the .txt= form the panel accepts - the clock/date/AMPM render live instead of a frozen placeholder",
+      "The updater used the wrong parameter order in the display-reflash command (baud where the file size belongs) - the reflash never started",
+      "The display-reflash now follows the complete per-block handshake - no more uploads stuck at 95%",
+      "Touch behavior: presses no longer jump the screen mid-interaction; the screensaver wakes on release",
+      "A malformed UART read could crash the touch decoder - guarded",
+      "The config storage is verified before erase (no blank-filesystem loop)",
+      "Commands are matched by their exact JSON field - stray mentions no longer trigger actions",
+      "The adopted OTA address is validated (dotted-quad) before use"
+    ],
+    "features": [
+      "Zero-typing provisioning: the first-boot form asks only for WiFi; the app pushes the MQTT settings after you accept the panel",
+      "POST /provision endpoint on the panel - the app's push channel for settings",
+      "mDNS + a status JSON the app can discover panels by"
+    ],
+    "breaking": []
   }
 }
