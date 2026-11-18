@@ -680,6 +680,17 @@ class NSPanelCoreManager:
                 return dict(self._firmware_status)
             latest = str(manifest.get("version", ""))
             self.config.settings.firmware_latest_version = latest
+            # P224: carry the categorized changes (bug fix / feature /
+            # breaking) through to the UI — the user decides from the truth.
+            changes = manifest.get("changes") or {}
+            if isinstance(changes, dict):
+                self.config.settings.firmware_latest_changes = {
+                    "bug_fixes": [str(x) for x in changes.get("bug_fixes", [])],
+                    "features": [str(x) for x in changes.get("features", [])],
+                    "breaking": [str(x) for x in changes.get("breaking", [])],
+                }
+            else:
+                self.config.settings.firmware_latest_changes = {}
             current = self._ota_active_version or await self.hass.async_add_executor_job(
                 _fs.bundled_version, os.path.dirname(__file__)
             )

@@ -38,7 +38,7 @@
                         <label class="label">
                             <span class="label-text justify-start w-full ml-2">Check firmware updates</span>
                         </label>
-                        <button class="btn btn-xs btn-info mr-2" onclick="nspanelFetch('/nspanel_core/firmware_check',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.latest?('Latest: '+j.latest+(j.update_available?' — update available (install it from Actions > Download + activate latest).':' (up to date)')):('Check failed: '+(j.error||'unknown')))).catch(e=>alert('Check failed'));">Check</button>
+                        <button class="btn btn-xs btn-info mr-2" onclick="nspanelFetch('/nspanel_core/firmware_check',{method:'POST'}).then(r=>r.json()).then(j=>{if(!j.latest)return alert('Check failed: '+(j.error||'unknown'));var c=j.changes||{};var f=function(k,t){return (c[k]||[]).length?(t+':\n  - '+c[k].join('\n  - ')+'\n'):'';};var msg='Latest firmware: '+j.latest;if(j.update_available)msg+='\n\nUPDATE AVAILABLE for your panels.';msg+='\n\n'+f('bug_fixes','Bug fixes')+f('features','New features')+f('breaking','BREAKING changes');if(j.update_available)msg+='\nInstall it from Actions > Download + activate latest (panels update themselves over the air).';alert(msg);}).catch(e=>alert('Check failed'));">Check</button>
                     </div>
                 </li>
                 <li>

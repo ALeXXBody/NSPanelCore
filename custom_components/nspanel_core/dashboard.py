@@ -1280,6 +1280,7 @@ class FirmwareStatusView(HomeAssistantView):
                 "latest": s.firmware_latest_version or "",
                 "last_check": s.firmware_last_check or "",
                 "manifest_url": _fs.DEFAULT_MANIFEST_URL,
+                "changes": dict(getattr(s, "firmware_latest_changes", {}) or {}),
                 "auto_check_hours": 6,
                 "served_tft": await manager.hass.async_add_executor_job(
                     manager.served_tft_info

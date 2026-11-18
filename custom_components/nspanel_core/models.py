@@ -268,6 +268,7 @@ class GlobalSettings:
     firmware_auto_check_hours: int = 24
     firmware_active_version: str = ""
     firmware_latest_version: str = ""
+    firmware_latest_changes: dict = field(default_factory=dict)
     firmware_last_check: str = ""
     firmware_active_md5s: dict = field(default_factory=dict)
     mqtt_wait_time: int = 0
