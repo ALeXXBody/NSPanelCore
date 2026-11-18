@@ -568,7 +568,7 @@ static void nsp_tft_task(void *) {
                                 catchup_failed = true;
                                 break;
                             }
-                            uint8_t cblock[4096];
+                            uint8_t *cblock = block;  /* P244: reuse the block buffer — a second 4 KB local on the 8 KB task stack overflowed it (the crash on every resume attempt) */
                             size_t cgot = 0;
                             int64_t cdead = esp_timer_get_time();
                             while (cgot < (size_t)cwant &&
@@ -666,7 +666,7 @@ void nsp_tft_start() {
         return;
     }
     s_state = OTA_FS;
-    xTaskCreatePinnedToCore(nsp_tft_task, "tft", 8192, nullptr, 1, nullptr, 0);
+    xTaskCreatePinnedToCore(nsp_tft_task, "tft", 12288, nullptr, 1, nullptr, 0);  /* P244: 8 KB was one 4 KB buffer away from overflow */
 }
 
 /* Rail #4: watchdog — call from the 1s housekeeping loop. */
