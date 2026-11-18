@@ -271,8 +271,17 @@ static void nsp_ota_fw_task(void *) {
             && fs_checksum.size() >= 32) break;
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
-    if (fs_checksum.size() >= 32 &&
-        g_cfg.md5_data_file.compare(0, 32, fs_checksum, 0, 32) != 0) {
+    if (fs_checksum.size() < 32) {
+        /* P208: an EMPTY/absent data-file checksum means "nothing to
+         * update" (the mirror serves "" by design). The old code burned
+         * 60 s of retries here and left the OTA busy, silently eating
+         * every tft_update issued in that window. */
+        nsp_mqtt_publish_log("OTA: no data-file update available");
+        s_state = OTA_IDLE;
+        vTaskDelete(nullptr);
+        return;
+    }
+    if (g_cfg.md5_data_file.compare(0, 32, fs_checksum, 0, 32) != 0) {
         if (nsp_write_fs_partition(fs_checksum)) {
             g_cfg.md5_data_file = fs_checksum.substr(0, 32);
             nsp_config_save();
