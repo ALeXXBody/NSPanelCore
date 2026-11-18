@@ -296,10 +296,17 @@ class MainPageView(HomeAssistantView):
 
     async def get(self, request, **kwargs):
         manager = _manager(request)
-        # P216: the first-run gate — before the broker credentials exist,
-        # the dashboard cannot provision panels, so show the setup page.
+        # P216/P222: the first-run gate is for FRESH installs only. An
+        # existing install (any accepted panel) must NEVER be gated — the
+        # old check keyed on first_run_done alone, which defaults to False
+        # for every install that predates the field, replacing the
+        # dashboard with the wizard (the user's "visually a mess").
         s = manager.config.settings
-        if not s.first_run_done:
+        has_panels = any(p.accepted for p in manager.config.panels)
+        if not s.first_run_done and has_panels:
+            # existing install: mark the first run done, show the dashboard
+            s.first_run_done = True
+        if not s.first_run_done and not manager.config.panels:
             return _redirect(request, f"{URL_BASE}/first_run")
         html = _render(
             "index_htmx.html",

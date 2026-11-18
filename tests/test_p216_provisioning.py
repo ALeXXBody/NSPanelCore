@@ -63,10 +63,13 @@ def _manager_from_request(mgr):
 
 # ---------------------------------------------------------------- FirstRunView
 
-def test_first_run_gated_before_save():
-    """The dashboard redirects to /first_run until first_run_done."""
+def test_first_run_gated_fresh_install_only():
+    """P222: the gate is for FRESH installs (no panels) — an existing
+    install with an accepted panel must NEVER be gated (the user's
+    dashboard was replaced by the wizard — the "visually a mess" bug)."""
     from nspanel_core.dashboard import MainPageView
-    mgr = _make_manager(first_run_done=False)
+    # fresh install: no panels, first_run not done -> gated
+    mgr = _make_manager(with_panel=False, first_run_done=False)
     view = MainPageView()
     with _manager_from_request(mgr), \
          patch("nspanel_core.dashboard._redirect",
@@ -74,8 +77,22 @@ def test_first_run_gated_before_save():
                    status=302, headers={"Location": location})):
         import asyncio
         resp = asyncio.get_event_loop().run_until_complete(view.get(_request()))
-    assert resp.status == 302, "the dashboard must gate to /first_run before first_run_done"
-    assert "/first_run" in resp.headers["Location"]
+    assert resp.status == 302 and "/first_run" in resp.headers["Location"]
+
+
+def test_existing_install_never_gated():
+    """An accepted panel means an existing install: the dashboard shows,
+    and first_run_done is auto-marked so the wizard never nags."""
+    from nspanel_core.dashboard import MainPageView
+    mgr = _make_manager(first_run_done=False)  # has an accepted panel
+    view = MainPageView()
+    with _manager_from_request(mgr), \
+         patch("nspanel_core.dashboard._render", return_value="<html>dash</html>"):
+        import asyncio
+        resp = asyncio.get_event_loop().run_until_complete(view.get(_request()))
+    assert resp.status == 200
+    assert mgr.config.settings.first_run_done is True, "existing installs auto-mark the first run"
+    assert b"dash" in resp.body
 
 
 def test_first_run_open_after_save():
