@@ -94,19 +94,54 @@ def test_edit_panel_renders_with_truthy_checks():
     assert m and "hidden" in m.group(0)  # EU panel hides US preview
 
 
-def test_settings_hub_lists_subpages():
+def test_settings_page_has_tabs():
+    """P236 (user design): ONE settings page — subpages are TABS inside it."""
     out = ENV.get_template("settings.html").render(
         _base(
-            subpages=[
-                {"slug": "general", "title": "General", "desc": "d"},
-                {"slug": "denied", "title": "Denied devices", "desc": "d"},
-                {"slug": "weather", "title": "Weather & Time", "desc": "d"},
-            ],
+            active_tab="general",
+            nspanels=[],
+            subpages=None,
+            manager_address="",
+            manager_port=1883,
+            mqtt_server="",
+            mqtt_port=1883,
+            mqtt_username="",
+            color_temp_min=2700,
+            color_temp_max=6500,
+            reverse_color_temp=False,
+            optimistic_mode=False,
+            turn_on_behaviour="color_temp",
+            raise_to_100_light_level=0,
+            light_turn_on_brightness=100,
+            min_button_push_time=50,
+            button_long_press_time=400,
+            special_mode_trigger_time=350,
+            special_mode_release_time=600,
+            screen_dim_level=100,
+            screensaver_dim_level=20,
+            screensaver_activation_timeout=15,
+            max_live_log_messages=100,
+            max_log_buffer_size=1000,
+            room_status_backoff_time=0,
+            all_rooms_status_backoff_time=0,
+            screensaver_mode="with_background",
+            rooms=[],
+            auto_tft_updates=True,
+            location_latitude="",
+            location_longitude="",
+            weather_update_interval=30,
+            clock_us_style=False,
+            date_format="dd.mm.yyyy",
+            use_fahrenheit=False,
+            precipitation_format="mm",
+            wind_speed_format="kmh",
+            outside_temp_provider="",
+            outside_temp_sensor="",
         )
     )
-    for slug in ("general", "denied", "weather"):
-        assert f'href="/nspanel_core/settings/{slug}"' in out
-    assert "Denied devices" in out and "Weather &amp; Time" in out
+    assert 'data-tab="general"' in out and 'data-tab="denied"' in out and 'data-tab="weather"' in out
+    assert 'id="settings_tab_denied"' in out and 'id="settings_tab_weather"' in out
+    assert "nsp_settings_tab(" in out  # the tab switcher is wired
 
 
 def test_settings_renders_with_auto_tft():

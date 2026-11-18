@@ -64,6 +64,8 @@ def test_p76_no_required_field_renders_empty():
     s = GlobalSettings()
     out = ENV.get_template("settings.html").render(
         _base(
+            active_tab="general",
+            nspanels=[],
             manager_address=s.manager_address,
             manager_port=s.manager_port,
             mqtt_server=getattr(s, "mqtt_server", ""),
@@ -90,6 +92,17 @@ def test_p76_no_required_field_renders_empty():
             screensaver_mode="with_background",
             rooms=[],
             auto_tft_updates=True,
+            # weather tab fields (rendered as tabs since P236)
+            location_latitude=s.location_latitude,
+            location_longitude=s.location_longitude,
+            weather_update_interval=s.weather_update_interval,
+            clock_us_style=s.clock_us_style,
+            date_format=s.date_format,
+            use_fahrenheit=s.use_fahrenheit,
+            precipitation_format=s.precipitation_format,
+            wind_speed_format=s.wind_speed_format,
+            outside_temp_provider=s.outside_temp_provider,
+            outside_temp_sensor=s.outside_temp_sensor_entity,
         )
     )
     empty = []

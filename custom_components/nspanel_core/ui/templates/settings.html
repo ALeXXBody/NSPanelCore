@@ -1,18 +1,75 @@
 {% extends 'base.html' %}
 
-{% block content %}
-<h2 class="title is-4">Settings</h2>
-<p class="subtitle is-6">Choose a section:</p>
+{# P236 (user design): ONE settings page — the subpages are TABS inside it.
+   The three tab bodies are the extracted partials; their standalone URLs
+   redirect here with the tab pre-selected. #}
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-    {% for sp in subpages %}
-    <a href="/nspanel_core/settings/{{ sp.slug }}"
-       class="card bg-base-200 hover:bg-base-300 transition-colors shadow-md">
-        <div class="card-body">
-            <h3 class="card-title text-base">{{ sp.title }}</h3>
-            <p class="text-sm text-base-content/70">{{ sp.desc }}</p>
-        </div>
-    </a>
-    {% endfor %}
+{% block head %}
+
+  <script src="/nspanel_core/static/question.js?version={{ version }}"></script>
+  <script src="/nspanel_core/static/settings.js?version={{ version }}"></script>
+  <script src="/nspanel_core/static/modal-select-entity.js?version={{ version }}"></script>
+
+  <script>
+
+  // This function is used from select_weather_outside_temperature_sensor.html to do the final selection of
+  // sensor and update the fields on this page.
+  function select_outside_temperature_sensor(sensor) {
+    var item = $(sensor);
+    var entity_source = item.data('entity-source');
+    var entity_id = item.data('entity-id');
+
+    $("#outside_temp_provider").val(entity_source);
+    $("#outside_temp_sensor").val(entity_id);
+    modal.close();
+  }
+
+  function clear_selected_outside_temperature_sensor() {
+    $("#outside_temp_provider").val("");
+    $("#outside_temp_sensor").val("");
+  }
+  </script>
+{% endblock %}
+
+{% block content %}
+
+<div class="flex items-center justify-between" id="nspanel_settings_container">
+  <div>
+    <h2 class="font-medium text-2xl" id="nspanel_name">Settings</h2>
+  </div>
 </div>
+
+<div class="tabs tabs-boxed mt-4" id="settings_tabs">
+  <button class="tab tab-active" data-tab="general" onclick="nsp_settings_tab('general')">General</button>
+  <button class="tab" data-tab="denied" onclick="nsp_settings_tab('denied')">Denied devices</button>
+  <button class="tab" data-tab="weather" onclick="nsp_settings_tab('weather')">Weather &amp; Time</button>
+</div>
+
+<div id="settings_tab_general" class="settings-tab-pane" {% if active_tab != 'general' %}style="display:none"{% endif %}>
+  {% include '_tab_general.html' %}
+</div>
+<div id="settings_tab_denied" class="settings-tab-pane" {% if active_tab != 'denied' %}style="display:none"{% endif %}>
+  {% include '_tab_denied.html' %}
+</div>
+<div id="settings_tab_weather" class="settings-tab-pane" {% if active_tab != 'weather' %}style="display:none"{% endif %}>
+  {% include '_tab_weather.html' %}
+</div>
+
+<script>
+function nsp_settings_tab(name) {
+  document.querySelectorAll('.settings-tab-pane').forEach(function (el) {
+    el.style.display = 'none';
+  });
+  document.getElementById('settings_tab_' + name).style.display = 'block';
+  document.querySelectorAll('#settings_tabs .tab').forEach(function (t) {
+    t.classList.toggle('tab-active', t.dataset.tab === name);
+  });
+  try { history.replaceState(null, '', '/nspanel_core/settings?tab=' + name); } catch (e) {}
+}
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var tab = params.get('tab');
+  if (tab && ['general', 'denied', 'weather'].indexOf(tab) !== -1) nsp_settings_tab(tab);
+})();
+</script>
 {% endblock %}

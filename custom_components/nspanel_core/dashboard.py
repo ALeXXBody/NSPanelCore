@@ -707,25 +707,8 @@ class WeatherTimeView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        manager = _manager(request)
-        s = manager.config.settings
-        html = _render(
-            "weather_and_time.html",
-            request=request,
-            location_latitude=s.location_latitude,
-            location_longitude=s.location_longitude,
-            weather_update_interval=s.weather_update_interval,
-            clock_us_style=s.clock_us_style,
-            date_format=s.date_format,
-            use_fahrenheit=s.use_fahrenheit,
-            precipitation_format=s.precipitation_format,
-            wind_speed_format=s.wind_speed_format,
-            outside_temp_provider=s.outside_temp_provider,
-            outside_temp_sensor=s.outside_temp_sensor_entity,
-            page_title="Weather & Time",
-            nspanels=_panels_context(manager),
-        )
-        return web.Response(text=html, content_type="text/html")
+        # P236: the tabbed Settings page holds this content — redirect in
+        return _redirect(request, f"{URL_BASE}/settings?tab=weather")
 
     async def post(self, request, **kwargs):
         manager = _manager(request)
@@ -755,7 +738,7 @@ class WeatherTimeView(HomeAssistantView):
                 text="Weather errors: " + "; ".join(f"{k}: {v}" for k, v in errors.items()),
                 status=422,
             )
-        return _redirect(request, f"{URL_BASE}/settings/weather")
+        return _redirect(request, f"{URL_BASE}/settings?tab=weather")
 
 
 class DeniedPanelsView(HomeAssistantView):
@@ -764,18 +747,8 @@ class DeniedPanelsView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        manager = _manager(request)
-        from dataclasses import asdict
-
-        denied = [asdict(p) for p in manager.config.panels if p.denied]
-        html = _render(
-            "denied_nspanels.html",
-            request=request,
-            nspanels=denied,
-            ignored=manager.config.settings.ignored_macs,
-            page_title="Denied NSPanels",
-        )
-        return web.Response(text=html, content_type="text/html")
+        # P236: the tabbed Settings page holds this content — redirect in
+        return _redirect(request, f"{URL_BASE}/settings?tab=denied")
 
 
 class AllowIgnoredMacView(HomeAssistantView):
@@ -802,51 +775,28 @@ class AllowIgnoredMacView(HomeAssistantView):
 
 
 class SettingsView(HomeAssistantView):
-    """P236: the Settings hub — opens on the subpages."""
+    """P236 (user design): ONE settings page — the subpages are TABS."""
 
     url = f"{URL_BASE}/settings"
     name = "nspanel_core:settings"
     requires_auth = False
 
-    _SUBPAGES = (
-        ("general", "General",
-         "Manager address, MQTT, display behavior, screensaver, themes"),
-        ("denied", "Denied devices",
-         "Panels that were denied access — allow them back here"),
-        ("weather", "Weather & Time",
-         "Location, outside-temperature provider, time and date format"),
-    )
+    _TABS = ("general", "denied", "weather")
 
     async def get(self, request, **kwargs):
         manager = _manager(request)
-        return web.Response(
-            text=_render(
-                "settings.html",
-                request=request,
-                subpages=[
-                    {"slug": slug, "title": title, "desc": desc}
-                    for slug, title, desc in self._SUBPAGES
-                ],
-                page_title="Settings",
-            ),
-            content_type="text/html",
-        )
-
-
-class GeneralSettingsView(HomeAssistantView):
-    """P236: the general settings — now a SUBPAGE of /settings."""
-
-    url = f"{URL_BASE}/settings/general"
-    name = "nspanel_core:settings_general"
-    requires_auth = False
-
-    async def get(self, request, **kwargs):
-        manager = _manager(request)
+        tab = request.query.get("tab", "general")
+        if tab not in self._TABS:
+            tab = "general"
         s = manager.config.settings
         themes = {"nspmwip": "NSPanel Core (dark)"}
+        from dataclasses import asdict
+
         html = _render(
-            "settings_general.html",
+            "settings.html",
             request=request,
+            active_tab=tab,
+            # general tab context
             manager_address=s.manager_address,
             manager_port=s.manager_port,
             mqtt_server=getattr(s, "mqtt_server", ""),
@@ -892,10 +842,34 @@ class GeneralSettingsView(HomeAssistantView):
             ],
             themes=themes,
             theme=s.theme,
-            page_title="Settings — General",
-            nspanels=_panels_context(manager),
+            # denied tab context
+            nspanels=[asdict(p) for p in manager.config.panels],
+            # weather tab context (names match the weather partial)
+            location_latitude=s.location_latitude,
+            location_longitude=s.location_longitude,
+            weather_update_interval=s.weather_update_interval,
+            clock_us_style=s.clock_us_style,
+            date_format=s.date_format,
+            use_fahrenheit=s.use_fahrenheit,
+            precipitation_format=s.precipitation_format,
+            wind_speed_format=s.wind_speed_format,
+            outside_temp_provider=s.outside_temp_provider,
+            outside_temp_sensor=s.outside_temp_sensor_entity,
+            page_title="Settings",
+            nspanels_count=len(manager.config.panels),
         )
         return web.Response(text=html, content_type="text/html")
+
+
+class GeneralSettingsView(HomeAssistantView):
+    """P236: general settings — redirects into the tabbed Settings page."""
+
+    url = f"{URL_BASE}/settings/general"
+    name = "nspanel_core:settings_general"
+    requires_auth = False
+
+    async def get(self, request, **kwargs):
+        return _redirect(request, f"{URL_BASE}/settings?tab=general")
 
 
 class SaveSettingsView(HomeAssistantView):

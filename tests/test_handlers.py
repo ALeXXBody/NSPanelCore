@@ -493,10 +493,15 @@ async def test_denied_page_renders(mgr, panel):
     panel.accepted = False
     mgr.config.settings.ignored_macs = ["aabbcc"]
     view = D.DeniedPanelsView()
-    r = await view.get(_req(None, manager=mgr))
-    assert r.status == 200
-    assert "Test" in r.text and "aabbcc" in r.text
-    assert "Allow again" in r.text
+    # P236: the Denied content is a TAB of the Settings page now — the
+    # direct URL redirects to the tab (_redirect raises HTTPFound; aiohttp
+    # converts it in production). The regression guard keeps the route
+    # alive; the content itself is covered by the settings tests.
+    import aiohttp
+
+    with pytest.raises(aiohttp.web_exceptions.HTTPFound) as ei:
+        await view.get(_req(None, manager=mgr))
+    assert "settings?tab=denied" in str(ei.value.location)
 
 
 class _FakeStomp:
