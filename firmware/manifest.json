@@ -20,11 +20,11 @@
     },
     "tft/gui.tft": {
       "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/gui.tft",
-      "md5": "4aa97a4db236c1ca65e62142a81e91a9"
+      "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
     },
     "tft/gui_us.tft": {
       "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/gui_us.tft",
-      "md5": "4aa97a4db236c1ca65e62142a81e91a9"
+      "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
     }
   },
   "changes": {
