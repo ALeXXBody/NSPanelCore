@@ -97,18 +97,20 @@ esp_err_t nsp_handle_config_save(httpd_req_t *req) {
         }
         if (!host_ok || hostname.size() > 32) hostname.clear();
     }
-    if (!ssid.empty() && !server.empty()) {  // fresh setup (AP mode)
+    if (!ssid.empty()) {  // P216: WiFi-only save — MQTT may be entirely absent
         g_cfg.wifi_ssid = ssid;
         g_cfg.wifi_psk = psk;
         if (!hostname.empty()) g_cfg.wifi_hostname = hostname;
-        // STA completion path: empty ssid keeps the recovered WiFi config
-        g_cfg.mqtt_server = server;
-        {
+        // P216: MQTT arrives LATER from the app (the provisioning flow).
+        // If the advanced fields were filled, honor them; otherwise the
+        // panel boots into provisioning mode (WiFi up, web UI up, mDNS).
+        if (!server.empty()) {
+            g_cfg.mqtt_server = server;
             int p = atoi(port.c_str());  // P208: bounds — port 0/garbage kills MQTT silently
             if (p > 0 && p < 65536) g_cfg.mqtt_port = p;
+            g_cfg.mqtt_user = user;
+            g_cfg.mqtt_pass = pass;
         }
-        g_cfg.mqtt_user = user;
-        g_cfg.mqtt_pass = pass;
         nsp_config_save();
     }
     const char *ok = "<html><body style='font:14px system-ui;background:#0d1016;"

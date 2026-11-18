@@ -232,6 +232,8 @@ bool nsp_web_start(bool ap_mode) {
     httpd_uri_t status = {"/status.json", HTTP_GET, on_get_status_json, nullptr};
     httpd_uri_t log = {"/log", HTTP_GET, on_get_log, nullptr};
     httpd_uri_t logtext = {"/log_text", HTTP_GET, on_get_log_text, nullptr};
+    extern esp_err_t nsp_handle_provision(httpd_req_t *req);
+    httpd_uri_t provision = {"/provision", HTTP_POST, nsp_handle_provision, nullptr};
     httpd_uri_t scan = {"/scan", HTTP_GET, on_get_scan, nullptr};
     httpd_uri_t save = {"/save", HTTP_POST, on_post_save, nullptr};
     httpd_uri_t action = {"/action", HTTP_POST, on_post_action, nullptr};
@@ -239,6 +241,7 @@ bool nsp_web_start(bool ap_mode) {
     httpd_register_uri_handler(server, &status);
     httpd_register_uri_handler(server, &log);
     httpd_register_uri_handler(server, &logtext);
+    httpd_register_uri_handler(server, &provision);
     httpd_register_uri_handler(server, &scan);
     httpd_register_uri_handler(server, &save);
     httpd_register_uri_handler(server, &action);

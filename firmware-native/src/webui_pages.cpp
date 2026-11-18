@@ -266,12 +266,15 @@ std::string nsp_web_setup_page(const NspWebStatus &s) {
     + field("Password", "<input type=password name=psk>")
     + (s.wifi_known ? "<p class=hint>WiFi is already configured \u2014 leave blank to keep it.</p>" : "")
     + "</section>"
-    + "<section class=card><h2>MQTT</h2>"
-    + field("Server", "<input type=text name=mqtt_server placeholder=\"MQTT Server\" value=\"" + server_val + "\" required>")
-    + field("Port", "<input type=number name=mqtt_port value=\"" + port_val + "\" required>")
+    /* P216: the first-boot form asks ONLY WiFi — the MQTT settings arrive
+     * from the app after the user accepts the panel (the zero-typing
+     * provisioning flow). The fields below are the ADVANCED fallback. */
+    + "<details class=card><summary>Advanced: MQTT (the app normally sends these)</summary><div class=details-body>"
+    + field("Server", "<input type=text name=mqtt_server placeholder=\"MQTT Server\" value=\"" + server_val + "\">")
+    + field("Port", "<input type=number name=mqtt_port value=\"" + port_val + "\">")
     + field("Username", "<input type=text name=mqtt_user value=\"" + user_val + "\">")
     + field("Password", "<input type=password name=mqtt_pass>")
-    + "</section>"
+    + "</div></details>"
     + "<div class=\"actions sticky\"><button class=\"btn btn-primary\" type=submit>Save &amp; restart</button></div></form>"
     + "<script>function scan(){var b=document.getElementById('scb');b.textContent='Scanning\u2026';b.disabled=true;"
       "fetch('/scan').then(r=>r.json()).then(function(l){var s=document.getElementById('sclist');"
