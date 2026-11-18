@@ -11,6 +11,40 @@
     box-shadow: 0 18px 50px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05);
     width: min(540px, 100%);
   }
+  /* the device representation (the settings page's panel graphic, live) */
+  .pv-device { position: relative; background: #101318; border-radius: 14px;
+    box-shadow: inset 0 0 0 1px #232833, 0 10px 30px rgba(0,0,0,.5);
+    margin: 0 auto; }
+  .pv-device[data-dev="eu"]          { width: 340px; height: 340px; }
+  .pv-device[data-dev="us_vertical"] { width: 260px; height: 420px; }
+  .pv-device[data-dev="us_horizontal"],
+  .pv-device[data-dev="us_horizontal_mirrored"] { width: 420px; height: 260px; }
+  .pv-btnzone { position: absolute; background: #1a1e26;
+    border: 1px solid #232833; border-radius: 6px; cursor: pointer;
+    transition: all .15s; z-index: 2; }
+  .pv-btnzone:hover { border-color: #39c8e8; box-shadow: 0 0 12px rgba(57,200,232,.25); }
+  .pv-device[data-dev="eu"] .pv-btnzone { height: 21.5%; width: 49%; bottom: 0; }
+  .pv-device[data-dev="eu"] #pv_bz_left { left: 0; border-radius: 6px 0 0 12px; }
+  .pv-device[data-dev="eu"] #pv_bz_right { right: 0; border-radius: 0 6px 12px 0; }
+  .pv-device[data-dev="us_vertical"] .pv-btnzone { height: 15.6%; width: 49%; bottom: 0; }
+  .pv-device[data-dev="us_vertical"] #pv_bz_left { left: 0; }
+  .pv-device[data-dev="us_vertical"] #pv_bz_right { right: 0; }
+  .pv-device[data-dev="us_horizontal"] .pv-btnzone,
+  .pv-device[data-dev="us_horizontal_mirrored"] .pv-btnzone { width: 15.6%; height: 49%; right: 0; }
+  .pv-device[data-dev="us_horizontal"] #pv_bz_left,
+  .pv-device[data-dev="us_horizontal_mirrored"] #pv_bz_left { top: 0; }
+  .pv-device[data-dev="us_horizontal"] #pv_bz_right,
+  .pv-device[data-dev="us_horizontal_mirrored"] #pv_bz_right { bottom: 0; }
+  .pv-screenwrap { position: absolute; background: #000; overflow: hidden;
+    display: flex; justify-content: center; align-items: center; }
+  .pv-device[data-dev="eu"] .pv-screenwrap { left: 0; right: 0; top: 0; height: 77%; }
+  .pv-device[data-dev="us_vertical"] .pv-screenwrap { left: 0; right: 0; top: 0; height: 81.5%; }
+  .pv-device[data-dev="us_horizontal"] .pv-screenwrap,
+  .pv-device[data-dev="us_horizontal_mirrored"] .pv-screenwrap { top: 0; bottom: 0; left: 0; width: 81.5%; }
+  .pv-screen-inner { position: absolute; left: 0; top: 0; width: 480px; height: 320px;
+    transform-origin: top left; }
+  .pv-btnzone .pv-btnlbl { position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; font-size: 11px; color: #5a6068; }
   .studio-screen {
     position: relative; width: 480px; height: 320px;
     max-width: 100%; aspect-ratio: 3/2;
@@ -73,8 +107,8 @@
 <div id="status" class="text-sm" style="min-height:1.4rem;color:#39c8e8"></div>
 
 <div class="flex flex-wrap gap-8 mt-4 items-start">
-  <!-- THE PREVIEW: what the user will see on the panel -->
-  <div class="studio-panel-frame">
+  <!-- THE PREVIEW: the physical panel's representation, as the settings page shows it -->
+  <div class="studio-panel-frame" id="pv_frame" data-dev="eu">
     <div class="flex items-center justify-between px-1 pb-3">
       <span class="text-xs" style="color:#5a6068">NSPanel <span style="color:#39c8e8">Core</span> — live preview</span>
       <span class="text-xs" style="color:#5a6068">
@@ -82,13 +116,21 @@
         <a href="javascript:void(0)" id="view_scr" onclick="setView('scr')" style="color:#5a6068">Screensaver</a>
       </span>
     </div>
-    <div class="studio-screen" id="preview">
-      <img id="pv_bg" class="bg" style="display:none" alt="">
-      <div id="pv_scr" style="display:none">
-        <div class="studio-clock" id="pv_clock">00:00</div>
-        <div class="studio-date" id="pv_date"></div>
+    <div class="pv-device" id="pv_device">
+      <!-- the physical button zones (the buttons are customized in the Panel tab) -->
+      <div class="pv-btnzone" id="pv_bz_left" title="Left button — customize in Panel settings"></div>
+      <div class="pv-btnzone" id="pv_bz_right" title="Right button — customize in Panel settings"></div>
+      <!-- the screen -->
+      <div class="pv-screenwrap" id="pv_screenwrap">
+        <div class="pv-screen-inner" id="pv_inner">
+          <img id="pv_bg" class="bg" style="display:none" alt="">
+          <div id="pv_scr" style="display:none">
+            <div class="studio-clock" id="pv_clock">00:00</div>
+            <div class="studio-date" id="pv_date"></div>
+          </div>
+          <div id="pv_tiles"></div>
+        </div>
       </div>
-      <div id="pv_tiles"></div>
     </div>
   </div>
 
@@ -276,6 +318,9 @@ function loadPanelSettings() {
         el.style.background = '#141821'; el.style.color = '#e8eaec';
         el.style.borderColor = '#2a2f3a';
       });
+      var typeSel = document.getElementById('panel_type');
+      if (typeSel) typeSel.addEventListener('change', renderPreview);
+      renderPreview();  // the button-zone labels + the device frame follow the settings
       box.querySelector('form')?.addEventListener('submit', function (ev) {
         ev.preventDefault();
         var fd = new FormData(ev.target);
@@ -295,7 +340,24 @@ function savePanelSettings() {
 
 /* ---- the live preview -------------------------------------------------- */
 function renderPreview() {
-  var scrSel = document.getElementById('scr_sel');
+  // the device representation follows the panel type (from the settings partial)
+  var dev = "eu";
+  var typeSel = document.getElementById("panel_type");
+  if (typeSel && typeSel.value) dev = typeSel.value;
+  document.getElementById("pv_device").dataset.dev = dev;
+
+  // the physical button zones carry the customized modes
+  var b1 = document.getElementById("button1_mode");
+  var b2 = document.getElementById("button2_mode");
+  var l1 = document.getElementById("pv_bz_left"), l2 = document.getElementById("pv_bz_right");
+  var lbl = function (sel, fallback) {
+    if (!sel) return fallback;
+    var o = sel.options[sel.selectedIndex];
+    return o ? o.text : fallback;
+  };
+  l1.innerHTML = '<div class="pv-btnlbl">' + (b1 ? lbl(b1, "Left button") : "Left button") + '</div>';
+  l2.innerHTML = '<div class="pv-btnlbl">' + (b2 ? lbl(b2, "Right button") : "Right button") + '</div>';
+
   var activeRoom = design.pages.find(p => p.name === (design.screensaver_page || (design.pages[0] && design.pages[0].name)));
   var isScr = view === 'scr' && activeRoom;
   document.getElementById('pv_scr').style.display = isScr ? 'block' : 'none';
@@ -309,11 +371,11 @@ function renderPreview() {
     bg.src = '/nspanel_core/dashboard_photo?panel=' + currentMac() + '&page=' + activeRoom.name + '&variant=scr&r=' + Date.now();
     bg.onerror = function () { bg.style.display = 'none'; };
     tickClock();
+    scaleScreen();
     return;
   }
-  var room = design.pages.find(p => p.name === (design.pages[0] || {}).name);
-  room = design.pages[0] || null;
-  if (!room) { bg.style.display = 'none'; tilesEl.innerHTML = ''; return; }
+  var room = design.pages[0] || null;
+  if (!room) { bg.style.display = 'none'; tilesEl.innerHTML = ''; scaleScreen(); return; }
   bg.style.display = room.background_image ? 'block' : 'none';
   bg.className = 'bg dash';
   bg.src = '/nspanel_core/dashboard_photo?panel=' + currentMac() + '&page=' + room.name + '&variant=dash&r=' + Date.now();
@@ -328,6 +390,34 @@ function renderPreview() {
       (kind ? '<div class="val">--</div>' : '') +
       '</div>';
   }).join('');
+  scaleScreen();
+}
+
+/* scale the 480x320 screen content into the device's screen area */
+function scaleScreen() {
+  var dev = document.getElementById("pv_device").dataset.dev || "eu";
+  var wrap = document.getElementById("pv_screenwrap");
+  var inner = document.getElementById("pv_inner");
+  var sw = wrap.clientWidth, sh = wrap.clientHeight;
+  var s = Math.min(sw / 480, sh / 320);
+  inner.style.transform = "scale(" + s + ")";
+  inner.style.left = ((sw - 480 * s) / 2) + "px";
+  inner.style.top = ((sh - 320 * s) / 2) + "px";
+}
+new ResizeObserver(scaleScreen).observe(document.getElementById("pv_screenwrap"));
+
+/* the button zones jump to their settings in the Panel tab */
+function initZoneJumps() {
+  document.getElementById("pv_bz_left").onclick = function () {
+    setTab("panel");
+    var el = document.getElementById("button1_mode");
+    if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus(); }
+  };
+  document.getElementById("pv_bz_right").onclick = function () {
+    setTab("panel");
+    var el = document.getElementById("button2_mode");
+    if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus(); }
+  };
 }
 
 function tickClock() {
@@ -343,5 +433,6 @@ setInterval(function () {
   if (view === 'scr') tickClock();
 }, 1000);
 setView('dash');
+initZoneJumps();
 </script>
 {% endblock %}
