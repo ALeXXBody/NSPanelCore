@@ -36,41 +36,20 @@
                 <li>
                     <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
                         <label class="label">
-                            <span class="label-text justify-start w-full ml-2">Check firmware updates</span>
+                            <span class="label-text justify-start w-full ml-2">Update all panels</span>
                         </label>
-                        <button class="btn btn-xs btn-info mr-2" onclick="nspanelFetch('/nspanel_core/firmware_check',{method:'POST'}).then(r=>r.json()).then(j=>{if(!j.latest)return alert('Check failed: '+(j.error||'unknown'));var c=j.changes||{};var f=function(k,t){return (c[k]||[]).length?(t+':\n  - '+c[k].join('\n  - ')+'\n'):'';};var msg='Latest firmware: '+j.latest;if(j.update_available)msg+='\n\nUPDATE AVAILABLE for your panels.';msg+='\n\n'+f('bug_fixes','Bug fixes')+f('features','New features')+f('breaking','BREAKING changes');if(j.update_available)msg+='\nInstall it from Actions > Download + activate latest (panels update themselves over the air).';alert(msg);}).catch(e=>alert('Check failed'));">Check</button>
+                        <button class="btn btn-xs btn-primary mr-2" onclick="if(confirm('Activate the latest firmware and update every panel (ESP + display)?'))nspanelFetch('/nspanel_core/firmware_install',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.message)).catch(e=>alert('Update failed'));">Update</button>
                     </div>
                 </li>
                 <li>
                     <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
                         <label class="label">
-                            <span class="label-text justify-start w-full ml-2">Download + activate latest firmware</span>
+                            <span class="label-text justify-start w-full ml-2">Firmware channel status</span>
                         </label>
-                        <button class="btn btn-xs btn-warning mr-2" onclick="if(confirm('Download and activate the latest firmware? Panels update over MQTT OTA.'))nspanelFetch('/nspanel_core/firmware_install',{method:'POST'}).then(r=>r.json()).then(j=>alert(j.message)).catch(e=>alert('Install failed'));">Install</button>
-                    </div>
-                </li>
-                <li>
-                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
-                        <label class="label">
-                            <span class="label-text justify-start w-full ml-2">Reboot all panels</span>
-                        </label>
-                        <button class="btn btn-xs btn-warning mr-2" onclick="if(confirm('Reboot all accepted panels?'))document.querySelectorAll('.nspanel-reboot-button').forEach(b=>b.click());">Reboot</button>
-                    </div>
-                </li>
-                <li>
-                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
-                        <label class="label">
-                            <span class="label-text justify-start w-full ml-2">Update firmware on all panels</span>
-                        </label>
-                        <button class="btn btn-xs btn-warning mr-2" onclick="if(confirm('Flash ESP firmware on ALL panels? This also refreshes their setup web UI and WIPES their WiFi settings. Continue?'))document.querySelectorAll('[id^=firmware-update-]').forEach(b=>b.click());">Flash all</button>
-                    </div>
-                </li>
-                <li>
-                    <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
-                        <label class="label">
-                            <span class="label-text justify-start w-full ml-2">Served display files (what panels download)</span>
-                        </label>
-                        <button class="btn btn-xs btn-info mr-2" onclick="nspanelFetch('/nspanel_core/firmware_status').then(r=>r.json()).then(j=>{var t=j.served_tft||{};var f=function(v){return v?(v.filename+': '+v.bytes+' bytes, md5 '+String(v.md5).slice(0,12)+'… ('+v.source+')'):'missing';};var w=j.served_firmware||{};var g=function(v){return v?(v.filename+': '+v.bytes+' bytes, md5 '+String(v.md5).slice(0,12)+'… ('+v.source+')'):'missing';};alert('EU display: '+f(t.eu)+'\nUS display: '+f(t.us)+'\nESP sonoff fw: '+g(w.sonoff)+'\nESP sonoff data: '+g(w['sonoff-data'])+'\nESP custom fw: '+g(w.custom)+'\nESP custom data: '+g(w['custom-data']));}).catch(e=>alert('Check failed'));">Show</button>
+                        <span class="mr-2 flex gap-1">
+                            <button class="btn btn-xs btn-info" onclick="nspanelFetch('/nspanel_core/firmware_check',{method:'POST'}).then(r=>r.json()).then(j=>{if(!j.latest)return alert('Check failed: '+(j.error||'unknown'));var c=j.changes||{};var f=function(k,t){return (c[k]||[]).length?(t+':\n  - '+c[k].join('\n  - ')+'\n'):'';};var msg='Latest firmware: '+j.latest;if(j.update_available)msg+='\n\nUPDATE AVAILABLE for your panels.';msg+='\n\n'+f('bug_fixes','Bug fixes')+f('features','New features')+f('breaking','BREAKING changes');alert(msg);}).catch(e=>alert('Check failed'));">Check</button>
+                            <button class="btn btn-xs btn-ghost" onclick="nspanelFetch('/nspanel_core/firmware_status').then(r=>r.json()).then(j=>{var t=j.served_tft||{};var f=function(v){return v?(v.filename+': '+v.bytes+' bytes, md5 '+String(v.md5).slice(0,12)+'… ('+v.source+')'):'missing';};var w=j.served_firmware||{};var g=function(v){return v?(v.filename+': '+v.bytes+' bytes, md5 '+String(v.md5).slice(0,12)+'… ('+v.source+')'):'missing';};alert('EU display: '+f(t.eu)+'\nUS display: '+f(t.us)+'\nESP sonoff fw: '+g(w.sonoff)+'\nESP sonoff data: '+g(w['sonoff-data'])+'\nESP custom fw: '+g(w.custom)+'\nESP custom data: '+g(w['custom-data']));}).catch(e=>alert('Check failed'));">Show</button>
+                        </span>
                     </div>
                 </li>
                 <li>
@@ -88,9 +67,9 @@
                 <li>
                     <div class="bg-base-100 rounded-lg my-1 flex items-center justify-between">
                         <label class="label">
-                            <span class="label-text justify-start w-full ml-2">Update display on all panels</span>
+                            <span class="label-text justify-start w-full ml-2">Reboot all panels</span>
                         </label>
-                        <button class="btn btn-xs btn-warning mr-2" onclick="document.querySelectorAll('[id^=screen-update-]').forEach(b=>b.click());">Flash all</button>
+                        <button class="btn btn-xs btn-warning mr-2" onclick="if(confirm('Reboot all accepted panels?'))document.querySelectorAll('.nspanel-reboot-button').forEach(b=>b.click());">Reboot</button>
                     </div>
                 </li>
                 <li>
