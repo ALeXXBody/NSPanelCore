@@ -118,9 +118,12 @@ void nsp_mqtt_publish_touch(int page, int component, int event) {
 /* P208: extract the "command" field properly — substring matching let any
  * payload MENTIONING a command word trigger it. */
 static bool nsp_json_command(const std::string &payload, std::string &out) {
+    /* P212: the compact form {"command":"x"} has NO space before the
+     * colon — find(':') from the KEY start (not k+10, which landed on
+     * the closing quote and returned the key itself). */
     size_t k = payload.find("\"command\"");
     if (k == std::string::npos) return false;
-    size_t colon = payload.find(':', k + 10);
+    size_t colon = payload.find(':', k);
     if (colon == std::string::npos) return false;
     size_t q1 = payload.find('"', colon + 1);
     if (q1 == std::string::npos) return false;
