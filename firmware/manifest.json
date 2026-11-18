@@ -1,47 +1,40 @@
 {
-  "version": "0.1.2",
+  "version": "0.1.3",
   "notes": "fw v0.1.2 \u2014 the zero-typing provisioning firmware: WiFi-only first-boot form, POST /provision, + all audit repairs + the TFT block protocol.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.2/native-firmware-0.1.2.bin",
-      "md5": "848bbc1c6bd156afcb9ca13b274c4889"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.3/native-firmware-0.1.3.bin",
+      "md5": "f50910ee0ebe47b547a7e3eb515acfba"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.2/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.3/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.2/native-firmware-0.1.2.bin",
-      "md5": "848bbc1c6bd156afcb9ca13b274c4889"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.3/native-firmware-0.1.3.bin",
+      "md5": "f50910ee0ebe47b547a7e3eb515acfba"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.2/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.3/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "tft/gui.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.2/gui.tft",
-      "md5": "f2539275ad4b1209e027d1b66694bd27"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.3/gui.tft",
+      "md5": "6db1a04d5ba71d3aa1cabb6ad167c8e8"
     },
     "tft/gui_us.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.2/gui_us.tft",
-      "md5": "f2539275ad4b1209e027d1b66694bd27"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.3/gui_us.tft",
+      "md5": "6db1a04d5ba71d3aa1cabb6ad167c8e8"
     }
   },
   "changes": {
     "bug_fixes": [
-      "Display commands now use the .txt= form the panel accepts - the clock/date/AMPM render live instead of a frozen placeholder",
-      "The updater used the wrong parameter order in the display-reflash command (baud where the file size belongs) - the reflash never started",
-      "The display-reflash now follows the complete per-block handshake - no more uploads stuck at 95%",
-      "Touch behavior: presses no longer jump the screen mid-interaction; the screensaver wakes on release",
-      "A malformed UART read could crash the touch decoder - guarded",
-      "The config storage is verified before erase (no blank-filesystem loop)",
-      "Commands are matched by their exact JSON field - stray mentions no longer trigger actions",
-      "The adopted OTA address is validated (dotted-quad) before use"
+      "THE DISPLAY: the build on your panel predated the corrected display-upload code (the 95% stall) - this build contains the complete per-block upload and the full authored interface (clock, date, relay cards with touch)",
+      "The panel reported the wrong version number (0.1.4) - every version field in the firmware now carries the true release version, verified byte-for-byte in the built binary before shipping",
+      "A WiFi or MQTT password containing a quote silently broke provisioning (the JSON escape was not undone) - fixed"
     ],
     "features": [
-      "Zero-typing provisioning: the first-boot form asks only for WiFi; the app pushes the MQTT settings after you accept the panel",
-      "POST /provision endpoint on the panel - the app's push channel for settings",
-      "mDNS + a status JSON the app can discover panels by"
+      "The dashboard channel: the integration can now drive the panel's screen with custom dashboards (sanitized display commands + the dash page map)"
     ],
     "breaking": []
   }
