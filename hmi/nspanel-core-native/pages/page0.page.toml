@@ -13,4 +13,10 @@ x = 0
 y = 0
 w = 480
 h = 320
-pic = "splash_boot"
+pic = "boot_f0"
+
+[[component]]
+name = "anim"
+type = "timer"
+tim = 150
+en = 1

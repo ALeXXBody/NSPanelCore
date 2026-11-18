@@ -15,6 +15,16 @@ pages = [
 ]
 pictures = [
     "splash_boot",
+    "boot_f0",
+    "boot_f1",
+    "boot_f2",
+    "boot_f3",
+    "boot_f4",
+    "boot_f5",
+    "boot_f6",
+    "boot_f7",
+    "boot_f8",
+    "boot_f9",
     "bg_pad",
     "bg_home",
     "bg_plain",
