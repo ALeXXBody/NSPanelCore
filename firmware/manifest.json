@@ -1,10 +1,10 @@
 {
-  "version": "0.1.1",
-  "notes": "fw v0.1.1 \u2014 P216 provisioning flow (firmware side): WiFi-only first-boot form, POST /provision for the app to push MQTT settings, + all v0.1.1 repairs.",
+  "version": "0.1.2",
+  "notes": "fw v0.1.2 \u2014 the zero-typing provisioning firmware: WiFi-only first-boot form, POST /provision, + all audit repairs + the TFT block protocol.",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "http://192.168.50.200:8000/sonoff-fw",
-      "md5": "052db68a53b5b08318922cb77babceb9"
+      "md5": "848bbc1c6bd156afcb9ca13b274c4889"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "http://192.168.50.200:8000/sonoff-data",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "http://192.168.50.200:8000/custom-fw",
-      "md5": "052db68a53b5b08318922cb77babceb9"
+      "md5": "848bbc1c6bd156afcb9ca13b274c4889"
     },
     "firmware/custom/data_file.bin": {
       "url": "http://192.168.50.200:8000/custom-data",
