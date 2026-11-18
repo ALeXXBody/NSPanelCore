@@ -1309,7 +1309,9 @@ class FirmwareStatusView(HomeAssistantView):
 
 
 class FirmwareCheckView(HomeAssistantView):
-    """POST: fetch the manifest now, report latest (no download)."""
+    """POST: fetch the manifest, report latest — and if a new firmware is
+    available, ACTIVATE it and push the update to the panels (P240b: check
+    that acts; the read-only Check contradicted the automatic system)."""
 
     url = f"{URL_BASE}/firmware_check"
     name = "nspanel_core:firmware_check"
@@ -1318,6 +1320,10 @@ class FirmwareCheckView(HomeAssistantView):
     async def post(self, request, **kwargs):
         manager = _manager(request)
         status = await manager.check_firmware_updates()
+        if status.get("update_available") and status.get("latest"):
+            ok, message = await manager.activate_firmware_version()
+            status["activated"] = ok
+            status["message"] = message
         return web.json_response(status)
 
 
