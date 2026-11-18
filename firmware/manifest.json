@@ -1,35 +1,36 @@
 {
-  "version": "0.1.10",
+  "version": "0.1.9",
   "notes": "fw v0.1.2 \u2014 the zero-typing provisioning firmware: WiFi-only first-boot form, POST /provision, + all audit repairs + the TFT block protocol.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/native-firmware-0.1.10.bin",
-      "md5": "8a0a8e17cc210277783c7c0c1c167cfc"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.9/native-firmware-0.1.9.bin",
+      "md5": "aa11355ce6481d34976d15bc0f35a6d5"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.9/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/native-firmware-0.1.10.bin",
-      "md5": "8a0a8e17cc210277783c7c0c1c167cfc"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.9/native-firmware-0.1.9.bin",
+      "md5": "aa11355ce6481d34976d15bc0f35a6d5"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.9/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "tft/gui.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/gui.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.9/gui.tft",
       "md5": "13ff610a4b698bcc64393b20c9f8a22e"
     },
     "tft/gui_us.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/gui_us.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.9/gui_us.tft",
       "md5": "13ff610a4b698bcc64393b20c9f8a22e"
     }
   },
   "changes": {
     "bug_fixes": [
-      "A display left half-written by an interrupted update could not recover: every same-size re-upload was answered with a resume request at the broken state. The display image now ships at a NEW SIZE (a 200x200 pad picture parked on the unused spare page), which forces the display to erase and write the whole image cleanly from byte 0"
+      "No more power-cycling the display as a routine step: attempt 1 talks to the display directly; a cycle happens only to recover a truly unresponsive display",
+      "A display left half-written by an interrupted update could not recover (every same-size re-upload was answered with a resume at the broken state) - the display image now ships at a NEW SIZE (697,276 B), which forces a clean full erase + write from byte 0"
     ],
     "features": [],
     "breaking": []
