@@ -1,41 +1,39 @@
 {
-  "version": "0.1.7",
+  "version": "0.1.3",
   "notes": "fw v0.1.2 \u2014 the zero-typing provisioning firmware: WiFi-only first-boot form, POST /provision, + all audit repairs + the TFT block protocol.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/native-firmware-0.1.7.bin",
-      "md5": "30af16156677392bcbc79be0418f2868"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.3/native-firmware-0.1.3.bin",
+      "md5": "b98957857f51e6d8fc5ebc56aad570fe"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.3/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/native-firmware-0.1.7.bin",
-      "md5": "30af16156677392bcbc79be0418f2868"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.3/native-firmware-0.1.3.bin",
+      "md5": "b98957857f51e6d8fc5ebc56aad570fe"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.3/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "tft/gui.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/gui.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.3/gui.tft",
       "md5": "6db1a04d5ba71d3aa1cabb6ad167c8e8"
     },
     "tft/gui_us.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/gui_us.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.3/gui_us.tft",
       "md5": "6db1a04d5ba71d3aa1cabb6ad167c8e8"
     }
   },
   "changes": {
     "bug_fixes": [
-      "The panel reported the wrong version number (0.1.4) - every version field in the build now carries the true release version, verified byte-for-byte in the binary before shipping",
-      "The display reflash task shipped in the previous build predated the corrected upload protocol - this build contains the complete per-block upload (no more stalls at 95%)",
+      "The panel reported the wrong version number (0.1.4) - every version field in the firmware now carries the true release version, verified byte-for-byte in the built binary before shipping",
+      "The display reflash task in the previous build predated the corrected upload protocol - this build contains the complete per-block upload (no more stalls at 95%)",
       "The previous display image was a splash-only test picture - this release ships the full panel interface"
     ],
-    "features": [
-      "The display now receives the full authored interface: clock page, date, AM/PM, relay cards with touch toggles"
-    ],
+    "features": [],
     "breaking": []
   }
 }

@@ -3,6 +3,6 @@
   "render_readme": true,
   "homeassistant": "2026.10.0",
   "hacs": "2.0.0",
-  "version": "0.1.7",
+  "version": "0.1.6",
   "icon": "icon.png"
 }
