@@ -529,8 +529,75 @@ static void nsp_tft_task(void *) {
                 uint32_t req_off = (uint32_t)resp[1] | ((uint32_t)resp[2] << 8) |
                                    ((uint32_t)resp[3] << 16) | ((uint32_t)resp[4] << 24);
                 if (req_off > (unsigned long long)offset) {
-                    /* absurd: the display asks for data it was never sent
-                     * (the upstream System-Data-ERROR Frankenstein) */
+                    if ((long long)req_off <= file_size) {
+                        /* P243: the display REMEMBERS a partially-written
+                         * image across power cycles and asks to RESUME at
+                         * its flash pointer (655360 = exactly where a
+                         * previous transfer died). The old guard called
+                         * this absurd and restarted — the display then
+                         * re-asked forever (the "stuck at 94%"). Honor it:
+                         * hash the skipped prefix (fetched, NOT sent — the
+                         * recorded md5 must equal the FULL file's or the
+                         * manager would reflash in a loop), then stream
+                         * from the display's pointer. */
+                        char l[96];
+                        snprintf(l, sizeof(l), "TFT: display asks to resume at %u — catching up",
+                                 req_off);
+                        nsp_mqtt_publish_log(l);
+                        long long p = offset;
+                        bool catchup_failed = false;
+                        while (p < (long long)req_off && !catchup_failed) {
+                            long long cwant = 4096;
+                            if ((long long)req_off - p < cwant) cwant = (long long)req_off - p;
+                            esp_http_client_config_t ccfg = {};
+                            std::string curl = nsp_manager_url(url_path);
+                            ccfg.url = curl.c_str();
+                            ccfg.timeout_ms = 15000;
+                            esp_http_client_handle_t cclient = esp_http_client_init(&ccfg);
+                            if (cclient == nullptr) { catchup_failed = true; break; }
+                            esp_http_client_set_method(cclient, HTTP_METHOD_GET);
+                            {
+                                char crange[64];
+                                snprintf(crange, sizeof(crange), "bytes=%lld-%lld", p, p + cwant - 1);
+                                esp_http_client_set_header(cclient, "Range", crange);
+                            }
+                            if (esp_http_client_open(cclient, 0) != ESP_OK ||
+                                esp_http_client_fetch_headers(cclient) < 0 ||
+                                esp_http_client_get_status_code(cclient) != 206) {
+                                esp_http_client_cleanup(cclient);
+                                catchup_failed = true;
+                                break;
+                            }
+                            uint8_t cblock[4096];
+                            size_t cgot = 0;
+                            int64_t cdead = esp_timer_get_time();
+                            while (cgot < (size_t)cwant &&
+                                   esp_timer_get_time() - cdead < 15000000LL) {
+                                int cr = esp_http_client_read(
+                                    cclient, (char *)cblock + cgot, (int)((size_t)cwant - cgot));
+                                if (cr > 0) {
+                                    cgot += (size_t)cr;
+                                    s_last_progress_us = esp_timer_get_time();
+                                } else {
+                                    vTaskDelay(pdMS_TO_TICKS(20));
+                                }
+                            }
+                            esp_http_client_close(cclient);
+                            esp_http_client_cleanup(cclient);
+                            if (cgot < (size_t)cwant) { catchup_failed = true; break; }
+                            mbedtls_md5_update(&tft_md5, cblock, cgot);
+                            p += (long long)cgot;
+                        }
+                        if (catchup_failed) {
+                            nsp_mqtt_publish_log("TFT: resume catch-up fetch failed — restarting");
+                            failed = true;
+                            break;
+                        }
+                        offset = (long long)req_off;
+                        resent = false;
+                        continue;
+                    }
+                    /* beyond the file: the genuinely absurd case */
                     char l[96];
                     snprintf(l, sizeof(l), "TFT: absurd 0x08 offset %u — clean restart", req_off);
                     nsp_mqtt_publish_log(l);

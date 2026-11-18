@@ -1,36 +1,35 @@
 {
-  "version": "0.1.6",
+  "version": "0.1.7",
   "notes": "fw v0.1.2 \u2014 the zero-typing provisioning firmware: WiFi-only first-boot form, POST /provision, + all audit repairs + the TFT block protocol.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/native-firmware-0.1.6.bin",
-      "md5": "bca9d8b79c87d95e122c75e6f976a889"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/native-firmware-0.1.7.bin",
+      "md5": "096411a85e7a7cc793601e3491324abb"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/native-firmware-0.1.6.bin",
-      "md5": "bca9d8b79c87d95e122c75e6f976a889"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/native-firmware-0.1.7.bin",
+      "md5": "096411a85e7a7cc793601e3491324abb"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "tft/gui.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/gui.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/gui.tft",
       "md5": "0a205300a5006c6964a5e879fc4103f4"
     },
     "tft/gui_us.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/gui_us.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/gui_us.tft",
       "md5": "0a205300a5006c6964a5e879fc4103f4"
     }
   },
   "changes": {
     "bug_fixes": [
-      "A display that stopped answering mid-upload hung the update forever (progress frozen, further commands swallowed): no-reply retries are now capped at 3 per block, then the attempt restarts cleanly (the display power-cycle clears its error state)",
-      "An update request arriving while one is running is now logged instead of silently ignored"
+      "THE 94% STALL, ROOT-CAUSED: the display remembers a partially-written image across power cycles and asks every new upload to RESUME at its write pointer (655360 = exactly where a previous transfer died) - the updater called that absurd and restarted, so the display re-asked forever. The updater now honors the resume: it catches up (fetching the skipped bytes to keep the recorded checksum true), streams from the display's pointer, and the image completes"
     ],
     "features": [],
     "breaking": []
