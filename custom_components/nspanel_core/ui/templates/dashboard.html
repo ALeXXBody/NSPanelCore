@@ -24,10 +24,15 @@
 <div id="editor" style="display:none">
   <h3 class="title is-5">Dashboard pages (rooms)</h3>
   <table class="table is-fullwidth" id="pages_tbl">
-    <thead><tr><th>Page</th><th>Title</th><th>Background</th><th></th></tr></thead>
+    <thead><tr><th>Page</th><th>Title</th><th>Background</th><th>Photo</th><th></th></tr></thead>
     <tbody></tbody>
   </table>
   <button class="button is-small" onclick="addPage()">+ Add page</button>
+  <p class="is-size-7" style="margin-top:.4rem">
+    Screensaver background from room:
+    <select id="scr_sel" onchange="design.screensaver_page=this.value"></select>
+    <em>(the room's photo sits under the clock)</em>
+  </p>
 
   <h3 class="title is-5" style="margin-top:1.5rem">Items</h3>
   <table class="table is-fullwidth" id="items_tbl">
@@ -79,9 +84,29 @@ function renderPages() {
       '<td><input class="input is-small" value="' + p.name + '" onchange="design.pages[' + i + '].name=this.value"></td>' +
       '<td><input class="input is-small" value="' + p.title + '" onchange="design.pages[' + i + '].title=this.value"></td>' +
       '<td><input class="input is-small" value="' + p.background + '" onchange="design.pages[' + i + '].background=this.value"></td>' +
+      '<td><input type="file" accept="image/*" class="file-input" style="width:11rem" onchange="uploadBg(' + i + ', this)">' +
+      (p.background_image ? '<span class="tag is-success is-light is-small">' + p.background_image + '</span>' : '') + '</td>' +
       '<td><button class="button is-small is-danger" onclick="design.pages.splice(' + i + ',1);renderPages();renderItems()">✕</button></td>' +
       '</tr>';
   }).join('');
+  var ss = document.getElementById('scr_sel');
+  ss.innerHTML = design.pages.map(function (p) {
+    return '<option value="' + p.name + '"' + (design.screensaver_page === p.name ? ' selected' : '') + '>' + p.title + '</option>';
+  }).join('');
+}
+
+function uploadBg(i, input) {
+  var file = input.files[0];
+  if (!file) return;
+  var fd = new FormData();
+  fd.append('panel', currentMac());
+  fd.append('page', design.pages[i].name);
+  fd.append('file', file);
+  nspanelFetch('/nspanel_core/dashboard_upload_background', { method: 'POST', body: fd })
+    .then(r => r.json()).then(j => {
+      if (j.error) setStatus('Upload failed: ' + j.error, true);
+      else { setStatus('Photo stored — it backs the screensaver and this room\'s dashboard', false); loadDesign(); }
+    }).catch(e => setStatus('Upload failed: ' + e, true));
 }
 
 function renderItems() {

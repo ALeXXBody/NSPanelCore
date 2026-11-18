@@ -26,6 +26,7 @@ _PAGE_NAME_RE = __import__("re").compile(r"^dash_[a-z0-9_]{1,9}$")
 _ENTITY_RE = __import__("re").compile(r"^[a-z_]+\.[a-z0-9_]+$")
 _NAME_RE = __import__("re").compile(r"^[A-Za-z0-9_\- ]{1,32}$")
 _ITEM_RE = __import__("re").compile(r"^[a-z][a-z0-9_]{0,23}$")
+_BGIMG_RE = __import__("re").compile(r"^[a-z0-9_]+\.(jpg|jpeg|png)$")
 
 
 class DesignError(ValueError):
@@ -84,19 +85,23 @@ class DashPage:
     name: str  # dash_<...>
     title: str  # shown in the menu + page header
     background: str = "bg_plain"  # picture resource name from the kit
+    background_image: str = ""  # the user's uploaded photo (stored filename)
 
     def validate(self) -> None:
         if not _PAGE_NAME_RE.match(self.name or ""):
             raise DesignError(f"page name {self.name!r}: dash_ + a-z/0-9/_ (max 25)")
         if not _NAME_RE.match(self.title or ""):
             raise DesignError(f"page title {self.title!r}: too long or invalid")
-        if not __import__("re").compile(r"^[a-z][a-z0-9_]{0,13}$").match(
-            self.background or ""
-        ):
+        if self.background and not __import__("re").compile(
+            r"^[a-z][a-z0-9_]{0,13}$"
+        ).match(self.background):
             raise DesignError("invalid background picture name")
+        if self.background_image and not _BGIMG_RE.match(self.background_image):
+            raise DesignError("invalid background image reference")
 
     def to_dict(self) -> dict:
-        return {"name": self.name, "title": self.title, "background": self.background}
+        return {"name": self.name, "title": self.title, "background": self.background,
+                "background_image": self.background_image}
 
     @classmethod
     def from_dict(cls, d: dict) -> "DashPage":
@@ -104,6 +109,7 @@ class DashPage:
             name=str(d.get("name", "")),
             title=str(d.get("title", "")),
             background=str(d.get("background", "bg_plain")),
+            background_image=str(d.get("background_image", "")),
         )
 
 
@@ -114,6 +120,7 @@ class PanelDesign:
     mac: str  # lowercase, no separators — matches PanelConfig.mac
     pages: list[DashPage] = field(default_factory=list)
     items: list[DashItem] = field(default_factory=list)
+    screensaver_page: str = ""  # the room whose photo backs the screensaver
 
     def validate(self) -> None:
         if not self.mac or not isinstance(self.mac, str):
@@ -139,6 +146,8 @@ class PanelDesign:
             item_ids.add(it.id)
         if len(self.pages) > 6:
             raise DesignError("max 6 dashboard pages (the menu grid is 3x2)")
+        if self.screensaver_page and self.screensaver_page not in names:
+            raise DesignError("the screensaver room must be one of the pages")
 
     # -- persistence -------------------------------------------------
     def to_dict(self) -> dict:
@@ -146,6 +155,7 @@ class PanelDesign:
             "mac": self.mac,
             "pages": [p.to_dict() for p in self.pages],
             "items": [i.to_dict() for i in self.items],
+            "screensaver_page": self.screensaver_page,
         }
 
     @classmethod
@@ -154,6 +164,7 @@ class PanelDesign:
             mac=str(d.get("mac", "")),
             pages=[DashPage.from_dict(x) for x in d.get("pages", [])],
             items=[DashItem.from_dict(x) for x in d.get("items", [])],
+            screensaver_page=str(d.get("screensaver_page", "")),
         )
         return design
 

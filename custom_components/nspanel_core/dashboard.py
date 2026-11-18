@@ -2038,6 +2038,37 @@ class DashboardSendView(HomeAssistantView):
         return web.json_response(result, status=status)
 
 
+class DashboardBackgroundUploadView(HomeAssistantView):
+    """POST (multipart): upload a room photo — the screensaver background.
+
+    P255 (the user's design): the original backs the screensaver (the clock
+    sits on it via photo-crop text backgrounds) and its darkened twin backs
+    that room's dashboard. Both processed to panel standards at generate.
+    """
+
+    url = f"{URL_BASE}/dashboard_upload_background"
+    name = "nspanel_core:dashboard_upload_background"
+    requires_auth = True
+
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        try:
+            data = await request.post()
+            mac = str(data.get("panel", ""))
+            page = str(data.get("page", ""))
+            file = data.get("file")
+        except Exception:  # noqa: BLE001
+            return web.json_response({"error": "malformed upload"}, status=400)
+        if not mac or not page or file is None or not getattr(file, "file", None):
+            return web.json_response({"error": "panel, page and file required"}, status=400)
+        file_bytes = file.file.read()
+        if len(file_bytes) > 8 * 1024 * 1024:
+            return web.json_response({"error": "file too large (max 8 MB)"}, status=400)
+        result = manager.dash.store_background(mac, page, file_bytes, file.filename or "")
+        status = 200 if result.get("ok") else 400
+        return web.json_response(result, status=status)
+
+
 class DashboardEntitiesView(HomeAssistantView):
     """GET: HA entities for the editor's picker (controllable domains)."""
 
@@ -2152,6 +2183,7 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         DashboardDesignView,
         DashboardSaveView,
         DashboardSendView,
+        DashboardBackgroundUploadView,
         DashboardEntitiesView,
     ]
     for view_cls in views:

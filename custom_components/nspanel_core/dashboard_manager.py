@@ -96,7 +96,8 @@ class DashboardService:
     def _generate_and_compile(self, design: dd.PanelDesign) -> tuple[str, str, dict, list]:
         """Blocking: design → TFT path + md5 + component map + page ids."""
         with tempfile.TemporaryDirectory(prefix="nspdash") as wd:
-            cmap = hg.generate_source(design, KIND, wd)
+            origins = _dash_dir(self.hass)
+            cmap = hg.generate_source(design, KIND, wd, origins_dir=origins)
             tft_tmp = os.path.join(wd, "panel.tft")
             hg.compile_tft(wd, tft_tmp)
             data = open(tft_tmp, "rb").read()
@@ -209,6 +210,39 @@ class DashboardService:
                     json.dumps({"command": "dash", "payload": stmt}),
                 )
             )
+
+    # -- the user's room photos -------------------------------------------
+
+    def store_background(self, mac: str, page: str, file_bytes: bytes,
+                         filename: str) -> dict:
+        """Store a room photo upload and reference it in the design.
+
+        P255 (the user's design): the photo is kept as-is (the screensaver
+        variant) and processed to the dashboard variant at generate time.
+        """
+        import imghdr
+
+        ext = ".png" if (imghdr.what(None, file_bytes) == "png") else ".jpg"
+        origins = _dash_dir(self.hass)
+        safe = f"orig_{mac}_{page}{ext}"
+        with open(os.path.join(origins, safe), "wb") as f:
+            f.write(file_bytes)
+        design = self._designs.get(mac)
+        if design is None:
+            design = dd.PanelDesign(mac=mac)
+            self._designs[mac] = design
+        target = next((p for p in design.pages if p.name == page), None)
+        if target is None:
+            return {"error": f"page {page} is not in the design"}
+        target.background_image = safe
+        # the underlying task is async: persist through the running loop
+        import asyncio
+
+        self.hass.loop.create_task(self._save())
+        return {"ok": True, "stored": safe}
+
+    def origins_dir(self) -> str:
+        return _dash_dir(self.hass)
 
     # -- touch routing -----------------------------------------------------
 
