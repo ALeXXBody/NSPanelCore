@@ -18,6 +18,7 @@ pic = "bg_home"
 [[component]]
 name = "rel1"
 type = "dual-state-button"
+sendkey = 3
 x = 20
 y = 60
 w = 210
@@ -28,6 +29,7 @@ pic2 = "btn_on"
 [[component]]
 name = "rel2"
 type = "dual-state-button"
+sendkey = 3
 x = 250
 y = 60
 w = 210
@@ -38,6 +40,7 @@ pic2 = "btn_on"
 [[component]]
 name = "room_btn"
 type = "hotspot"
+sendkey = 3
 x = 20
 y = 180
 w = 210
@@ -55,6 +58,7 @@ pic = "btn_room"
 [[component]]
 name = "scenes_btn"
 type = "hotspot"
+sendkey = 3
 x = 250
 y = 180
 w = 210

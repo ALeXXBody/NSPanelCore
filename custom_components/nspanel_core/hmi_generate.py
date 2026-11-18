@@ -48,6 +48,8 @@ def _write_toml(path: str, page_name: str, comps: list[dict]) -> None:
             lines.append(f'txt = "{c["text"]}"')
         if "font" in c:
             lines.append(f'font = "{c["font"]}"')
+        if "sendkey" in c:
+            lines.append(f"sendkey = {int(c['sendkey'])}")
         lines.append("")
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))

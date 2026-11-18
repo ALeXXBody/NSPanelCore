@@ -18,6 +18,7 @@ pic = "bg_scenes"
 [[component]]
 name = "back"
 type = "hotspot"
+sendkey = 3
 x = 20
 y = 220
 w = 210

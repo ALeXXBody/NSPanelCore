@@ -186,12 +186,12 @@ def menu_components(design: PanelDesign) -> list[dict]:
     for n, page in enumerate(design.pages):
         x, y = GRID_SLOTS[n]
         comps.append({"name": f"m{n}", "type": "hotspot",
-                      "x": x, "y": y, "w": TILE_W, "h": BTN_H})
+                      "x": x, "y": y, "w": TILE_W, "h": BTN_H, "sendkey": 3})
         comps.append({"name": f"ml{n}", "type": "text",
                       "x": x, "y": y + BTN_H, "w": TILE_W, "h": LBL_H,
                       "text": clean_text(page.title, 24), "font": "NotoSans24"})
     comps.append({"name": "back", "type": "hotspot",
-                  "x": 165, "y": 290, "w": TILE_W, "h": 24})
+                  "x": 165, "y": 290, "w": TILE_W, "h": 24, "sendkey": 3})
     comps.append({"name": "back_pic", "type": "picture",
                   "x": 165, "y": 290, "w": TILE_W, "h": 24, "pic": "btn_scenes"})
     return comps
@@ -213,11 +213,11 @@ def dash_components(design: PanelDesign, page: DashPage) -> list[dict]:
         if it.widget in ("switch", "light", "rgb_light"):
             comps.append({"name": f"b{it.slot}", "type": "dual-state-button",
                           "x": x, "y": y, "w": TILE_W, "h": BTN_H,
-                          "pic": "btn_off", "pic2": "btn_on"})
+                          "pic": "btn_off", "pic2": "btn_on", "sendkey": 3})
         elif it.widget == "scene":
             comps.append({"name": f"b{it.slot}", "type": "picture",
                           "x": x, "y": y, "w": TILE_W, "h": BTN_H,
-                          "pic": "btn_scenes"})
+                          "pic": "btn_scenes", "sendkey": 3})
         else:  # sensor / climate — a value text (txt= updated at runtime)
             comps.append({"name": f"b{it.slot}", "type": "text",
                           "x": x, "y": y, "w": TILE_W, "h": BTN_H,
@@ -226,7 +226,7 @@ def dash_components(design: PanelDesign, page: DashPage) -> list[dict]:
                       "x": x, "y": y + BTN_H, "w": TILE_W, "h": LBL_H,
                       "text": clean_text(it.label, 24), "font": "NotoSans24"})
     comps.append({"name": "back", "type": "hotspot",
-                  "x": 395, "y": 20, "w": 75, "h": 30})
+                  "x": 395, "y": 20, "w": 75, "h": 30, "sendkey": 3})
     comps.append({"name": "back_pic", "type": "picture",
                   "x": 395, "y": 20, "w": 75, "h": 30, "pic": "btn_scenes"})
     return comps

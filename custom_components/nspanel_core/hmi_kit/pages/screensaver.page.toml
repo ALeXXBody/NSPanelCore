@@ -60,6 +60,7 @@ txt = "AM"
 [[component]]
 name = "wake"
 type = "hotspot"
+sendkey = 3
 x = 0
 y = 0
 w = 480
