@@ -12,6 +12,8 @@ import asyncio
 import json
 import logging
 import pathlib
+from PIL import Image, ImageEnhance, ImageFilter
+import os as _os
 
 from typing import Any
 
@@ -452,70 +454,113 @@ class EditPanelView(HomeAssistantView):
             html = _render("index_shell.html", page_title="Bad panel id", nspanels=[])
             return web.Response(text=html, content_type="text/html")
         panel = next((p for p in manager.panels() if p.id == panel_id), None)
+def _panel_settings_context(manager, panel) -> dict:
+    """The context for the panel-settings fields (shared by the edit page
+    and the Dashboard studio's Panel tab — the elements live once)."""
+    from dataclasses import asdict
+
+    panel_dict = asdict(panel)
+    panel_dict["ip_address"] = ""
+    panel_dict["friendly_name"] = panel.name  # Django model used friendly_name
+    panel_dict["mac_address"] = panel.mac  # MAC shown in settings header
+    panel_dict["room"] = {"id": panel.room_id}  # Django model used panel.room (FK)
+    # Django FKs not used in integration; provide stubs so template attribute access is safe.
+    class _Stub:
+        room = None
+    panel_dict["button1_detached_mode_entity"] = _Stub()
+    panel_dict["button2_detached_mode_entity"] = _Stub()
+    # Detached-mode room selects: pre-select the room of the stored light.
+    _light_room = {l.id: l.room_id for l in manager.config.lights}
+    panel_dict["button1_detached_room"] = _light_room.get(
+        panel.button1_detached_light, panel.room_id)
+    panel_dict["button2_detached_room"] = _light_room.get(
+        panel.button2_detached_light, panel.room_id)
+    panel_info = {"data": panel_dict}
+    nspanel = {"data": panel_dict}
+    room_views = []
+    for r in manager.config.rooms:
+        r_nspanels = [p for p in manager.config.panels if p.room_id == r.id]
+        r_entities = [l for l in manager.config.lights if l.room_id == r.id]
+        rv = _RoomView(r, nspanels=r_nspanels, entities=r_entities)
+        # make nspanels template-friendly (friendly_name)
+        rv._nspanels = [type("P", (), {"friendly_name": p.name}) for p in r_nspanels]
+        rv._entities = [type("E", (), {"friendly_name": e.name}) for e in r_entities]
+        room_views.append(rv)
+    rooms = room_views
+    lights = [
+        {"id": l.id, "name": l.name, "ha_entity": l.ha_entity, "room_id": l.room_id}
+        for l in manager.config.lights
+    ]
+    settings_ctx = dict(panel_dict)
+    settings_ctx["selected_tft"] = ""
+    settings_ctx["us_panel_orientation"] = panel.us_panel_orientation or ""
+    # Template renders the MQTT button inputs from *custom_* names while
+    # the model stores button*_mqtt_topic — an undefined key rendered ""
+    # and every save wiped a configured topic/payload.
+    settings_ctx["button1_custom_mqtt_topic"] = panel.button1_mqtt_topic
+    settings_ctx["button1_custom_mqtt_payload"] = panel.button1_mqtt_payload
+    settings_ctx["button2_custom_mqtt_topic"] = panel.button2_mqtt_topic
+    settings_ctx["button2_custom_mqtt_payload"] = panel.button2_mqtt_payload
+    return {
+        "panel_info": panel_info,
+        "nspanel": nspanel,
+        "settings": settings_ctx,
+        "rooms": rooms,
+        "lights": lights,
+        "temperature_unit": "°C",
+        "current_temperature": 0,
+        "current_humidity": 0,
+        "current_pressure": 0,
+        "current_wifi_signal_strength": 0,
+        "current_ram_usage": 0,
+    }
+
+
+class EditPanelView(HomeAssistantView):
+    """The ORIGINAL panel settings page (edit_nspanel template)."""
+
+    url = f"{URL_BASE}/edit/{{panel_id}}"
+    name = "nspanel_core:edit"
+    requires_auth = False
+
+    async def get(self, request, **kwargs):
+        manager = _manager(request)
+        try:
+            panel_id = int(request.match_info["panel_id"])
+        except (KeyError, ValueError, TypeError):
+            html = _render("index_shell.html", page_title="Bad panel id", nspanels=[])
+            return web.Response(text=html, content_type="text/html")
+        panel = next((p for p in manager.panels() if p.id == panel_id), None)
         if panel is None:
             html = _render("index_shell.html", page_title="Panel not found", nspanels=[])
             return web.Response(text=html, content_type="text/html")
         # Context shaped like the Django view: panel_info wrapper + settings
-        from dataclasses import asdict
+        ctx = _panel_settings_context(manager, panel)
+        ctx["page_title"] = f"{panel.name} — settings"
+        ctx["nspanels"] = _panels_context(manager)
+        html = _render("edit_nspanel.html", **ctx)
+        return web.Response(text=html, content_type="text/html")
 
-        panel_dict = asdict(panel)
-        panel_dict["ip_address"] = ""
-        panel_dict["friendly_name"] = panel.name  # Django model used friendly_name
-        panel_dict["mac_address"] = panel.mac  # MAC shown in settings header
-        panel_dict["room"] = {"id": panel.room_id}  # Django model used panel.room (FK)
-        # Django FKs not used in integration; provide stubs so template attribute access is safe.
-        class _Stub:
-            room = None
-        panel_dict["button1_detached_mode_entity"] = _Stub()
-        panel_dict["button2_detached_mode_entity"] = _Stub()
-        # Detached-mode room selects: pre-select the room of the stored light.
-        _light_room = {l.id: l.room_id for l in manager.config.lights}
-        panel_dict["button1_detached_room"] = _light_room.get(
-            panel.button1_detached_light, panel.room_id)
-        panel_dict["button2_detached_room"] = _light_room.get(
-            panel.button2_detached_light, panel.room_id)
-        panel_info = {"data": panel_dict}
-        nspanel = {"data": panel_dict}
-        room_views = []
-        for r in manager.config.rooms:
-            r_nspanels = [p for p in manager.config.panels if p.room_id == r.id]
-            r_entities = [l for l in manager.config.lights if l.room_id == r.id]
-            rv = _RoomView(r, nspanels=r_nspanels, entities=r_entities)
-            # make nspanels template-friendly (friendly_name)
-            rv._nspanels = [type("P", (), {"friendly_name": p.name}) for p in r_nspanels]
-            rv._entities = [type("E", (), {"friendly_name": e.name}) for e in r_entities]
-            room_views.append(rv)
-        rooms = room_views
-        lights = [
-            {"id": l.id, "name": l.name, "ha_entity": l.ha_entity, "room_id": l.room_id}
-            for l in manager.config.lights
-        ]
-        settings_ctx = dict(panel_dict)
-        settings_ctx["selected_tft"] = ""
-        settings_ctx["us_panel_orientation"] = panel.us_panel_orientation or ""
-        # Template renders the MQTT button inputs from *custom_* names while
-        # the model stores button*_mqtt_topic — an undefined key rendered ""
-        # and every save wiped a configured topic/payload.
-        settings_ctx["button1_custom_mqtt_topic"] = panel.button1_mqtt_topic
-        settings_ctx["button1_custom_mqtt_payload"] = panel.button1_mqtt_payload
-        settings_ctx["button2_custom_mqtt_topic"] = panel.button2_mqtt_topic
-        settings_ctx["button2_custom_mqtt_payload"] = panel.button2_mqtt_payload
-        html = _render(
-            "edit_nspanel.html",
-            panel_info=panel_info,
-            nspanel=nspanel,
-            settings=settings_ctx,
-            rooms=rooms,
-            lights=lights,
-            page_title=f"{panel.name} — settings",
-            temperature_unit="°C",
-            current_temperature=0,
-            current_humidity=0,
-            current_pressure=0,
-            current_wifi_signal_strength=0,
-            current_ram_usage=0,
-            nspanels=_panels_context(manager),
-        )
+
+class DashboardPanelSettingsView(HomeAssistantView):
+    """P263: the panel-settings fields, rendered for the Dashboard studio's
+    Panel tab — the SAME elements the edit page shows, moved here."""
+
+    url = f"{URL_BASE}/dashboard/panel_settings"
+    name = "nspanel_core:dashboard_panel_settings"
+    requires_auth = False
+
+    async def get(self, request, **kwargs):
+        manager = _manager(request)
+        try:
+            panel_id = int(request.query.get("panel_id", ""))
+        except (KeyError, ValueError, TypeError):
+            return web.Response(text="<p class='text-sm'>Choose a panel.</p>", content_type="text/html")
+        panel = next((p for p in manager.panels() if p.id == panel_id), None)
+        if panel is None:
+            return web.Response(text="<p class='text-sm'>Panel not found.</p>", content_type="text/html")
+        ctx = _panel_settings_context(manager, panel)
+        html = _render("_panel_settings_fields.html", **ctx)
         return web.Response(text=html, content_type="text/html")
 
 
@@ -2038,6 +2083,46 @@ class DashboardSendView(HomeAssistantView):
         return web.json_response(result, status=status)
 
 
+class DashboardPhotoView(HomeAssistantView):
+    """GET: a panel's stored room photo — the preview in the studio.
+
+    variant=scr (default): the full-brightness screensaver photo;
+    variant=dash: the darkened dashboard variant. Processed on demand
+    (the same standards the generator uses), cached by the browser.
+    """
+
+    url = f"{URL_BASE}/dashboard_photo"
+    name = "nspanel_core:dashboard_photo"
+    requires_auth = False
+
+    async def get(self, request, **kwargs):
+        manager = _manager(request)
+        mac = request.query.get("panel", "")
+        page = request.query.get("page", "")
+        variant = request.query.get("variant", "scr")
+        design = manager.dash.design(mac)
+        target = next((p for p in design.pages if p.name == page), None)
+        if target is None or not target.background_image:
+            return web.Response(status=404, text="no photo")
+        origins = manager.dash.origins_dir()
+        from . import bg_process as bgp
+        from aiohttp import web as _web
+        import io as _io
+
+        with Image.open(os.path.join(origins, target.background_image)) as im:
+            im = im.convert("RGB")
+            base = bgp.cover_crop(im)
+            if variant == "dash":
+                base = base.filter(ImageFilter.GaussianBlur(bgp.DASH_BLUR))
+                base = ImageEnhance.Brightness(base).enhance(bgp.DASH_BRIGHTNESS)
+                base = ImageEnhance.Contrast(base).enhance(bgp.DASH_CONTRAST)
+        buf = _io.BytesIO()
+        base.save(buf, format="JPEG", quality=90)
+        return _web.Response(
+            body=buf.getvalue(), content_type="image/jpeg",
+            headers={"Cache-Control": "no-cache"})
+
+
 class DashboardBackgroundUploadView(HomeAssistantView):
     """POST (multipart): upload a room photo — the screensaver background.
 
@@ -2180,6 +2265,8 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         SettingsView,
         GeneralSettingsView,
         DashboardView,
+        DashboardPanelSettingsView,
+        DashboardPhotoView,
         DashboardDesignView,
         DashboardSaveView,
         DashboardSendView,

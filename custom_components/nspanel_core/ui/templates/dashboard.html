@@ -1,78 +1,177 @@
 {% extends 'base.html' %}
 
-{% block content %}
-<h2 class="title is-4">Dashboard — customize a panel's screen</h2>
-<p class="subtitle is-6">
-  Pick a panel, design its dashboard, then press <strong>Send to panel</strong>.
-  Changes are batched — nothing reaches the panel until you send it.
-</p>
+{% block head %}
+<style>
+  /* P263: the creation studio — dark glass, brand cyan, the panel preview */
+  .studio-panel-frame {
+    background: linear-gradient(160deg, #1a1e26 0%, #0d1016 60%);
+    border: 1px solid #2a2f3a;
+    border-radius: 22px;
+    padding: 18px 14px 26px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05);
+    width: min(540px, 100%);
+  }
+  .studio-screen {
+    position: relative; width: 480px; height: 320px;
+    max-width: 100%; aspect-ratio: 3/2;
+    border-radius: 8px; overflow: hidden;
+    background: #0d1016;
+    box-shadow: inset 0 0 0 1px #232833, 0 0 24px rgba(57,200,232,.06);
+  }
+  .studio-screen img.bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .studio-screen img.bg.dash { filter: brightness(.42) blur(2px) contrast(.9); transform: scale(1.04); }
+  .studio-tile {
+    position: absolute; width: 150px; height: 110px;
+    border-radius: 10px; background: rgba(13,16,22,.82);
+    border: 1px solid rgba(57,200,232,.25);
+    box-shadow: 0 6px 18px rgba(0,0,0,.45);
+    padding: 10px 12px; box-sizing: border-box;
+  }
+  .studio-tile .sw { width: 26px; height: 26px; border-radius: 8px; background: #39c8e8; }
+  .studio-tile .lbl { position:absolute; left:12px; bottom:8px; font-size:12px; color:#c8cbce; }
+  .studio-tile .val { position:absolute; right:12px; top:10px; font-size:16px; font-weight:600; color:#fff; }
+  .studio-clock {
+    position:absolute; left:40px; top:80px; width:400px; text-align:center;
+    font-size:64px; font-weight:300; color:#c8cbce; letter-spacing:2px;
+  }
+  .studio-date {
+    position:absolute; left:40px; top:210px; width:400px; text-align:center;
+    font-size:20px; color:#8b9099; letter-spacing:3px;
+  }
+  .studio-tab { cursor: pointer; padding: 8px 18px; border-radius: 10px 10px 0 0;
+    border: 1px solid #232833; border-bottom: none; color: #8b9099; background: #141821; }
+  .studio-tab.active { color: #39c8e8; background: #0d1016; border-color: #2a2f3a; }
+  .studio-tabpane { display: none; border: 1px solid #2a2f3a; border-radius: 0 12px 12px 12px;
+    background: #0d1016; padding: 16px; }
+  .studio-tabpane.active { display: block; }
+  .studio-btn { background: linear-gradient(135deg, #39c8e8 0%, #2e7d8e 100%);
+    color: #06222b; font-weight: 600; border: none; border-radius: 10px;
+    padding: 9px 20px; cursor: pointer; }
+  .studio-btn.ghost { background: transparent; color: #8b9099; border: 1px solid #2a2f3a; }
+</style>
+{% endblock %}
 
-<div class="field">
-  <label class="label">Panel</label>
-  <div class="control">
-    <div class="select">
-      <select id="panel_sel" onchange="loadDesign()">
+{% block content %}
+<div class="flex items-center justify-between flex-wrap gap-3">
+  <div>
+    <h2 class="font-medium text-2xl" style="color:#e8eaec">Dashboard Studio</h2>
+    <p class="text-sm text-base-content/60">Design what the panel shows — live preview, your rooms, your photos.</p>
+  </div>
+  <div class="flex items-center gap-3">
+    <div class="select" style="background:#141821;border:1px solid #2a2f3a;border-radius:10px">
+      <select id="panel_sel" onchange="loadDesign()" style="background:transparent;color:#e8eaec;padding:8px 12px">
         <option value="">— choose a panel —</option>
         {% for p in panels %}
-        <option value="{{ p.mac }}">{{ p.name }}</option>
+        <option value="{{ p.mac }}" data-id="{{ p.id }}">{{ p.name }}</option>
         {% endfor %}
       </select>
+    </div>
+    <button class="studio-btn ghost" onclick="saveDesign()">Save design</button>
+    <button class="studio-btn" onclick="sendPanel()">Send to panel</button>
+  </div>
+</div>
+<div id="status" class="text-sm" style="min-height:1.4rem;color:#39c8e8"></div>
+
+<div class="flex flex-wrap gap-8 mt-4 items-start">
+  <!-- THE PREVIEW: what the user will see on the panel -->
+  <div class="studio-panel-frame">
+    <div class="flex items-center justify-between px-1 pb-3">
+      <span class="text-xs" style="color:#5a6068">NSPanel <span style="color:#39c8e8">Core</span> — live preview</span>
+      <span class="text-xs" style="color:#5a6068">
+        <a href="javascript:void(0)" id="view_dash" onclick="setView('dash')" style="color:#39c8e8;margin-right:10px">Dashboard</a>
+        <a href="javascript:void(0)" id="view_scr" onclick="setView('scr')" style="color:#5a6068">Screensaver</a>
+      </span>
+    </div>
+    <div class="studio-screen" id="preview">
+      <img id="pv_bg" class="bg" style="display:none" alt="">
+      <div id="pv_scr" style="display:none">
+        <div class="studio-clock" id="pv_clock">00:00</div>
+        <div class="studio-date" id="pv_date"></div>
+      </div>
+      <div id="pv_tiles"></div>
+    </div>
+  </div>
+
+  <!-- THE EDITORS -->
+  <div class="flex-1" style="min-width:min(560px,100%)">
+    <div class="flex gap-1">
+      <div class="studio-tab active" data-tab="design" onclick="setTab('design')">Design</div>
+      <div class="studio-tab" data-tab="panel" onclick="setTab('panel')">Panel settings</div>
+    </div>
+    <div class="studio-tabpane active" id="pane_design">
+      <h3 class="text-sm font-semibold" style="color:#e8eaec;margin-bottom:.5rem">Rooms (dashboard pages)</h3>
+      <table class="table is-fullwidth" id="pages_tbl" style="background:transparent;color:#c8cbce">
+        <thead><tr><th>Page</th><th>Title</th><th>Fallback bg</th><th>Photo</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <button class="studio-btn ghost" style="padding:5px 14px" onclick="addPage()">+ Add room</button>
+      <p class="is-size-7" style="color:#8b9099;margin:.5rem 0 1rem">
+        Screensaver background from room:
+        <select id="scr_sel" onchange="design.screensaver_page=this.value;renderPreview()"
+                style="background:#141821;color:#e8eaec;border:1px solid #2a2f3a;border-radius:8px;padding:4px 10px"></select>
+      </p>
+
+      <h3 class="text-sm font-semibold" style="color:#e8eaec;margin:1rem 0 .5rem">Items (what sits on the photo)</h3>
+      <table class="table is-fullwidth" id="items_tbl" style="background:transparent;color:#c8cbce">
+        <thead><tr><th>Room</th><th>Slot</th><th>Widget</th><th>Entity</th><th>Label</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <button class="studio-btn ghost" style="padding:5px 14px" onclick="addItem()">+ Add item</button>
+    </div>
+    <div class="studio-tabpane" id="pane_panel">
+      <p class="is-size-7" style="color:#8b9099;margin-bottom:.75rem">
+        The panel's own settings — the same ones the settings page shows, moved here.
+      </p>
+      <div id="panel_settings_box" style="color:#c8cbce">
+        <p class="text-sm opacity-60">Choose a panel to load its settings.</p>
+      </div>
+      <button class="studio-btn" style="margin-top:.75rem" onclick="savePanelSettings()">Save panel settings</button>
     </div>
   </div>
 </div>
 
-<div id="editor" style="display:none">
-  <h3 class="title is-5">Dashboard pages (rooms)</h3>
-  <table class="table is-fullwidth" id="pages_tbl">
-    <thead><tr><th>Page</th><th>Title</th><th>Background</th><th>Photo</th><th></th></tr></thead>
-    <tbody></tbody>
-  </table>
-  <button class="button is-small" onclick="addPage()">+ Add page</button>
-  <p class="is-size-7" style="margin-top:.4rem">
-    Screensaver background from room:
-    <select id="scr_sel" onchange="design.screensaver_page=this.value"></select>
-    <em>(the room's photo sits under the clock)</em>
-  </p>
-
-  <h3 class="title is-5" style="margin-top:1.5rem">Items</h3>
-  <table class="table is-fullwidth" id="items_tbl">
-    <thead><tr><th>Page</th><th>Slot</th><th>Widget</th><th>Entity</th><th>Label</th><th></th></tr></thead>
-    <tbody></tbody>
-  </table>
-  <button class="button is-small" onclick="addItem()">+ Add item</button>
-
-  <div style="margin-top:1.5rem">
-    <button class="button is-primary" onclick="saveDesign()">Save design</button>
-    <button class="button is-info" onclick="sendPanel()">Send to panel</button>
-    <span id="status" style="margin-left:.75rem"></span>
-  </div>
-</div>
-
 <script>
-var design = { mac: "", pages: [], items: [] };
+var design = { mac: "", pages: [], items: [], screensaver_page: "" };
 var entities = [];
+var panelId = null;
+var view = "dash";
+var SLOTS = [[10,60],[165,60],[320,60],[10,190],[165,190],[320,190]];
 
 function currentMac() { return document.getElementById('panel_sel').value; }
+function setStatus(t, err) {
+  var el = document.getElementById('status');
+  el.textContent = t; el.style.color = err ? 'crimson' : '#39c8e8';
+}
+
+function setView(v) {
+  view = v;
+  document.getElementById('view_dash').style.color = v === 'dash' ? '#39c8e8' : '#5a6068';
+  document.getElementById('view_scr').style.color = v === 'scr' ? '#39c8e8' : '#5a6068';
+  renderPreview();
+}
+
+function setTab(t) {
+  document.querySelectorAll('.studio-tab').forEach(e => e.classList.toggle('active', e.dataset.tab === t));
+  document.querySelectorAll('.studio-tabpane').forEach(e => e.classList.toggle('active', e.id === 'pane_' + t));
+  if (t === 'panel' && panelId) loadPanelSettings();
+}
 
 function loadDesign() {
   var mac = currentMac();
-  if (!mac) { document.getElementById('editor').style.display = 'none'; return; }
+  var sel = document.getElementById('panel_sel');
+  panelId = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].dataset.id : null;
+  document.getElementById('panel_settings_box').innerHTML =
+    '<p class="text-sm opacity-60">Choose a panel to load its settings.</p>';
+  if (!mac) { document.getElementById('preview').style.opacity = .35; return; }
+  document.getElementById('preview').style.opacity = 1;
   Promise.all([
-    nspanelFetch('/nspanel_core/dashboard_design?panel=' + mac, { credentials: 'same-origin' }).then(r => r.json()),
-    nspanelFetch('/nspanel_core/dashboard_entities', { credentials: 'same-origin' }).then(r => r.json())
+    fetch('/nspanel_core/dashboard_design?panel=' + mac, { credentials: 'same-origin' }).then(r => r.json()),
+    fetch('/nspanel_core/dashboard_entities', { credentials: 'same-origin' }).then(r => r.json())
   ]).then(([dj, ej]) => {
-    design = dj.design;
-    design.mac = mac;
+    design = dj.design; design.mac = mac;
     entities = ej.entities || [];
-    document.getElementById('editor').style.display = 'block';
-    renderPages(); renderItems();
+    renderPages(); renderItems(); renderPreview();
   }).catch(e => setStatus('Failed to load: ' + e, true));
-}
-
-function setStatus(t, err) {
-  var el = document.getElementById('status');
-  el.textContent = t;
-  el.style.color = err ? 'crimson' : 'green';
 }
 
 function opt(v, sel) { return '<option value="' + v + '"' + (v === sel ? ' selected' : '') + '>' + v + '</option>'; }
@@ -81,32 +180,18 @@ function renderPages() {
   var tb = document.querySelector('#pages_tbl tbody');
   tb.innerHTML = design.pages.map(function (p, i) {
     return '<tr>' +
-      '<td><input class="input is-small" value="' + p.name + '" onchange="design.pages[' + i + '].name=this.value"></td>' +
-      '<td><input class="input is-small" value="' + p.title + '" onchange="design.pages[' + i + '].title=this.value"></td>' +
-      '<td><input class="input is-small" value="' + p.background + '" onchange="design.pages[' + i + '].background=this.value"></td>' +
-      '<td><input type="file" accept="image/*" class="file-input" style="width:11rem" onchange="uploadBg(' + i + ', this)">' +
-      (p.background_image ? '<span class="tag is-success is-light is-small">' + p.background_image + '</span>' : '') + '</td>' +
-      '<td><button class="button is-small is-danger" onclick="design.pages.splice(' + i + ',1);renderPages();renderItems()">✕</button></td>' +
+      '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + p.name + '" onchange="design.pages[' + i + '].name=this.value;renderPreview()"></td>' +
+      '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + p.title + '" onchange="design.pages[' + i + '].title=this.value;renderPreview()"></td>' +
+      '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a;width:6.5rem" value="' + p.background + '" onchange="design.pages[' + i + '].background=this.value"></td>' +
+      '<td><input type="file" accept="image/*" style="width:10rem;color:#8b9099" onchange="uploadBg(' + i + ', this)">' +
+      (p.background_image ? '<span class="tag is-small" style="background:rgba(57,200,232,.15);color:#39c8e8">' + p.background_image.replace(/^orig_[a-z0-9]+_/, '') + '</span>' : '') + '</td>' +
+      '<td><button class="button is-small is-danger" onclick="design.pages.splice(' + i + ',1);renderPages();renderItems();renderPreview()">✕</button></td>' +
       '</tr>';
   }).join('');
   var ss = document.getElementById('scr_sel');
   ss.innerHTML = design.pages.map(function (p) {
     return '<option value="' + p.name + '"' + (design.screensaver_page === p.name ? ' selected' : '') + '>' + p.title + '</option>';
   }).join('');
-}
-
-function uploadBg(i, input) {
-  var file = input.files[0];
-  if (!file) return;
-  var fd = new FormData();
-  fd.append('panel', currentMac());
-  fd.append('page', design.pages[i].name);
-  fd.append('file', file);
-  nspanelFetch('/nspanel_core/dashboard_upload_background', { method: 'POST', body: fd })
-    .then(r => r.json()).then(j => {
-      if (j.error) setStatus('Upload failed: ' + j.error, true);
-      else { setStatus('Photo stored — it backs the screensaver and this room\'s dashboard', false); loadDesign(); }
-    }).catch(e => setStatus('Upload failed: ' + e, true));
 }
 
 function renderItems() {
@@ -120,51 +205,143 @@ function renderItems() {
   };
   tb.innerHTML = design.items.map(function (it, i) {
     return '<tr>' +
-      '<td><select class="select is-small" onchange="design.items[' + i + '].page=this.value">' + pageOpts(it.page) + '</select></td>' +
-      '<td><input class="input is-small" style="width:4.5rem" type="number" min="0" max="5" value="' + it.slot + '" onchange="design.items[' + i + '].slot=parseInt(this.value)"></td>' +
-      '<td><select class="select is-small" onchange="design.items[' + i + '].widget=this.value">' + widgetOpts(it.widget) + '</select></td>' +
-      '<td><select class="select is-small" onchange="design.items[' + i + '].entity_id=this.value">' + entityOpts(it.entity_id) + '</select></td>' +
-      '<td><input class="input is-small" value="' + it.label + '" onchange="design.items[' + i + '].label=this.value"></td>' +
-      '<td><button class="button is-small is-danger" onclick="design.items.splice(' + i + ',1);renderItems()">✕</button></td>' +
+      '<td><select class="select is-small" style="background:#141821;color:#e8eaec" onchange="design.items[' + i + '].page=this.value;renderPreview()">' + pageOpts(it.page) + '</select></td>' +
+      '<td><input class="input is-small" style="width:4rem;background:#141821;color:#e8eaec;border-color:#2a2f3a" type="number" min="0" max="5" value="' + it.slot + '" onchange="design.items[' + i + '].slot=parseInt(this.value);renderPreview()"></td>' +
+      '<td><select class="select is-small" style="background:#141821;color:#e8eaec" onchange="design.items[' + i + '].widget=this.value;renderPreview()">' + widgetOpts(it.widget) + '</select></td>' +
+      '<td><select class="select is-small" style="background:#141821;color:#e8eaec;max-width:14rem" onchange="design.items[' + i + '].entity_id=this.value">' + entityOpts(it.entity_id) + '</select></td>' +
+      '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + it.label + '" onchange="design.items[' + i + '].label=this.value;renderPreview()"></td>' +
+      '<td><button class="button is-small is-danger" onclick="design.items.splice(' + i + ',1);renderItems();renderPreview()">✕</button></td>' +
       '</tr>';
   }).join('');
 }
 
 function addPage() {
   var n = design.pages.length + 1;
-  design.pages.push({ name: 'dash_room' + n, title: 'Room ' + n, background: 'bg_plain' });
-  renderPages();
+  design.pages.push({ name: 'dash_room' + n, title: 'Room ' + n, background: 'bg_plain', background_image: '' });
+  renderPages(); renderPreview();
+}
+function addItem() {
+  if (!design.pages.length) { setStatus('Add a room first', true); return; }
+  design.items.push({ id: 'item' + (design.items.length + 1), page: design.pages[0].name, widget: 'light', entity_id: '', label: '', slot: design.items.length % 6 });
+  renderItems(); renderPreview();
 }
 
-function addItem() {
-  if (!design.pages.length) { setStatus('Add a page first', true); return; }
-  design.items.push({ id: 'item' + (design.items.length + 1), page: design.pages[0].name, widget: 'light', entity_id: '', label: '', slot: design.items.length % 6 });
-  renderItems();
+function uploadBg(i, input) {
+  var file = input.files[0];
+  if (!file) return;
+  var fd = new FormData();
+  fd.append('panel', currentMac());
+  fd.append('page', design.pages[i].name);
+  fd.append('file', file);
+  nspanelFetch('/nspanel_core/dashboard_upload_background', { method: 'POST', body: fd })
+    .then(r => r.json()).then(j => {
+      if (j.error) setStatus('Upload failed: ' + j.error, true);
+      else { setStatus('Photo stored', false); loadDesign(); }
+    }).catch(e => setStatus('Upload failed: ' + e, true));
 }
 
 function saveDesign() {
-  nspanelFetch('/nspanel_core/dashboard_save', {
+  return fetch('/nspanel_core/dashboard_save', {
     method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ design: design })
   }).then(r => r.json()).then(j => {
-    if (j.error) setStatus('Save failed: ' + j.error, true);
-    else { setStatus('Design saved', false); loadDesign(); }
-  }).catch(e => setStatus('Save failed: ' + e, true));
+    if (j.error) { setStatus('Save failed: ' + j.error, true); return false; }
+    setStatus('Design saved', false); return true;
+  }).catch(e => { setStatus('Save failed: ' + e, true); return false; });
 }
 
 function sendPanel() {
-  saveDesign();
-  setTimeout(function () {
-    nspanelFetch('/nspanel_core/dashboard_send', {
+  saveDesign().then(ok => {
+    if (!ok) return;
+    fetch('/nspanel_core/dashboard_send', {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mac: currentMac() })
     }).then(r => r.json()).then(j => {
       if (j.error) setStatus('Send failed: ' + j.error, true);
-      else setStatus('Compiling + sending (' + j.bytes + ' bytes) — the panel reflashes in ~1 minute', false);
+      else setStatus('Compiling + sending (' + j.bytes + ' bytes) — the panel reflashes in under a minute', false);
     }).catch(e => setStatus('Send failed: ' + e, true));
-  }, 600);
+  });
 }
+
+/* ---- the panel settings (the elements moved from the settings page) ---- */
+function loadPanelSettings() {
+  var box = document.getElementById('panel_settings_box');
+  box.innerHTML = '<p class="text-sm opacity-60">Loading…</p>';
+  nspanelFetch('/nspanel_core/dashboard/panel_settings?panel_id=' + panelId)
+    .then(r => r.text()).then(t => {
+      box.innerHTML = t;
+      box.querySelectorAll('input,select').forEach(el => {
+        el.style.background = '#141821'; el.style.color = '#e8eaec';
+        el.style.borderColor = '#2a2f3a';
+      });
+      box.querySelector('form')?.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        var fd = new FormData(ev.target);
+        fetch(ev.target.action, { method: 'POST', credentials: 'same-origin', body: fd })
+          .then(() => setStatus('Panel settings saved', false))
+          .catch(e => setStatus('Save failed: ' + e, true));
+      });
+    });
+}
+function savePanelSettings() {
+  var form = document.querySelector('#panel_settings_box form');
+  if (!form) return;
+  fetch(form.action, { method: 'POST', credentials: 'same-origin', body: new FormData(form) })
+    .then(() => setStatus('Panel settings saved', false))
+    .catch(e => setStatus('Save failed: ' + e, true));
+}
+
+/* ---- the live preview -------------------------------------------------- */
+function renderPreview() {
+  var scrSel = document.getElementById('scr_sel');
+  var activeRoom = design.pages.find(p => p.name === (design.screensaver_page || (design.pages[0] && design.pages[0].name)));
+  var isScr = view === 'scr' && activeRoom;
+  document.getElementById('pv_scr').style.display = isScr ? 'block' : 'none';
+  var tilesEl = document.getElementById('pv_tiles');
+  var bg = document.getElementById('pv_bg');
+
+  if (isScr) {
+    tilesEl.innerHTML = '';
+    bg.style.display = activeRoom.background_image ? 'block' : 'none';
+    bg.className = 'bg';
+    bg.src = '/nspanel_core/dashboard_photo?panel=' + currentMac() + '&page=' + activeRoom.name + '&variant=scr&r=' + Date.now();
+    bg.onerror = function () { bg.style.display = 'none'; };
+    tickClock();
+    return;
+  }
+  var room = design.pages.find(p => p.name === (design.pages[0] || {}).name);
+  room = design.pages[0] || null;
+  if (!room) { bg.style.display = 'none'; tilesEl.innerHTML = ''; return; }
+  bg.style.display = room.background_image ? 'block' : 'none';
+  bg.className = 'bg dash';
+  bg.src = '/nspanel_core/dashboard_photo?panel=' + currentMac() + '&page=' + room.name + '&variant=dash&r=' + Date.now();
+  bg.onerror = function () { bg.style.display = 'none'; };
+  var pageItems = design.items.filter(it => it.page === room.name);
+  tilesEl.innerHTML = pageItems.map(function (it) {
+    var s = SLOTS[it.slot] || SLOTS[0];
+    var kind = (it.widget === 'sensor' || it.widget === 'climate');
+    return '<div class="studio-tile" style="left:' + s[0] + 'px;top:' + s[1] + 'px">' +
+      '<div class="sw"></div>' +
+      '<div class="lbl">' + (it.label || it.entity_id || '') + '</div>' +
+      (kind ? '<div class="val">--</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+function tickClock() {
+  var n = new Date();
+  var hh = String(n.getHours()).padStart(2, '0'), mm = String(n.getMinutes()).padStart(2, '0');
+  document.getElementById('pv_clock').textContent = hh + ':' + mm;
+  var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  document.getElementById('pv_date').textContent =
+    days[n.getDay()] + ' ' + n.getDate() + ' ' + months[n.getMonth()];
+}
+setInterval(function () {
+  if (view === 'scr') tickClock();
+}, 1000);
+setView('dash');
 </script>
 {% endblock %}
