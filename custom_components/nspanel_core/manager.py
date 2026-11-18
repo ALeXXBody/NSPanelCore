@@ -373,7 +373,11 @@ class NSPanelCoreManager:
             self._reschedule_weather()
         return {}
 
-    _FIRMWARE_CHECK_HOURS = 6
+    # P239 (user design — the system is automatic): releases flow to the
+    # panels within minutes. The poll auto-activates (P132, no approval
+    # gap); the cadence was the bottleneck (6 h).
+    _FIRMWARE_CHECK_HOURS = 0
+    _FIRMWARE_CHECK_MINUTES = 5
 
     def _reschedule_firmware_check(self) -> None:
         for unsub in list(self._firmware_unsubs):
@@ -382,10 +386,12 @@ class NSPanelCoreManager:
             except Exception:  # noqa: BLE001
                 pass
         self._firmware_unsubs = []
-        # Fixed 6-hour cadence — the only source and schedule, no UI for it.
+        # Fixed 5-minute cadence (P239: auto-activation with no approval
+        # gap; the 6-hour cadence left releases unserved for hours).
         self._firmware_unsubs.append(
             async_track_time_interval(
-                self.hass, self._poll_firmware_manifest, timedelta(hours=self._FIRMWARE_CHECK_HOURS)
+                self.hass, self._poll_firmware_manifest,
+                timedelta(hours=self._FIRMWARE_CHECK_HOURS, minutes=self._FIRMWARE_CHECK_MINUTES),
             )
         )
 
@@ -1440,7 +1446,10 @@ class NSPanelCoreManager:
 
         tft_filename = "gui_us.tft" if panel.is_us_panel else "gui.tft"
         tft_md5 = self.ota_md5("tft", tft_filename)
-        if tft_md5 and report.get("md5_tft_file") and report["md5_tft_file"] != tft_md5:
+        # P239: an EMPTY reported md5 is "never delivered", not "nothing to
+        # compare" — a fresh panel (or one running the pre-0.1.4 firmware,
+        # which never recorded the field) must still get the display image.
+        if tft_md5 and (not report.get("md5_tft_file") or report["md5_tft_file"] != tft_md5):
             if not self.config.settings.auto_tft_updates:
                 _LOGGER.info(
                     "TFT update available for panel %s — NOT triggering automatically "
