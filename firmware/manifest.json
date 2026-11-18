@@ -1,35 +1,35 @@
 {
-  "version": "0.1.4",
+  "version": "0.1.5",
   "notes": "fw v0.1.2 \u2014 the zero-typing provisioning firmware: WiFi-only first-boot form, POST /provision, + all audit repairs + the TFT block protocol.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.4/native-firmware-0.1.4.bin",
-      "md5": "fa733a09dedf8701f665351d61c0727f"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/native-firmware-0.1.5.bin",
+      "md5": "a82ccc8f5d007a7d056ddc6fb0f1d9a2"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.4/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.4/native-firmware-0.1.4.bin",
-      "md5": "fa733a09dedf8701f665351d61c0727f"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/native-firmware-0.1.5.bin",
+      "md5": "a82ccc8f5d007a7d056ddc6fb0f1d9a2"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.4/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "tft/gui.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.4/gui.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/gui.tft",
       "md5": "6db1a04d5ba71d3aa1cabb6ad167c8e8"
     },
     "tft/gui_us.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.4/gui_us.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/gui_us.tft",
       "md5": "6db1a04d5ba71d3aa1cabb6ad167c8e8"
     }
   },
   "changes": {
     "bug_fixes": [
-      "Automatic display updates never fired: the panel reported a TFT checksum field that was never written - after a display reflash the panel now records the delivered image's checksum, so the integration can compare and trigger correctly"
+      "Display uploads took ~15 minutes (the block-accept reply was waited on for 5 seconds every block) - the 'next' reply is now accepted instantly; a full display reflash takes under a minute"
     ],
     "features": [],
     "breaking": []

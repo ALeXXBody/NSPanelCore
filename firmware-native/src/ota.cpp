@@ -491,7 +491,11 @@ static void nsp_tft_task(void *) {
                 int n = nsp_display_read(&b, 1, 250);
                 if (n > 0) {
                     resp[rlen++] = b;
-                    if (rlen == 1 && resp[0] != 0x05 && resp[0] != 0x08) break;
+                    /* P238c: 0x05 ("next") is ONE byte — accepting it late
+                     * burned ~5 s per block (~15 min per full TFT). Break
+                     * the moment it lands; only 0x08 carries 4 more bytes. */
+                    if (resp[0] == 0x05) break;
+                    if (rlen == 1 && resp[0] != 0x08) break;
                 }
                 s_last_progress_us = esp_timer_get_time();
             }
