@@ -1,10 +1,10 @@
 {
   "version": "0.1.1",
-  "notes": "fw v0.1.1 \u2014 the audited repairs: exact command dispatch, address validation, display text fix, touch fixes, fs two-pass, TFT block protocol.",
+  "notes": "fw v0.1.1 \u2014 P216 provisioning flow (firmware side): WiFi-only first-boot form, POST /provision for the app to push MQTT settings, + all v0.1.1 repairs.",
   "files": {
     "firmware/sonoff/firmware.bin": {
       "url": "http://192.168.50.200:8000/sonoff-fw",
-      "md5": "623db356b05206fe1e1034e9dd51bbd4"
+      "md5": "052db68a53b5b08318922cb77babceb9"
     },
     "firmware/sonoff/data_file.bin": {
       "url": "http://192.168.50.200:8000/sonoff-data",
@@ -12,7 +12,7 @@
     },
     "firmware/custom/firmware.bin": {
       "url": "http://192.168.50.200:8000/custom-fw",
-      "md5": "623db356b05206fe1e1034e9dd51bbd4"
+      "md5": "052db68a53b5b08318922cb77babceb9"
     },
     "firmware/custom/data_file.bin": {
       "url": "http://192.168.50.200:8000/custom-data",
