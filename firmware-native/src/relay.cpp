@@ -10,6 +10,8 @@
 #include "relay_cmd.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "protocol.h"
 #include "config.h"
 
@@ -91,27 +93,37 @@ static void nsp_button_pressed(int button) {
     nsp_relay_set(relay, new_state);
 }
 
-/* Called by the button scan loop (polling the GPIOs, 50 ms debounce). */
+/* P259: the buttons are scanned on their OWN fast task — they used to sit
+ * in the 1 s housekeeping loop, so a press waited up to a full second to
+ * be SEEN (and quick taps were missed entirely: the user had to hold
+ * 1-2 s). 50 ms here = instant response. */
 void nsp_button_scan(void) {
     int64_t now = esp_timer_get_time();
     int b1 = gpio_get_level(BUTTON1_PIN) == 0 ? 1 : 0;  // active-low
     int b2 = gpio_get_level(BUTTON2_PIN) == 0 ? 1 : 0;
     if (b1 != s_btn1_state && now - s_btn1_last_us > (int64_t)BUTTON_DEBOUNCE_MS * 1000) {
-        if (b1) {  // pressed (falling edge)
-            s_btn1_last_us = now;
-            s_btn1_state = b1;
+        s_btn1_last_us = now;
+        s_btn1_state = b1;
+        if (b1) {  // fire on the press edge
             nsp_button_pressed(1);
         }
-        s_btn1_state = b1;
     }
     if (b2 != s_btn2_state && now - s_btn2_last_us > (int64_t)BUTTON_DEBOUNCE_MS * 1000) {
+        s_btn2_last_us = now;
+        s_btn2_state = b2;
         if (b2) {
-            s_btn2_last_us = now;
-            s_btn2_state = b2;
             nsp_button_pressed(2);
         }
-        s_btn2_state = b2;
     }
+}
+
+void nsp_button_task_start(void) {
+    xTaskCreatePinnedToCore([](void *) {
+        for (;;) {
+            nsp_button_scan();
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    }, "btn", 4096, nullptr, 1, nullptr, 0);
 }
 
 /* P210: the display's touch buttons toggle relays directly. */

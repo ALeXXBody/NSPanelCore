@@ -1,37 +1,37 @@
 {
-  "version": "0.1.11",
+  "version": "0.1.12",
   "notes": "fw v0.1.2 \u2014 the zero-typing provisioning firmware: WiFi-only first-boot form, POST /provision, + all audit repairs + the TFT block protocol.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/native-firmware-0.1.11.bin",
-      "md5": "92305fa24cd013360b3fe0096075d9d6"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/native-firmware-0.1.12.bin",
+      "md5": "b742268e52a71e03caaa3ea1c72ea773"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/native-firmware-0.1.11.bin",
-      "md5": "92305fa24cd013360b3fe0096075d9d6"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/native-firmware-0.1.12.bin",
+      "md5": "b742268e52a71e03caaa3ea1c72ea773"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "tft/gui.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/gui.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/gui.tft",
       "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
     },
     "tft/gui_us.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/gui_us.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/gui_us.tft",
       "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
     }
   },
   "changes": {
-    "bug_fixes": [],
-    "features": [
-      "Diagnostics: every touch frame the panel receives is now logged (the relay-latency investigation - quick taps on the relay buttons appear to need a long press)"
+    "bug_fixes": [
+      "THE PHYSICAL BUTTONS: a press waited up to a full second before the firmware even LOOKED at the button (the scan ran inside the 1-second housekeeping loop - a quick tap could be missed entirely). The buttons now run on their own 50 ms task: every press registers instantly"
     ],
+    "features": [],
     "breaking": []
   }
 }

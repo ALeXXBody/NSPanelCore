@@ -33,7 +33,8 @@ extern "C" void nsp_ota_confirm(void);  // file scope: in-body extern "C"
     // declarations are illegal inside app_main
 extern void nsp_display_touch_task_start(void);
 extern void nsp_relay_init(void);
-extern void nsp_button_scan(void);  // file scope — an in-body
+extern void nsp_button_task_start(void);  // P259: FILE scope (the extern-C-app_main linkage trap)
+extern void nsp_button_scan(void);        // still referenced by the button task (relay.cpp)
     // declaration inside extern "C" app_main would get C linkage (P160)
 extern float nsp_temperature(void);
 extern void nsp_ota_start(void);  // P187: FILE scope — the extern-"C"-
@@ -89,6 +90,7 @@ extern "C" void app_main(void) {
     nsp_relay_init();
     nsp_display_init();
     nsp_display_touch_task_start();
+    nsp_button_task_start();  // P259: the buttons on a 50 ms task
 
     if (g_cfg.wifi_ssid.empty()) {
         // Unconfigured (fresh NVS): the setup AP owns first boot.
@@ -127,8 +129,9 @@ extern "C" void app_main(void) {
                 s_last_report_us = now;
             }
         }
-        nsp_button_scan();
         nsp_ota_watchdog_feed_check();
+        // P259: nsp_button_scan() moved OUT of this 1 s loop — the buttons
+        // now run on their own 50 ms task (a press waited up to 1 s here).
         // P171 fix: confirm the running app once the panel is functional —
         // without this the bootloader rolls back on the next reboot
         // (the native fw confirmed nothing and was eaten after OTA).
