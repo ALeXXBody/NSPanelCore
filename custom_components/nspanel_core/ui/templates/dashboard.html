@@ -53,8 +53,8 @@ function loadDesign() {
   var mac = currentMac();
   if (!mac) { document.getElementById('editor').style.display = 'none'; return; }
   Promise.all([
-    fetch('/nspanel_core/dashboard_design?panel=' + mac, { credentials: 'same-origin' }).then(r => r.json()),
-    fetch('/nspanel_core/dashboard_entities', { credentials: 'same-origin' }).then(r => r.json())
+    nspanelFetch('/nspanel_core/dashboard_design?panel=' + mac, { credentials: 'same-origin' }).then(r => r.json()),
+    nspanelFetch('/nspanel_core/dashboard_entities', { credentials: 'same-origin' }).then(r => r.json())
   ]).then(([dj, ej]) => {
     design = dj.design;
     design.mac = mac;
@@ -118,7 +118,7 @@ function addItem() {
 }
 
 function saveDesign() {
-  fetch('/nspanel_core/dashboard_save', {
+  nspanelFetch('/nspanel_core/dashboard_save', {
     method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ design: design })
@@ -131,7 +131,7 @@ function saveDesign() {
 function sendPanel() {
   saveDesign();
   setTimeout(function () {
-    fetch('/nspanel_core/dashboard_send', {
+    nspanelFetch('/nspanel_core/dashboard_send', {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mac: currentMac() })
