@@ -757,7 +757,8 @@ class NSPanelCoreManager:
         for panel in self.config.panels:
             if not panel.accepted or panel.denied:
                 continue
-            self._last_ota_trigger.pop(panel.mac, None)
+            self._last_ota_trigger.pop(f"{panel.mac}/fw", None)
+            self._last_ota_trigger.pop(f"{panel.mac}/tft", None)
             await self._maybe_trigger_firmware_ota(
                 panel,
                 {
@@ -1266,8 +1267,16 @@ class NSPanelCoreManager:
             return
         mac = panel.mac
         now = _time.monotonic()
-        last = self._last_ota_trigger.get(mac, 0)
-        if now - last < 1800:
+        # P253: per-KIND cooldowns — a firmware trigger must not blind the
+        # display evaluation (in the wild: the activation pushed fw+tft
+        # back-to-back, the tft command hit a busy panel, and the fresh
+        # fw cooldown then skipped the display's re-evaluation after the
+        # reboot — the display update stalled until a manual press).
+        fw_last = self._last_ota_trigger.get(f"{mac}/fw", 0)
+        tft_last = self._last_ota_trigger.get(f"{mac}/tft", 0)
+        fw_cooled = now - fw_last >= 1800
+        tft_cooled = now - tft_last >= 1800
+        if not fw_cooled and not tft_cooled:
             return
         # P184: failure streak — compare against the last attempt's record.
         # P208: kind-aware — the TFT has its own streak (the panel never
@@ -1288,7 +1297,7 @@ class NSPanelCoreManager:
                     _LOGGER.warning(
                         "OTA auto-trigger disabled for %s after %s consecutive failed attempts (manual trigger only)",
                         panel.name, streak)
-                    self._last_ota_trigger[mac] = now
+                    self._last_ota_trigger[f"{mac}/fw"] = now
                     return
             else:
                 streaks[mac] = 0
@@ -1305,12 +1314,15 @@ class NSPanelCoreManager:
                     _LOGGER.warning(
                         "TFT auto-update disabled for %s after %s consecutive failed attempts (manual trigger only)",
                         panel.name, tstreak)
-                    self._last_ota_trigger[mac] = now
+                    self._last_ota_trigger[f"{mac}/tft"] = now
                     return
             else:
                 streaks[mac + ":tft"] = 0
-        await self._maybe_trigger_firmware_ota(panel, report)
-        self._last_ota_trigger[mac] = now
+        await self._maybe_trigger_firmware_ota(panel, report, fw_cooled=fw_cooled, tft_cooled=tft_cooled)
+        if fw_cooled:
+            self._last_ota_trigger[f"{mac}/fw"] = now
+        if tft_cooled:
+            self._last_ota_trigger[f"{mac}/tft"] = now
         if not hasattr(self, "_ota_attempt_md5"):
             self._ota_attempt_md5 = {}
         model = panel.model if panel.model in ("sonoff", "custom") else "sonoff"
@@ -1430,7 +1442,8 @@ class NSPanelCoreManager:
     def pages(self) -> list:
         return list(self.config.pages)
 
-    async def _maybe_trigger_firmware_ota(self, panel: PanelConfig, report: dict) -> None:
+    async def _maybe_trigger_firmware_ota(self, panel: PanelConfig, report: dict,
+                                          fw_cooled: bool = True, tft_cooled: bool = True) -> None:
         """Trigger OTA when the panel's checksums differ from the cached ones.
 
         Uses the startup-computed MD5 cache — no disk I/O on the event loop.
@@ -1444,7 +1457,7 @@ class NSPanelCoreManager:
         fw_md5 = self.ota_md5("firmware", f"{model}/firmware.bin")
         data_md5 = self.ota_md5("firmware", f"{model}/data_file.bin")
 
-        if fw_md5 and report.get("md5_firmware") and report["md5_firmware"] != fw_md5:
+        if fw_cooled and fw_md5 and report.get("md5_firmware") and report["md5_firmware"] != fw_md5:
             _LOGGER.info("Firmware update available for panel %s — triggering OTA", panel.name)
             await self._publish(self._panel_cmd_topic(panel, "command"), json.dumps({"command": "firmware_update"}))
 
@@ -1464,7 +1477,7 @@ class NSPanelCoreManager:
         # P239: an EMPTY reported md5 is "never delivered", not "nothing to
         # compare" — a fresh panel (or one running the pre-0.1.4 firmware,
         # which never recorded the field) must still get the display image.
-        if tft_md5 and (not report.get("md5_tft_file") or report["md5_tft_file"] != tft_md5):
+        if tft_cooled and tft_md5 and (not report.get("md5_tft_file") or report["md5_tft_file"] != tft_md5):
             if not self.config.settings.auto_tft_updates:
                 _LOGGER.info(
                     "TFT update available for panel %s — NOT triggering automatically "
@@ -1711,7 +1724,8 @@ class NSPanelCoreManager:
                              if not (isinstance(k, tuple) and k[0] == mac) and k != panel.mac}
         self._log_backlog.pop(panel.mac, None)
         self._last_telemetry.pop(panel.mac, None)
-        self._last_ota_trigger.pop(panel.mac, None)
+        self._last_ota_trigger.pop(f"{panel.mac}/fw", None)
+        self._last_ota_trigger.pop(f"{panel.mac}/tft", None)
         self._relay_listeners = {k: v for k, v in self._relay_listeners.items() if v}
 
     def allow_mac(self, mac: str) -> bool:
