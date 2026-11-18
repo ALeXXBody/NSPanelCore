@@ -186,14 +186,21 @@ photos are only in that panel's regenerated TFT.
 
 | Phase | Content | Ship vehicle |
 |---|---|---|
-| 1 | Manager dashboard editor (rooms + items + entity picker) + HMI generator + nxwright compile + per-panel TFT send via the existing block channel; touch → entity routing | app minor (fw likely unchanged) |
+| 1 | Manager Dashboard page (panel dropdown + rooms + items + entity picker) + HMI generator + nxwright compile in the integration + batch-then-"Send to panel" via the existing block channel; touch → entity routing | app minor |
 | 2 | Climate + RGB widget templates (detail pages generated on demand) | app minor |
 | 3 | Custom background photo uploads per room | app minor |
 | 4 | US portrait geometry template | app minor |
 
-## Decision needed from the user
+## Decisions (locked by the user, P234)
 
-1. Compile inside HA (default) or on .200?
-2. Widget priority order (climate before RGB, or the reverse)?
-3. Is the ~1-minute send-per-change acceptable, or should the editor batch
-   changes and only send on an explicit "Send to panel"?
+1. **Compile inside the integration.** nxwright is downloaded when the
+   integration is installed (manifest requirement: `nxwright @ git+https://…` —
+   verified installable from its GitHub repo; NOT on PyPI). Verified caveat:
+   native-wheel deps (pillow, freetype-py, resvg-py) must resolve on the HA
+   host's platform — first build-step test.
+2. **The Dashboard page exists in the integration UI.** One dashboard editor,
+   **panel selected from a dropdown**, per-panel customization (rooms, item
+   placement, entity assignment).
+3. **All widget types** — light, switch, climate, RGB light, scene, sensor.
+4. **Batch then send.** The editor accumulates changes; the panel's TFT is
+   regenerated and sent only on an explicit **Send to panel** action.
