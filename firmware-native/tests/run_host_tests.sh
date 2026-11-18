@@ -17,3 +17,5 @@ g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_t6 test_logbuf.cpp ../src/logb
 /tmp/opencode/nsp_t6
 g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_t7 test_webui_pages.cpp ../src/webui_pages.cpp
 /tmp/opencode/nsp_t7
+g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_t8 test_provision_parse.cpp ../src/provision_parse.cpp
+/tmp/opencode/nsp_t8

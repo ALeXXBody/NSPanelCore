@@ -13,27 +13,10 @@
 extern void nsp_web_log(const std::string &line);
 extern void nsp_mqtt_publish_log(const char *msg);
 
-static bool json_str(const std::string &body, const char *key, std::string &out) {
-    /* tolerant parse: "key":"value" or "key":value (numbers) */
-    std::string needle = std::string("\"") + key + "\"";
-    size_t k = body.find(needle);
-    if (k == std::string::npos) return false;
-    size_t colon = body.find(':', k + needle.size());
-    if (colon == std::string::npos) return false;
-    size_t q1 = body.find('"', colon + 1);
-    if (q1 != std::string::npos && q1 < colon + 12) {
-        size_t q2 = body.find('"', q1 + 1);
-        if (q2 == std::string::npos) return false;
-        out = body.substr(q1 + 1, q2 - q1 - 1);
-        return true;
-    }
-    /* numeric */
-    size_t end = body.find_first_not_of("0123456789", colon + 1);
-    if (end == std::string::npos) end = body.size();
-    out = body.substr(body.find_first_of("0123456789-", colon + 1),
-                      end - body.find_first_of("0123456789-", colon + 1));
-    return true;
-}
+/* P222c: the field extraction moved to provision_parse.cpp — pure,
+ * host-unit-tested (the /provision endpoint shipped without tests once;
+ * never again). */
+#include "provision_parse.h"
 
 esp_err_t nsp_handle_provision(httpd_req_t *req) {
     if (req->content_len <= 0 || req->content_len > 2048) {
@@ -48,13 +31,13 @@ esp_err_t nsp_handle_provision(httpd_req_t *req) {
     }
     std::string body(buf, r);
     std::string server, port, user, pass;
-    if (!json_str(body, "mqtt_server", server) || server.empty()) {
+    if (!nsp_provision_field(body, "mqtt_server", server) || server.empty()) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mqtt_server missing");
         return ESP_OK;
     }
-    json_str(body, "mqtt_port", port);
-    json_str(body, "mqtt_user", user);
-    json_str(body, "mqtt_pass", pass);
+    nsp_provision_field(body, "mqtt_port", port);
+    nsp_provision_field(body, "mqtt_user", user);
+    nsp_provision_field(body, "mqtt_pass", pass);
 
     g_cfg.mqtt_server = server;
     {
