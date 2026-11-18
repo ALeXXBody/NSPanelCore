@@ -1003,7 +1003,11 @@ class OtaFileView(HomeAssistantView):
         model = request.query.get("model", "sonoff")
         if self._filename in ("eu", "us"):
             kind, name = "tft", ("gui_us.tft" if self._filename == "us" else "gui.tft")
-            path = manager.servable_path(kind, name) or _tft_file(self._filename)
+            # P234: a per-panel dashboard TFT being delivered takes precedence
+            override = manager.dash.tft_override()
+            path = override if override else (
+                manager.servable_path(kind, name) or _tft_file(self._filename)
+            )
         else:
             kind, name, path = "firmware", f"{model}/{self._filename}", None
             if model in ("sonoff", "custom"):
@@ -1932,6 +1936,116 @@ class WebappAssetView(HomeAssistantView):
 
 import re  # noqa: E402
 
+from . import dashboard_design as _dd  # noqa: E402
+
+
+class DashboardView(HomeAssistantView):
+    """P234: the per-panel dashboard editor (the user's design page)."""
+
+    url = f"{URL_BASE}/dashboard"
+    name = "nspanel_core:dashboard"
+    requires_auth = False
+
+    async def get(self, request, **kwargs):
+        manager = _manager(request)
+        panels = [
+            {"mac": p.mac, "name": p.name}
+            for p in manager.config.panels
+            if p.accepted and not p.denied
+        ]
+        return web.Response(
+            text=_render("dashboard.html", request=request, panels=panels),
+            content_type="text/html",
+        )
+
+
+class DashboardDesignView(HomeAssistantView):
+    """GET: the design JSON for one panel (the editor's data)."""
+
+    url = f"{URL_BASE}/dashboard_design"
+    name = "nspanel_core:dashboard_design"
+    requires_auth = True
+
+    async def get(self, request, **kwargs):
+        manager = _manager(request)
+        mac = request.query.get("panel", "")
+        design = manager.dash.design(mac)
+        return web.json_response(
+            {
+                "design": design.to_dict(),
+                "page_ids": manager.dash._page_ids.get(mac, []),
+                "serving": manager.dash.serving_info(),
+            }
+        )
+
+
+class DashboardSaveView(HomeAssistantView):
+    """POST: save a panel's design (batch — nothing reaches the panel)."""
+
+    url = f"{URL_BASE}/dashboard_save"
+    name = "nspanel_core:dashboard_save"
+    requires_auth = True
+
+    async def post(self, request, **kwargs):
+        from .dashboard_design import DesignError
+
+        manager = _manager(request)
+        try:
+            body = await request.json()
+            design = _dd.PanelDesign.from_dict(body.get("design", {}))
+        except (ValueError, TypeError, KeyError):
+            return web.json_response({"error": "malformed body"}, status=400)
+        try:
+            await manager.dash.async_save_design(design)
+        except DesignError as exc:
+            return web.json_response({"error": str(exc)}, status=400)
+        return web.json_response({"ok": True})
+
+
+class DashboardSendView(HomeAssistantView):
+    """POST: generate + compile + send the TFT to one panel (the user's click)."""
+
+    url = f"{URL_BASE}/dashboard_send"
+    name = "nspanel_core:dashboard_send"
+    requires_auth = True
+
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        try:
+            body = await request.json()
+            mac = str(body.get("mac", ""))
+        except (ValueError, TypeError):
+            return web.json_response({"error": "malformed body"}, status=400)
+        result = await manager.dash.async_send_to_panel(mac)
+        status = 200 if result.get("ok") else 400
+        return web.json_response(result, status=status)
+
+
+class DashboardEntitiesView(HomeAssistantView):
+    """GET: HA entities for the editor's picker (controllable domains)."""
+
+    url = f"{URL_BASE}/dashboard_entities"
+    name = "nspanel_core:dashboard_entities"
+    requires_auth = True
+
+    _DOMAINS = ("light", "switch", "scene", "sensor", "climate")
+
+    async def get(self, request, **kwargs):
+        manager = _manager(request)
+        out = []
+        for state in manager.hass.states.async_all():
+            domain = state.entity_id.split(".", 1)[0]
+            if domain in self._DOMAINS:
+                out.append(
+                    {
+                        "entity_id": state.entity_id,
+                        "name": state.attributes.get("friendly_name", state.entity_id),
+                        "domain": domain,
+                    }
+                )
+        out.sort(key=lambda e: (e["domain"], e["name"]))
+        return web.json_response({"entities": out})
+
 
 def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
     """Register the original-UI views, static assets and the sidebar panel."""
@@ -2015,6 +2129,11 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         FirmwareCheckView,
         FirmwareInstallView,
         ComingSoonView,
+        DashboardView,
+        DashboardDesignView,
+        DashboardSaveView,
+        DashboardSendView,
+        DashboardEntitiesView,
     ]
     for view_cls in views:
         try:

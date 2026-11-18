@@ -94,6 +94,11 @@ class NSPanelCoreManager:
         self._firmware_notified_version: str = ""
         self._firmware_status: dict = {"checking": False, "error": ""}
         self.stomp = None
+        # P234: the dashboard service — the manager owns the designs, the
+        # generated TFTs, touch routing and state mirroring.
+        from .dashboard_manager import DashboardService
+
+        self.dash = DashboardService(hass, self)
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -107,6 +112,8 @@ class NSPanelCoreManager:
         await async_wait_for_mqtt_client(self.hass)
         data = await self._store.async_load()
         self.config = IntegrationConfig.from_dict(data or {})
+        await self.dash.async_load()
+        self.dash.start_state_listener()
 
         # Read manifest.json in the executor: it is blocking I/O and this
         # runs on the event loop.
@@ -129,6 +136,7 @@ class NSPanelCoreManager:
         for sub in (
             (TOPIC_PANEL_STATUS, self._on_panel_status, None),
             (TOPIC_PANEL_STATUS_REPORT, self._on_panel_status_report, None),
+            ("nspanel/+/touch", self._on_panel_touch, None),
             (TOPIC_MANAGER_COMMAND, self._on_manager_command, None),
             ("nspanel/+/r1_state", self._on_relay_state, None),
             ("nspanel/+/r2_state", self._on_relay_state, None),
@@ -981,6 +989,8 @@ class NSPanelCoreManager:
             panel.firmware_md5 = data["md5_firmware"]
         if data.get("md5_tft_file"):
             panel.tft_md5 = data["md5_tft_file"]
+            # P234: a delivered dashboard TFT completes the send slot
+            self.dash.on_tft_md5(panel.mac, data["md5_tft_file"])
         if data.get("md5_data_file"):
             panel.littlefs_md5 = data["md5_data_file"]
 
@@ -997,6 +1007,10 @@ class NSPanelCoreManager:
                 json.dumps({"command": "reload"}),
             )
             await self._publish_panel_status(panel, "online")
+            # P234: re-push the dashboard config (RAM-only on the panel)
+            dash = getattr(self, "dash", None)
+            if dash is not None and dash.has_design(panel.mac):
+                await dash.async_push_config(panel.mac)
 
         # Registration carries the panel's current checksums — evaluate OTA
         # here, but ONLY for accepted panels. Flashing an unaccepted (merely
@@ -1044,6 +1058,20 @@ class NSPanelCoreManager:
         })
         _LOGGER.info("Sent register accept + reload to panel %s", panel.name)
         await self._publish_panel_status(panel, "online")
+
+    async def _on_panel_touch(self, msg) -> None:
+        """P234: touch events from the panel (dash pages publish only)."""
+        try:
+            data = json.loads(msg.payload)
+            page = int(data["page"])
+            component = int(data["component"])
+            event = int(data["event"])
+        except (ValueError, TypeError, KeyError):
+            return
+        mac = mac_from_topic(msg.topic, "touch")
+        if not mac:
+            return
+        self.dash.on_touch(mac, page, component, event)
 
     async def _on_panel_status_report(self, msg) -> None:
         """Status report: nspanel/<panel>/status_report (retained).
@@ -1149,6 +1177,7 @@ class NSPanelCoreManager:
                 panel.littlefs_md5 = md5s["md5_littlefs"]
             if md5s["md5_tft_file"]:
                 panel.tft_md5 = md5s["md5_tft_file"]
+                self.dash.on_tft_md5(panel.mac, md5s["md5_tft_file"])
         was_online = panel.online
         panel.online = report.get("state", "") not in ("updating_tft", "updating_fw", "updating_fs")
         caps_changed = False

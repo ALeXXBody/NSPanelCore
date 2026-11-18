@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2 class="title is-4">Dashboard — customize a panel's screen</h2>
+<p class="subtitle is-6">
+  Pick a panel, design its dashboard, then press <strong>Send to panel</strong>.
+  Changes are batched — nothing reaches the panel until you send it.
+</p>
+
+<div class="field">
+  <label class="label">Panel</label>
+  <div class="control">
+    <div class="select">
+      <select id="panel_sel" onchange="loadDesign()">
+        <option value="">— choose a panel —</option>
+        {% for p in panels %}
+        <option value="{{ p.mac }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+</div>
+
+<div id="editor" style="display:none">
+  <h3 class="title is-5">Dashboard pages (rooms)</h3>
+  <table class="table is-fullwidth" id="pages_tbl">
+    <thead><tr><th>Page</th><th>Title</th><th>Background</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <button class="button is-small" onclick="addPage()">+ Add page</button>
+
+  <h3 class="title is-5" style="margin-top:1.5rem">Items</h3>
+  <table class="table is-fullwidth" id="items_tbl">
+    <thead><tr><th>Page</th><th>Slot</th><th>Widget</th><th>Entity</th><th>Label</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <button class="button is-small" onclick="addItem()">+ Add item</button>
+
+  <div style="margin-top:1.5rem">
+    <button class="button is-primary" onclick="saveDesign()">Save design</button>
+    <button class="button is-info" onclick="sendPanel()">Send to panel</button>
+    <span id="status" style="margin-left:.75rem"></span>
+  </div>
+</div>
+
+<script>
+var design = { mac: "", pages: [], items: [] };
+var entities = [];
+
+function currentMac() { return document.getElementById('panel_sel').value; }
+
+function loadDesign() {
+  var mac = currentMac();
+  if (!mac) { document.getElementById('editor').style.display = 'none'; return; }
+  Promise.all([
+    fetch('/nspanel_core/dashboard_design?panel=' + mac, { credentials: 'same-origin' }).then(r => r.json()),
+    fetch('/nspanel_core/dashboard_entities', { credentials: 'same-origin' }).then(r => r.json())
+  ]).then(([dj, ej]) => {
+    design = dj.design;
+    design.mac = mac;
+    entities = ej.entities || [];
+    document.getElementById('editor').style.display = 'block';
+    renderPages(); renderItems();
+  }).catch(e => setStatus('Failed to load: ' + e, true));
+}
+
+function setStatus(t, err) {
+  var el = document.getElementById('status');
+  el.textContent = t;
+  el.style.color = err ? 'crimson' : 'green';
+}
+
+function opt(v, sel) { return '<option value="' + v + '"' + (v === sel ? ' selected' : '') + '>' + v + '</option>'; }
+
+function renderPages() {
+  var tb = document.querySelector('#pages_tbl tbody');
+  tb.innerHTML = design.pages.map(function (p, i) {
+    return '<tr>' +
+      '<td><input class="input is-small" value="' + p.name + '" onchange="design.pages[' + i + '].name=this.value"></td>' +
+      '<td><input class="input is-small" value="' + p.title + '" onchange="design.pages[' + i + '].title=this.value"></td>' +
+      '<td><input class="input is-small" value="' + p.background + '" onchange="design.pages[' + i + '].background=this.value"></td>' +
+      '<td><button class="button is-small is-danger" onclick="design.pages.splice(' + i + ',1);renderPages();renderItems()">✕</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderItems() {
+  var tb = document.querySelector('#items_tbl tbody');
+  var pageOpts = function (sel) { return design.pages.map(function (p) { return opt(p.name, sel); }).join(''); };
+  var widgetOpts = function (sel) {
+    return ['switch', 'light', 'rgb_light', 'scene', 'sensor', 'climate'].map(function (w) { return opt(w, sel); }).join('');
+  };
+  var entityOpts = function (sel) {
+    return entities.map(function (e) { return opt(e.entity_id, sel); }).join('');
+  };
+  tb.innerHTML = design.items.map(function (it, i) {
+    return '<tr>' +
+      '<td><select class="select is-small" onchange="design.items[' + i + '].page=this.value">' + pageOpts(it.page) + '</select></td>' +
+      '<td><input class="input is-small" style="width:4.5rem" type="number" min="0" max="5" value="' + it.slot + '" onchange="design.items[' + i + '].slot=parseInt(this.value)"></td>' +
+      '<td><select class="select is-small" onchange="design.items[' + i + '].widget=this.value">' + widgetOpts(it.widget) + '</select></td>' +
+      '<td><select class="select is-small" onchange="design.items[' + i + '].entity_id=this.value">' + entityOpts(it.entity_id) + '</select></td>' +
+      '<td><input class="input is-small" value="' + it.label + '" onchange="design.items[' + i + '].label=this.value"></td>' +
+      '<td><button class="button is-small is-danger" onclick="design.items.splice(' + i + ',1);renderItems()">✕</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function addPage() {
+  var n = design.pages.length + 1;
+  design.pages.push({ name: 'dash_room' + n, title: 'Room ' + n, background: 'bg_plain' });
+  renderPages();
+}
+
+function addItem() {
+  if (!design.pages.length) { setStatus('Add a page first', true); return; }
+  design.items.push({ id: 'item' + (design.items.length + 1), page: design.pages[0].name, widget: 'light', entity_id: '', label: '', slot: design.items.length % 6 });
+  renderItems();
+}
+
+function saveDesign() {
+  fetch('/nspanel_core/dashboard_save', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ design: design })
+  }).then(r => r.json()).then(j => {
+    if (j.error) setStatus('Save failed: ' + j.error, true);
+    else { setStatus('Design saved', false); loadDesign(); }
+  }).catch(e => setStatus('Save failed: ' + e, true));
+}
+
+function sendPanel() {
+  saveDesign();
+  setTimeout(function () {
+    fetch('/nspanel_core/dashboard_send', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mac: currentMac() })
+    }).then(r => r.json()).then(j => {
+      if (j.error) setStatus('Send failed: ' + j.error, true);
+      else setStatus('Compiling + sending (' + j.bytes + ' bytes) — the panel reflashes in ~1 minute', false);
+    }).catch(e => setStatus('Send failed: ' + e, true));
+  }, 600);
+}
+</script>
+{% endblock %}
