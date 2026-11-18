@@ -1,0 +1,16 @@
+[page]
+name = "page0"
+type = "page"
+x = 0
+y = 0
+w = 480
+h = 320
+
+[[component]]
+name = "splash"
+type = "picture"
+x = 0
+y = 0
+w = 480
+h = 320
+pic = "splash_boot"
