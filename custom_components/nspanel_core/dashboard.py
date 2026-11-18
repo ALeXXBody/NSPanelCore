@@ -1951,6 +1951,9 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
     # direct add_route bypassed auth entirely even with requires_auth=True.
     views = [
         MainPageView,
+        FirstRunView,       # P216: the first-run gate (was missing — /first_run 404'd)
+        FirstRunSaveView,   # P216: the first-run save
+        ProvisionPushView,  # P216: the settings push to the panel
         HtmxNspanelsSectionView,
         PanelActionView,
         EditPanelView,
