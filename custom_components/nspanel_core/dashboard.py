@@ -198,7 +198,7 @@ SESSION_COOKIE = "nspanel_session"
 SESSION_TTL = 24 * 3600
 
 
-def _gated(handler):
+def _gated(handler=None, *, bootstrap_url: str | None = None):
     """P295: auth for every BROWSER-facing view, without HA's ban middleware.
 
     HA's request_handler_factory raises HTTPUnauthorized for requires_auth=True
@@ -208,13 +208,24 @@ def _gated(handler):
     when a client retry with a fresh token succeeds a moment later.
 
     Views the browser calls are therefore requires_auth=False and carry this
-    decorator instead: the SAME identity check (_nspanel_auth_ok accepts the HA
-    token, the 24h session cookie and the URL fallback), but a plain 401
+    decorator instead: the SAME identity check (_nspanel_auth_ok accepts the
+    HA token, the 24h session cookie and the URL fallback), but a plain 401
     Response. No exception reaches HA's ban middleware, so no notification.
+
+    P310: `bootstrap_url=` serves a small self-contained CONNECTING page on a
+    credentialless load instead of the bare 401 body. The companion app's
+    webview has no session cookie on first use, and the panel shim pushes the
+    live token into the frame via postMessage AFTER the load — a bare 401 body
+    swallowed it. The bootstrap page receives the push (same origin only),
+    reloads itself with ?ha_token=, and the gate admits the real page.
     """
     @functools.wraps(handler)
     async def wrapper(self, request, *args, **kwargs):
         if not await _nspanel_auth_ok(request):
+            if bootstrap_url:
+                return web.Response(status=401, content_type="text/html",
+                                    text=_BOOTSTRAP_HTML.replace(
+                                        "'" + UI_PATH + "?", "'" + bootstrap_url + "?"))
             return web.Response(status=401, text="Unauthorized")
         return await handler(self, request, *args, **kwargs)
     return wrapper
@@ -250,6 +261,38 @@ class AuthSessionView(HomeAssistantView):
         resp.set_cookie(SESSION_COOKIE, token, max_age=SESSION_TTL,
                         path="/", httponly=True, samesite="Strict")
         return resp
+
+
+_BOOTSTRAP_HTML = (
+    "<!DOCTYPE html><meta charset=utf-8>"
+    "<title>Connecting to Home Assistant…</title>"
+    "<style>html,body{height:100%;margin:0;background:#0d1016;"
+    "color:#8b9099;font:14px system-ui,sans-serif}"
+    "div{height:100%;display:flex;align-items:center;justify-content:center}"
+    "</style><div id=s>Connecting to Home Assistant…</div>"
+    "<script>window.addEventListener('message',function(ev){"
+    "if(ev.origin!==window.location.origin)return;"
+    "var d=ev.data||{};"
+    "if(d.type==='nspanel-hass-token'&&d.access_token){"
+    "location.replace('" + UI_PATH + "?ha_token='+"
+    "encodeURIComponent(d.access_token));}});"
+    "setTimeout(function(){document.getElementById('s').textContent="
+    "'Still connecting — reopen NSPanel Core from the sidebar or the app "
+    "menu.';},8000);</script>")
+
+
+async def _page_auth_or_bootstrap(request):
+    """P310: the auth gate for PAGE loads — the companion app's webview has
+    no session cookie on first use, and the panel shim pushes the live token
+    into the frame via postMessage AFTER the load. A bare 401 body swallowed
+    that push. When the load carries no credential, serve the small
+    connecting page: it receives the same-origin push and reloads itself with
+    ?ha_token=, which the gate then validates. Returns None when
+    authenticated (the view proceeds)."""
+    if await _nspanel_auth_ok(request):
+        return None
+    return web.Response(status=401, content_type="text/html",
+                        text=_BOOTSTRAP_HTML)
 
 
 async def _nspanel_auth_ok(request):
@@ -445,8 +488,9 @@ class MainPageView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
+        boot = await _page_auth_or_bootstrap(request)
+        if boot is not None:
+            return boot
 
         manager = _manager(request)
         # P216/P222: the first-run gate is for FRESH installs only. An
@@ -600,8 +644,9 @@ class EditPanelView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
+        boot = await _page_auth_or_bootstrap(request)
+        if boot is not None:
+            return boot
 
         manager = _manager(request)
         try:
@@ -757,8 +802,9 @@ class DashboardPanelSettingsView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
+        boot = await _page_auth_or_bootstrap(request)
+        if boot is not None:
+            return boot
 
         manager = _manager(request)
         try:
@@ -1032,8 +1078,9 @@ class GlobalScenesView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
+        boot = await _page_auth_or_bootstrap(request)
+        if boot is not None:
+            return boot
 
         manager = _manager(request)
         scenes_ctx = [
@@ -1056,8 +1103,9 @@ class RelayGroupsView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
+        boot = await _page_auth_or_bootstrap(request)
+        if boot is not None:
+            return boot
 
         manager = _manager(request)
         panels_by_mac = {p.mac: p for p in manager.config.panels}
@@ -1171,8 +1219,9 @@ class SettingsView(HomeAssistantView):
     _TABS = ("general", "denied", "weather")
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
+        boot = await _page_auth_or_bootstrap(request)
+        if boot is not None:
+            return boot
 
         manager = _manager(request)
         tab = request.query.get("tab", "general")
@@ -1336,8 +1385,9 @@ class ManagerSettingsView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
+        boot = await _page_auth_or_bootstrap(request)
+        if boot is not None:
+            return boot
 
         manager = _manager(request)
         room_views = []
@@ -2087,8 +2137,9 @@ class RoomsPageView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
+        boot = await _page_auth_or_bootstrap(request)
+        if boot is not None:
+            return boot
 
         manager = _manager(request)
         rooms_ctx = []
@@ -2385,8 +2436,9 @@ class DashboardView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
+        boot = await _page_auth_or_bootstrap(request)
+        if boot is not None:
+            return boot
 
         manager = _manager(request)
         panels = [
@@ -2489,8 +2541,9 @@ class DashboardPhotoView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
+        boot = await _page_auth_or_bootstrap(request)
+        if boot is not None:
+            return boot
 
         manager = _manager(request)
         mac = request.query.get("panel", "")
@@ -2647,8 +2700,9 @@ class DashboardGalleryImageView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
+        boot = await _page_auth_or_bootstrap(request)
+        if boot is not None:
+            return boot
         manager = _manager(request)
         mac = str(request.query.get("panel", ""))
         photo = str(request.query.get("photo", ""))
