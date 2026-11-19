@@ -1,37 +1,38 @@
 {
-  "version": "0.1.12",
+  "version": "0.1.13",
   "notes": "fw v0.1.2 \u2014 the zero-typing provisioning firmware: WiFi-only first-boot form, POST /provision, + all audit repairs + the TFT block protocol.",
   "files": {
     "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/native-firmware-0.1.12.bin",
-      "md5": "b742268e52a71e03caaa3ea1c72ea773"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.13/native-firmware-0.1.13.bin",
+      "md5": "aaf3059d7fc16758eaca59b12be979ef"
     },
     "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.13/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/native-firmware-0.1.12.bin",
-      "md5": "b742268e52a71e03caaa3ea1c72ea773"
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.13/native-firmware-0.1.13.bin",
+      "md5": "aaf3059d7fc16758eaca59b12be979ef"
     },
     "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/data_file.bin",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.13/data_file.bin",
       "md5": "74d7ce6e39754a9bec2ae3a075620c49"
     },
     "tft/gui.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/gui.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.13/gui.tft",
       "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
     },
     "tft/gui_us.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/gui_us.tft",
+      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.13/gui_us.tft",
       "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
     }
   },
   "changes": {
-    "bug_fixes": [],
+    "bug_fixes": [
+      "The full-audit fixes: the display-restart no longer kills the touch task, the MQTT client no longer leaks on WiFi reconnects, the clock/relay writes can no longer corrupt a display update mid-transfer, a resend no longer corrupts the recorded checksum, the dashboard command channel is injection-proof, the provisioning page is CSRF-guarded, quick taps are no longer lost to split UART reads, the log buffer is task-safe, a 33-page dashboard is supported, and a backslash password no longer becomes empty"
+    ],
     "features": [
-      "PAGE SWIPE: drag left/right on any dashboard page to move between your pages (the order you designed them in); a swipe over a tile never toggles it",
-      "Every touch carries its coordinates (the swipe's foundation)"
+      "PAGE SWIPE: drag left/right on any dashboard page to move between your pages (a swipe over a tile never toggles it)"
     ],
     "breaking": []
   }
