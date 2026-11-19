@@ -674,7 +674,7 @@ class EditPanelView(HomeAssistantView):
 
 class DashboardPanelSettingsView(HomeAssistantView):
     """P263: the panel-settings fields, rendered for the Dashboard studio's
-    Panel tab — the SAME elements the edit page shows, moved here."""
+    Panel tab — the same device-level fields as the edit page."""
 
     url = f"{URL_BASE}/dashboard/panel_settings"
     name = "nspanel_core:dashboard_panel_settings"
