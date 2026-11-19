@@ -289,20 +289,36 @@ async def _page_auth_or_bootstrap(request):
     no session cookie on first use, and the panel shim pushes the live token
     into the frame via postMessage AFTER the load. A bare 401 body swallowed
     that push. When the load carries no credential, serve the small
-    connecting page: it receives the same-origin push and reloads itself with
-    ?ha_token=, which the gate then validates. Returns None when
-    authenticated (the view proceeds)."""
-    if await _nspanel_auth_ok(request):
+    connecting page — WITH THE SERVER'S OWN VERDICT baked in (which
+    credentials were seen, which were missing/rejected) — so the page itself
+    reports what the app delivered instead of hanging blind. Returns None
+    when authenticated (the view proceeds)."""
+    report: dict = {}
+    ok = await _nspanel_auth_ok(request, report=report)
+    if ok:
         return None
-    return web.Response(status=401, content_type="text/html",
-                        text=_BOOTSTRAP_HTML)
+    verdict = report.get("verdict", "no credential on the request")
+    html = _BOOTSTRAP_HTML.replace(
+        "Connecting to Home Assistant…",
+        "Connecting to Home Assistant… (" + verdict + ")", 1)
+    return web.Response(status=401, content_type="text/html", text=html)
 
 
-async def _nspanel_auth_ok(request):
+async def _nspanel_auth_ok(request, report: dict | None = None):
     """P281: the studio/settings pages verify the viewer's identity —
     HA login token (the Bearer header for the fetches, the ?ha_token=
     parameter for the iframe page loads). The device-facing endpoints
-    (the OTA downloads, the panel's config fetch) stay token-less."""
+    (the OTA downloads, the panel's config fetch) stay token-less.
+
+    P310: when `report` is a dict, the gate records WHICH credential
+    sources it saw (cookie/bearer/param) and why it denied — the
+    connecting page and the HA log then tell the truth instead of the
+    integration staying silent while a client never authenticates."""
+    def _report(note: str) -> None:
+        if report is not None:
+            report["verdict"] = note
+        _LOGGER.info("NSPanel auth %s: %s", getattr(request, "path", "?"), note)
+
     manager = _manager(request)
     import time as _time
 
@@ -316,20 +332,26 @@ async def _nspanel_auth_ok(request):
         sessions = manager.config.settings.nspanel_sessions or {}
         tok = m.group(1)
         if tok in sessions and sessions[tok] > _time.time():
+            _report("session cookie OK")
             return True
+        _report("session cookie present but INVALID/expired")
     hass = getattr(manager, "hass", None)
     if hass is None:
+        _report("no hass object (test double) — allowing")
         return True  # the test doubles: no hass — the auth-less HA semantics
     auth = getattr(hass, "auth", None)
     if auth is None:
+        _report("no HA auth provider — allowing")
         return True  # the auth-less HA: everything stays open
     hdr = request.headers.get("Authorization", "")
     if hdr.startswith("Bearer "):
         try:
             if await auth.async_validate_token(hdr[7:]):
+                _report("Bearer token OK")
                 return True
+            _report("Bearer token REJECTED by HA")
         except Exception:  # noqa: BLE001
-            pass
+            _report("Bearer token validation raised")
     # P285 THE PROPER FIX: the session cookie — the same-origin shim sets
     # it from the live token; every navigation (the sidebar, the
     # Integrations links, new tabs) carries it automatically. The URL
@@ -347,9 +369,15 @@ async def _nspanel_auth_ok(request):
     if qp:
         try:
             if await auth.async_validate_token(qp):
+                _report("ha_token URL param OK")
                 return True
+            _report("ha_token URL param REJECTED by HA")
         except Exception:  # noqa: BLE001
-            pass
+            _report("ha_token validation raised")
+    _report("no valid credential: cookie=%s bearer=%s ha_token=%s" % (
+        "yes" if "nspanel_session" in cookie_hdr else "no",
+        "yes" if hdr.startswith("Bearer ") else "no",
+        "yes" if request.query.get("ha_token") else "no"))
     return False
 
 
