@@ -17,6 +17,12 @@ class NSPanelCorePanel extends HTMLElement {
       if (t && t !== this._liveToken) {
         this._liveToken = t;
         this._pushToken();
+        /* P285 THE PROPER FIX: the session cookie — set by this same-origin
+         * shim, carried by EVERY navigation to the integration's pages
+         * (the sidebar, the Integrations links, new tabs), validated
+         * server-side against the HA auth store. */
+        document.cookie = "nspanel_token=" + encodeURIComponent(t) +
+          "; path=/; max-age=3600; SameSite=Strict";
         // P281: the gated pages verify the token from the URL — keep the
         // iframe's credential current (one src refresh per token rotation)
         if (this._frame) {

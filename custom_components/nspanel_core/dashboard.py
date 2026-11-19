@@ -185,6 +185,19 @@ async def _nspanel_auth_ok(request):
                 return True
         except Exception:  # noqa: BLE001
             pass
+    # P285 THE PROPER FIX: the session cookie — the same-origin shim sets
+    # it from the live token; every navigation (the sidebar, the
+    # Integrations links, new tabs) carries it automatically. The URL
+    # parameter remains the bootstrap fallback.
+    import re as _re
+    m = _re.search(r"(?:^|;\s*)nspanel_token=([^;]+)", request.headers.get("Cookie", ""))
+    if m:
+        tok = m.group(1)
+        try:
+            if await auth.async_validate_token(tok):
+                return True
+        except Exception:  # noqa: BLE001
+            pass
     qp = request.query.get("ha_token", "")
     if qp:
         try:
@@ -237,8 +250,6 @@ class FirstRunView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
 
         manager = _manager(request)
         if manager.config.settings.first_run_done:
