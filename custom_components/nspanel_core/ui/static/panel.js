@@ -132,7 +132,7 @@ class NSPanelCorePanel extends HTMLElement {
       this._loadWithToken(this._liveToken);
     } else {
       this._tokenWait = setTimeout(() => {
-        if (!this._liveToken) iframe.src = "/nspanel_core/ui";
+        if (!this._liveToken) iframe.src = "/nspanel_core/ui?_cb=" + Date.now();
       }, 5000);
     }
   }
@@ -140,7 +140,9 @@ class NSPanelCorePanel extends HTMLElement {
   _loadWithToken(t) {
     try {
       if (this._tokenWait) { clearTimeout(this._tokenWait); this._tokenWait = null; }
-      const want = "/nspanel_core/ui?ha_token=" + encodeURIComponent(t);
+      // P310: the app's webview caches page loads — every load is fresh
+      const want = "/nspanel_core/ui?ha_token=" + encodeURIComponent(t) +
+        "&_cb=" + Date.now();
       if (this._frame && this._frame.src !== want) this._frame.src = want;
     } catch (e) {}
   }

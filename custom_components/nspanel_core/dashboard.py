@@ -301,7 +301,11 @@ async def _page_auth_or_bootstrap(request):
     html = _BOOTSTRAP_HTML.replace(
         "Connecting to Home Assistant…",
         "Connecting to Home Assistant… (" + verdict + ")", 1)
-    return web.Response(status=401, content_type="text/html", text=html)
+    # P310: the app's webview cached an older connecting page — never again
+    return web.Response(status=401, content_type="text/html", text=html, headers={
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+    })
 
 
 async def _nspanel_auth_ok(request, report: dict | None = None):
