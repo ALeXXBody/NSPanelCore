@@ -1,6 +1,6 @@
 {
-  "name": "NSPanel Core — P310 RECOVERY: fw v0.1.17 (setup form works, keeps NVS)",
-  "version": "0.1.17-recovery",
+  "name": "NSPanel Core — P310 RECOVERY: fw v0.1.4 (setup form works, keeps NVS)",
+  "version": "0.1.4-recovery",
   "new_install_prompt_erase": false,
   "builds": [
     {
@@ -9,7 +9,7 @@
         { "path": "bootloader_native.bin", "offset": 4096 },
         { "path": "partitions_native.bin", "offset": 32768 },
         { "path": "ota_data_initial.bin", "offset": 57344 },
-        { "path": "native_017_recovery.bin", "offset": 65536 }
+        { "path": "native_014_recovery.bin", "offset": 65536 }
       ]
     }
   ]
