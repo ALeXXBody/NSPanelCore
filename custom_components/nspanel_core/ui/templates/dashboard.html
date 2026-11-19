@@ -80,6 +80,13 @@
   .studio-tab { cursor: pointer; padding: 8px 18px; border-radius: 10px 10px 0 0;
     border: 1px solid #232833; border-bottom: none; color: #8b9099; background: #141821; }
   .studio-tab.active { color: #39c8e8; background: #0d1016; border-color: #2a2f3a; }
+  .studio-subtabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;
+    border-bottom: 1px solid #2a2f3a; padding-bottom: 8px; }
+  .studio-subtab { cursor: pointer; padding: 6px 14px; border-radius: 8px;
+    border: 1px solid #2a2f3a; color: #8b9099; background: #141821;
+    font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .studio-subtab:hover { color: #c8cbce; }
+  .studio-subtab.active { color: #06222b; background: #39c8e8; border-color: #39c8e8; }
   .studio-tabpane { display: none; border: 1px solid #2a2f3a; border-radius: 0 12px 12px 12px;
     background: #0d1016; padding: 16px; }
   .studio-tabpane.active { display: block; }
@@ -166,18 +173,12 @@
       <button class="studio-btn ghost" style="padding:5px 14px" onclick="addItem()">+ Add item</button>
     </div>
     <div class="studio-tabpane" id="pane_panel">
-      <div data-group="screen" style="margin-bottom:1rem">
-        <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">SCREEN &amp; SCREENSAVER</h4>
-        <div data-slot="screen"></div>
+      <div class="studio-subtabs" id="panel_subtabs">
+        <div class="studio-subtab active" data-sec="screen" onclick="setPanelSubTab('screen')">Screen &amp; screensaver</div>
+        <div class="studio-subtab" data-sec="buttons" onclick="setPanelSubTab('buttons')">Physical buttons</div>
+        <div class="studio-subtab" data-sec="general" onclick="setPanelSubTab('general')">General</div>
       </div>
-      <div data-group="buttons" style="margin-bottom:1rem">
-        <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">PHYSICAL BUTTONS</h4>
-        <div data-slot="buttons"></div>
-      </div>
-      <div data-group="general">
-        <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">GENERAL</h4>
-        <div id="panel_settings_box"></div>
-      </div>
+      <div id="panel_settings_box"></div>
       <button class="studio-btn" style="margin-top:.75rem" onclick="savePanelSettings()">Save panel settings</button>
     </div>
   </div>
@@ -215,6 +216,7 @@ function loadDesign() {
   var mac = currentMac();
   var sel = document.getElementById('panel_sel');
   panelId = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].dataset.id : null;
+  if (document.getElementById('pane_panel').classList.contains('active')) loadPanelSettings();
   document.getElementById('panel_settings_box').innerHTML =
     '<p class="text-sm opacity-60">Choose a panel to load its settings.</p>';
   if (!mac) { document.getElementById('pv_frame').style.opacity = .35; return; }
@@ -400,13 +402,49 @@ function sendPanel() {
   });
 }
 
-/* ---- the panel settings (the elements moved from the settings page) ---- */
+/* ---- the panel settings sub-tabs ---------------------------------------
+ * All three groups stay INSIDE the server-rendered form: the sub-tabs only
+ * toggle visibility. (The old code physically moved the sections out of the
+ * form into external slots — the headings showed while the inputs silently
+ * disappeared from FormData on save.) */
+var panelSubTab = 'screen';
+function setPanelSubTab(sec) {
+  panelSubTab = sec;
+  document.querySelectorAll('#panel_subtabs .studio-subtab').forEach(function (e) {
+    e.classList.toggle('active', e.dataset.sec === sec);
+  });
+  var form = document.querySelector('#panel_settings_box form');
+  if (!form) return;
+  var screen = form.querySelector('[data-section="screen"]');
+  var buttons = form.querySelector('[data-section="buttons"]');
+
+  // group everything else into a single "general" section — once, in place
+  var general = form.querySelector('[data-section="general"]');
+  if (!general) {
+    general = document.createElement('div');
+    general.dataset.section = 'general';
+    var host = screen ? screen.parentElement : (buttons ? buttons.parentElement : form);
+    Array.from(host.children).forEach(function (child) {
+      if (child !== screen && child !== buttons) general.appendChild(child);
+    });
+    host.appendChild(general);
+  }
+  ['screen', 'buttons', 'general'].forEach(function (s) {
+    var el = form.querySelector('[data-section="' + s + '"]');
+    if (el) el.style.display = (s === sec) ? '' : 'none';
+  });
+}
 function loadPanelSettings() {
   var box = document.getElementById('panel_settings_box');
   if (!box) return;
+  if (!panelId) {
+    box.innerHTML = '<p class="text-sm opacity-60">Choose a panel to load its settings.</p>';
+    return;
+  }
   box.innerHTML = '<p class="text-sm opacity-60">Loading…</p>';
   nspanelFetch('/nspanel_core/dashboard/panel_settings?panel_id=' + panelId)
-    .then(r => r.text()).then(t => {
+    .then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then(t => {
       box.innerHTML = t;
       box.querySelectorAll('input,select').forEach(el => {
         el.style.background = '#141821'; el.style.color = '#e8eaec';
@@ -414,33 +452,26 @@ function loadPanelSettings() {
       });
       var typeSel = document.getElementById('panel_type');
       if (typeSel) typeSel.addEventListener('change', renderPreview);
-      renderPreview();  // the button-zone labels + the device frame follow the settings
       var form = box.querySelector('form');
       if (!form) return;
-      // relocate the moved sections into their dedicated groups (P266:
-      // the button + screen settings live here, REMOVED from the settings page)
-      // the sections move WITHIN the form — the inputs never leave it
-      ['buttons', 'screen'].forEach(function (sec) {
-        var wrap = box.querySelector('[data-section="' + sec + '"]');
-        var slot = document.querySelector('[data-slot="' + sec + '"]');
-        if (wrap && slot) slot.appendChild(wrap);
-        wrap?.removeAttribute('style');
-      });
       form.id = 'panel_settings_form';
+      setPanelSubTab(panelSubTab);
       form.addEventListener('submit', function (ev) {
         ev.preventDefault();
-        var fd = new FormData(ev.target);
-        fetch(ev.target.action, { method: 'POST', credentials: 'same-origin', body: fd })
-          .then(() => setStatus('Panel settings saved', false))
-          .catch(e => setStatus('Save failed: ' + e, true));
+        savePanelSettings();
       });
-    });
+      renderPreview();  // the device frame follows the panel type
+    })
+    .catch(e => { box.innerHTML = '<p class="text-sm" style="color:#e07070">Failed to load settings: ' + e.message + '</p>'; });
 }
 function savePanelSettings() {
   var form = document.getElementById('panel_settings_form');
   if (!form) return;
-  fetch(form.action, { method: 'POST', credentials: 'same-origin', body: new FormData(form) })
-    .then(() => setStatus('Panel settings saved', false))
+  nspanelFetch(form.action, { method: 'POST', credentials: 'same-origin', body: new FormData(form) })
+    .then(r => {
+      if (r.ok) setStatus('Panel settings saved', false);
+      else setStatus('Save failed (HTTP ' + r.status + ')', true);
+    })
     .catch(e => setStatus('Save failed: ' + e, true));
 }
 
@@ -537,12 +568,12 @@ new ResizeObserver(scaleScreen).observe(document.getElementById("pv_screenwrap")
 /* the button zones jump to their settings in the Panel tab */
 function initZoneJumps() {
   document.getElementById("pv_bz_left").onclick = function () {
-    setTab("panel");
+    setTab("panel"); setPanelSubTab('buttons');
     var el = document.getElementById("button1_mode");
     if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus(); }
   };
   document.getElementById("pv_bz_right").onclick = function () {
-    setTab("panel");
+    setTab("panel"); setPanelSubTab('buttons');
     var el = document.getElementById("button2_mode");
     if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus(); }
   };
