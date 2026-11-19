@@ -2222,7 +2222,10 @@ class DashboardView(HomeAssistantView):
 
         manager = _manager(request)
         panels = [
-            {"mac": p.mac, "name": p.name}
+            # P305: the studio needs the numeric id — it is the key used by
+            # /dashboard/panel_settings. Without it the option's data-id was
+            # empty, panelId stayed falsy and the Panel sub-tabs never loaded.
+            {"mac": p.mac, "name": p.name, "id": p.id}
             for p in manager.config.panels
             if p.accepted and not p.denied
         ]

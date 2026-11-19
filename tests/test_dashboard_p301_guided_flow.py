@@ -76,48 +76,40 @@ def test_no_entity_library_block_or_migration_copy_remains():
     assert "addItem();return false;" in HTML  # Enter in the search adds a match
 
 
-# ------------------------------------------------------- the page selector
+# ------------------------------------------------------- page selection
 
-def test_page_selector_is_rendered_with_the_pages():
-    assert 'id="page_sel"' in HTML
-    assert 'onchange="selectPage(this.value)"' in HTML
-    assert "renderPagePicker();" in _FNS["renderPages"]
-    assert "renderPages();" in _FNS["selectPage"]  # selection mirrors the picker
+def test_numbered_page_pick_selects_the_exact_page():
+    assert '<th>#</th><th>Page name</th><th>Picture</th>' in HTML
+    assert 'class="studio-page-pick' in _FNS["renderPages"]
+    assert "selectPage(\\'' + p.name + '\\')" in _FNS["renderPages"]
+    assert "renderPages();" in _FNS["selectPage"]  # selection mirrors the table
+    assert 'for="scr_sel"' in HTML                # the picker moved to the pagebar
 
 
-def test_page_selector_lists_titles_and_tracks_the_selected_page():
+def test_page_rows_render_numbered_picks_and_screensaver_options():
     script = """
 %s
 %s
-var rendered = {};
-var document = { getElementById: function () {
-  return {
-    set innerHTML(v) { rendered.page = v; },
-    get innerHTML() { return rendered.page || ''; },
-    value: '',
-    get options() { return []; }
-  };
-} };
-var design = {pages: []}, selectedPage = null;
-var out = {};
-renderPagePicker();
-out.empty = rendered.page;
-design.pages = [{name: 'dash_kitchen', title: 'Kitchen'},
-                {name: 'dash_hall', title: 'Hall'}];
-renderPagePicker();
-out.two = {html: rendered.page, value: rendered.page && document.getElementById().value,
-  selectedPage: selectedPage};
-selectedPage = 'dash_hall';
-renderPagePicker();
-out.kept = {html: rendered.page, selectedPage: selectedPage};
-console.log(JSON.stringify(out));
-""" % (_FNS["esc"], _FNS["renderPagePicker"])
+var design = {pages: [
+  {name: 'dash_kitchen', title: 'Kitchen', background_image: ''},
+  {name: 'dash_hall', title: 'Hall', background_image: ''}
+], items: [], screensaver_page: 'dash_hall'};
+var selectedPage = 'dash_kitchen';
+var tb = {innerHTML: ''}, ss = {innerHTML: '', value: ''};
+var document = {
+  querySelector: function (s) { return s === '#pages_tbl tbody' ? tb : null; },
+  getElementById: function (id) { return id === 'scr_sel' ? ss : null; }
+};
+renderPages();
+console.log(JSON.stringify({rows: tb.innerHTML, scr: ss.innerHTML, value: ss.value}));
+""" % (_FNS["esc"], _FNS["renderPages"])
     out = _node_run(script)
-    assert "No pages yet" in out["empty"]
-    assert 'value="dash_kitchen">Kitchen</option>' in out["two"]["html"]
-    assert 'value="dash_hall">Hall</option>' in out["two"]["html"]
-    assert out["two"]["selectedPage"] == "dash_kitchen"
-    assert out["kept"]["selectedPage"] == "dash_hall"
+    assert '>1</button>' in out["rows"] and '>2</button>' in out["rows"]
+    assert 'title="Edit page 1"' in out["rows"]
+    assert "selectPage('dash_kitchen')" in out["rows"]
+    assert 'studio-page-pick active' in out["rows"]
+    assert 'value="dash_hall" selected' in out["scr"]
+    assert out["value"] == "dash_hall"
 
 
 def test_empty_slot_click_targets_the_cell_search():

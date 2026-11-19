@@ -56,16 +56,15 @@ def test_every_user_facing_label_says_page():
         "set up its pages, then send the design",
         "<b>2</b> Build pages",
         "the dots below the tiles are your pages",
-        'for="page_sel">Editing page',
-        "Steps 2 and 3 apply to this page.",
+        '<label for="scr_sel">Picture shown on the screensaver:</label>',
+        'Use the # column below to pick the page you want to edit.',
         '<span class="studio-step-title">Pages</span>',
         "Each page is one screen on the panel.",
-        "<th>Page name</th>",
+        "<th>#</th><th>Page name</th><th>Picture</th>",
         "+ Add page",
         "put it on the page selected above",
         "add it to this page",
         "Add a Home Assistant entity to this page",
-        "No pages yet — add one in step 1",
         'placeholder="Page name"',
         "Choose a page in the selector above first",
         "No items on this page",
@@ -74,38 +73,45 @@ def test_every_user_facing_label_says_page():
 
 
 def test_page_identifiers_are_renamed_everywhere():
-    for ident in ("page_sel", "selectPage", "selectedPage", "renderPagePicker",
-                  "studio-pagebar", "scrPage"):
+    for ident in ("selectPage", "selectedPage", "studio-pagebar", "scrPage",
+                  "scr_sel", "studio-page-pick"):
         assert ident in HTML, ident
-    assert 'id="page_sel" onchange="selectPage(this.value)"' in HTML
+    for gone in ("page_sel", "renderPagePicker", "Editing page"):
+        assert gone not in HTML, gone
     assert "onclick=\"selectPage(design.pages[' + i + '].name)\"" in HTML
+    assert 'id="scr_sel" onchange="design.screensaver_page=this.value;renderPreview()"' in HTML
+    assert "onclick=\"event.stopPropagation();selectPage(\\'' + p.name + '\\')\"" in HTML
 
 
-def test_new_page_defaults_and_empty_picker_say_pages():
-    script = (_FNS["pageSlug"] + _FNS["uniquePageName"] + _FNS["addPage"] +
-              _FNS["renderPagePicker"] + """
-var design = {pages: []}, selectedPage = null, status = '';
-function renderPages() {}
+def test_new_page_defaults_and_numbered_page_pick():
+    script = (_FNS["esc"] + _FNS["pageSlug"] + _FNS["uniquePageName"] +
+              _FNS["addPage"] + _FNS["renderPages"] + """
+var design = {pages: [], items: [], screensaver_page: ''};
+var selectedPage = null, status = '';
 function renderPreview() {}
 function setStatus(t) { status = t; }
-var picked = {innerHTML: '', value: ''};
+var tb = {innerHTML: ''}, ss = {innerHTML: '', value: ''};
 var document = {
-  getElementById: function (id) { return id === 'page_sel' ? picked : null; },
+  querySelector: function (sel) { return sel === '#pages_tbl tbody' ? tb : null; },
+  getElementById: function (id) { return id === 'scr_sel' ? ss : null; },
   querySelectorAll: function () { return [{focus: function () {}}]; }
 };
-var out = {};
-renderPagePicker();
-out.empty = picked.innerHTML;
-out.slugEmpty = pageSlug('');
+var out = {slugEmpty: pageSlug('')};
 addPage();
 out.title = design.pages[0].title;
 out.name = design.pages[0].name;
 out.status = status;
+out.row = tb.innerHTML;
+out.scrOptions = ss.innerHTML;
+out.screensaver = design.screensaver_page;
 console.log(JSON.stringify(out));
 """)
     out = _node_run(script)
-    assert out["empty"] == '<option value="">No pages yet — add one in step 1</option>'
     assert out["slugEmpty"] == "page"
     assert out["title"] == "New page"
     assert out["name"] == "dash_newpage"
     assert out["status"] == "Type a page name — the internal name is created from it."
+    assert 'class="studio-page-pick active"' in out["row"]
+    assert ">1</button>" in out["row"]
+    assert 'value="dash_newpage" selected' in out["scrOptions"]
+    assert out["screensaver"] == "dash_newpage"

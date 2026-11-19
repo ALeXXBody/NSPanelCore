@@ -141,6 +141,13 @@
   .studio-pagebar select { background:#141821; color:#e8eaec; border:1px solid #2a2f3a;
     border-radius:8px; padding:5px 10px; min-width:150px; }
   .studio-pagebar .hint { font-size:11px; color:#8b9099; }
+  /* P305: the numbered page picker in the first column of the pages table */
+  .studio-page-pick { width:28px; height:28px; border-radius:8px; cursor:pointer;
+    background:#141821; border:1px solid #2a2f3a; color:#8b9099;
+    font-size:12px; font-weight:700; }
+  .studio-page-pick:hover { border-color:#39c8e8; color:#39c8e8; }
+  .studio-page-pick.active { background:rgba(57,200,232,.18);
+    border-color:#39c8e8; color:#39c8e8; }
   .studio-step { border:1px solid #2a2f3a; border-radius:12px; padding:14px 16px;
     margin-bottom:12px; background:rgba(255,255,255,.012); }
   .studio-step.plain { border:none; background:none; padding:0; }
@@ -239,9 +246,10 @@
 
     <div class="studio-tabpane active" id="pane_design">
       <div class="studio-pagebar">
-        <label for="page_sel">Editing page</label>
-        <select id="page_sel" onchange="selectPage(this.value)"></select>
-        <span class="hint">Steps 2 and 3 apply to this page.</span>
+        <label for="scr_sel">Picture shown on the screensaver:</label>
+        <select id="scr_sel" onchange="design.screensaver_page=this.value;renderPreview()"
+                style="background:#141821;color:#e8eaec;border:1px solid #2a2f3a;border-radius:8px;padding:4px 10px"></select>
+        <span class="hint">Use the # column below to pick the page you want to edit.</span>
       </div>
 
       <section class="studio-step">
@@ -249,15 +257,10 @@
         <p class="studio-step-desc">Each page is one screen on the panel. Type a name and press Enter — that name becomes the page on the panel.</p>
         <div class="studio-step-body">
           <table class="table is-fullwidth" id="pages_tbl" style="background:transparent;color:#c8cbce">
-            <thead><tr><th>Page name</th><th>Picture</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Page name</th><th>Picture</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
           <button class="studio-btn ghost" style="padding:5px 14px" onclick="addPage()">+ Add page</button>
-          <p class="is-size-7" style="color:#8b9099;margin:.6rem 0 0">
-            Picture shown on the screensaver:
-            <select id="scr_sel" onchange="design.screensaver_page=this.value;renderPreview()"
-                    style="background:#141821;color:#e8eaec;border:1px solid #2a2f3a;border-radius:8px;padding:4px 10px"></select>
-          </p>
         </div>
       </section>
 
@@ -327,7 +330,9 @@ function setStatus(t, err) {
 function setTab(t) {
   document.querySelectorAll('.studio-tab').forEach(e => e.classList.toggle('active', e.dataset.tab === t));
   document.querySelectorAll('.studio-tabpane').forEach(e => e.classList.toggle('active', e.id === 'pane_' + t));
-  if (t === 'panel' && panelId) loadPanelSettings();
+  // P305: never gate the load on panelId — an empty id must show an explicit
+  // failure message, not leave the sub-tabs silently blank.
+  if (t === 'panel') loadPanelSettings();
 }
 
 /* P292: parse a studio response defensively. The save error the user saw —
@@ -434,22 +439,6 @@ function setItemEntity(i, id) {
   renderItems(); renderPreview();
 }
 
-/* P301: the page selector makes the current page explicit — the old studio
- * only highlighted a row in a table, so steps 2 and 3 had no visible target. */
-function renderPagePicker() {
-  var el = document.getElementById('page_sel');
-  if (!el) return;
-  if (!design.pages.length) {
-    el.innerHTML = '<option value="">No pages yet — add one in step 1</option>';
-    return;
-  }
-  el.innerHTML = design.pages.map(function (p) {
-    return '<option value="' + esc(p.name) + '">' + esc(p.title) + '</option>';
-  }).join('');
-  if (selectedPage) el.value = selectedPage;
-  else if (design.pages.length) { selectedPage = design.pages[0].name; el.value = selectedPage; }
-}
-
 function renderPages() {
   if (!selectedPage && design.pages.length) selectedPage = design.pages[0].name;
   if (selectedPage && !design.pages.find(p => p.name === selectedPage)) selectedPage = design.pages[0] ? design.pages[0].name : null;
@@ -457,6 +446,9 @@ function renderPages() {
   tb.innerHTML = design.pages.map(function (p, i) {
     var sel = p.name === selectedPage;
     return '<tr' + (sel ? ' style="outline:1px solid rgba(57,200,232,.4)"' : '') + ' onclick="selectPage(\'' + p.name + '\')" style="cursor:pointer">' +
+      '<td><button type="button" class="studio-page-pick' + (sel ? ' active' : '') + '"' +
+        ' onclick="event.stopPropagation();selectPage(\'' + p.name + '\')"' +
+        ' title="Edit page ' + (i + 1) + '">' + (i + 1) + '</button></td>' +
       '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + p.title + '" placeholder="Page name" onclick="event.stopPropagation()" onchange="renamePage(' + i + ', this.value)"></td>' +
       '<td onclick="event.stopPropagation()"><input type="file" accept="image/*" style="width:10rem;color:#8b9099" onchange="uploadBg(' + i + ', this)">' +
       (p.background_image ? '<span class="tag is-small" style="background:rgba(57,200,232,.15);color:#39c8e8">photo ✓</span>' : '<span class="tag is-small" style="background:rgba(255,255,255,.06);color:#5a6068">no photo — black screen</span>') +
@@ -465,10 +457,13 @@ function renderPages() {
       '</tr>';
   }).join('');
   var ss = document.getElementById('scr_sel');
+  if (!design.pages.some(function (p) { return p.name === design.screensaver_page; })) {
+    design.screensaver_page = design.pages.length ? design.pages[0].name : '';
+  }
   ss.innerHTML = design.pages.map(function (p) {
     return '<option value="' + esc(p.name) + '"' + (design.screensaver_page === p.name ? ' selected' : '') + '>' + esc(p.title) + '</option>';
   }).join('');
-  renderPagePicker();
+  ss.value = design.screensaver_page;
 }
 
 function widgetFromEntity(entity_id) {
@@ -833,7 +828,8 @@ function loadPanelSettings() {
   var box = document.getElementById('panel_settings_box');
   if (!box) return;
   if (!panelId) {
-    box.innerHTML = '<p class="text-sm opacity-60">Choose a panel to load its settings.</p>';
+    box.innerHTML = '<p class="text-sm" style="color:#e07070">No panel id — reload the Dashboard page, then choose a panel.</p>';
+    setStatus('No panel id on the selected panel — reload the Dashboard page.', true);
     return;
   }
   if (settingsLoading) return; // P297: no duplicate fetches from tab + zone jumps
