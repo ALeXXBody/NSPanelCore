@@ -28,15 +28,9 @@ class NSPanelCorePanel extends HTMLElement {
         // navigation carries (sidebar, Integrations links, new tabs) —
         // no 5-minute expiry, no referer tricks.
         this._exchangeSession(t);
-        // P281: the gated pages verify the token from the URL — keep the
-        // iframe's credential current (one src refresh per token rotation)
-        if (this._frame) {
-          const want = "/nspanel_core/ui?ha_token=" + encodeURIComponent(t);
-          if (this._frame.src.indexOf("ha_token=") === -1 ||
-              decodeURIComponent(this._frame.src.split("ha_token=")[1] || "") !== t) {
-            this._frame.src = want;
-          }
-        }
+        // P281: the gated pages verify the token from the URL — the iframe
+        // NEVER loads without it.
+        if (this._frame) this._loadWithToken(t);
       }
     } catch (e) {}
   }
@@ -48,17 +42,36 @@ class NSPanelCorePanel extends HTMLElement {
     this.style.cssText = "display:block;width:100%;height:100%;min-height:100vh;";
 
     const iframe = document.createElement("iframe");
-    iframe.src = this._liveToken
-      ? "/nspanel_core/ui?ha_token=" + encodeURIComponent(this._liveToken)
-      : "/nspanel_core/ui";
+    this._frame = iframe;
     iframe.title = "NSPanel Core";
     iframe.style.cssText = "border:0;width:100%;height:100%;min-height:100vh;display:block;";
     iframe.setAttribute("allowfullscreen", "");
-    this._frame = iframe;
     iframe.addEventListener("load", () => {
       try { this._pushToken(); } catch (e) {}
     });
     this.appendChild(iframe);
+    /* P310 (the user's report — "THE APP DASHBOARD says Unauthorized"): NEVER
+     * load the gated page without a credential. In the HA companion app the
+     * webview has no session cookie on first use, and a tokenless load shows
+     * a bare "Unauthorized". Wait for the live token and load with it; if it
+     * never lands (no hass), fall back to the cookie path after a grace
+     * period so cookie-carrying users still get the page. */
+    iframe.src = "about:blank";
+    if (this._liveToken) {
+      this._loadWithToken(this._liveToken);
+    } else {
+      this._tokenWait = setTimeout(() => {
+        if (!this._liveToken) iframe.src = "/nspanel_core/ui";
+      }, 5000);
+    }
+  }
+
+  _loadWithToken(t) {
+    try {
+      if (this._tokenWait) { clearTimeout(this._tokenWait); this._tokenWait = null; }
+      const want = "/nspanel_core/ui?ha_token=" + encodeURIComponent(t);
+      if (this._frame && this._frame.src !== want) this._frame.src = want;
+    } catch (e) {}
   }
 
   _exchangeSession(token) {
