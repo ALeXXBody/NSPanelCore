@@ -143,7 +143,7 @@
     <div class="studio-tabpane active" id="pane_design">
       <h3 class="text-sm font-semibold" style="color:#e8eaec;margin-bottom:.5rem">Rooms (dashboard pages)</h3>
       <table class="table is-fullwidth" id="pages_tbl" style="background:transparent;color:#c8cbce">
-        <thead><tr><th>Page</th><th>Title</th><th>Fallback bg</th><th>Photo</th><th></th></tr></thead>
+        <thead><tr><th>Room title</th><th>Photo</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
       <button class="studio-btn ghost" style="padding:5px 14px" onclick="addPage()">+ Add room</button>
@@ -155,7 +155,7 @@
 
       <h3 class="text-sm font-semibold" style="color:#e8eaec;margin:1rem 0 .5rem">Items (what sits on the photo)</h3>
       <table class="table is-fullwidth" id="items_tbl" style="background:transparent;color:#c8cbce">
-        <thead><tr><th>Room</th><th>Slot</th><th>Widget</th><th>Entity</th><th>Label</th><th></th></tr></thead>
+        <thead><tr><th>Room</th><th>Position</th><th>Widget</th><th>Entity</th><th>Label</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
       <button class="studio-btn ghost" style="padding:5px 14px" onclick="addItem()">+ Add item</button>
@@ -229,11 +229,9 @@ function renderPages() {
   var tb = document.querySelector('#pages_tbl tbody');
   tb.innerHTML = design.pages.map(function (p, i) {
     return '<tr>' +
-      '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + p.name + '" onchange="design.pages[' + i + '].name=this.value;renderPreview()"></td>' +
       '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + p.title + '" onchange="design.pages[' + i + '].title=this.value;renderPreview()"></td>' +
-      '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a;width:6.5rem" value="' + p.background + '" onchange="design.pages[' + i + '].background=this.value"></td>' +
       '<td><input type="file" accept="image/*" style="width:10rem;color:#8b9099" onchange="uploadBg(' + i + ', this)">' +
-      (p.background_image ? '<span class="tag is-small" style="background:rgba(57,200,232,.15);color:#39c8e8">' + p.background_image.replace(/^orig_[a-z0-9]+_/, '') + '</span>' : '') + '</td>' +
+      (p.background_image ? '<span class="tag is-small" style="background:rgba(57,200,232,.15);color:#39c8e8">photo ✓</span>' : '<span class="tag is-small" style="background:rgba(255,255,255,.06);color:#5a6068">no photo — black screen</span>') + '</td>' +
       '<td><button class="button is-small is-danger" onclick="design.pages.splice(' + i + ',1);renderPages();renderItems();renderPreview()">✕</button></td>' +
       '</tr>';
   }).join('');
@@ -266,6 +264,7 @@ function renderItems() {
 
 function addPage() {
   var n = design.pages.length + 1;
+  // the internal name is generated once and never shown — the widgets bind to it
   design.pages.push({ name: 'dash_room' + n, title: 'Room ' + n, background: 'bg_plain', background_image: '' });
   renderPages(); renderPreview();
 }
