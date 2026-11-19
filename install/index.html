@@ -21,7 +21,23 @@
   <h1>NSPanel <span>Core</span> <small class="note">native firmware line</small></h1>
 
   <div class="card">
-    <p><strong class="ok">RECOMMENDED — native fw v0.1.0 (ESP32, 4 MB)</strong></p>
+    <p><strong class="ok">RECOMMENDED — P310 RECOVERY, native fw v0.1.15 (ESP32, 4 MB)</strong></p>
+    <p>The fix build after the dead-panel incident: a stalled display update can
+    never reboot the panel in a loop again (no relay self-off), Display restart
+    returns the screen from the splash logo, and the bootloader rolls a failed
+    update back to the previous firmware. Ships the PROVEN display content.</p>
+    <p><strong>Wi-Fi + MQTT settings are PRESERVED</strong> — this flash does not
+    touch NVS. After the flash the panel joins Wi-Fi/MQTT on its own and pulls its
+    current firmware/checksums from NSPanel Core automatically.</p>
+    <p><esp-web-install-button manifest="./manifest_recovery.json"></esp-web-install-button></p>
+    <p class="note">Chrome or Edge (Web Serial) with a 3.3 V USB-TTL adapter wired
+    to TX/RX/GND. Hold <code>BOOT</code>, tap <code>RESET</code>, release
+    <code>BOOT</code> — then click INSTALL. Do NOT erase the flash when prompted.
+    Afterwards tap RESET once and power the panel from mains.</p>
+  </div>
+
+  <div class="card">
+    <p><strong class="ok">native fw v0.1.0 (ESP32, 4 MB)</strong></p>
     <p>The fixed native build: display handshake works (UART pins corrected),
     temperature reads the real NTC, OTA streams to flash and self-configures
     the manager address from the register_accept.</p>
