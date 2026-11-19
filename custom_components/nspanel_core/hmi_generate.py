@@ -44,10 +44,24 @@ def _write_toml(path: str, page_name: str, comps: list[dict]) -> None:
             lines.append(f'pic = "{c["pic"]}"')
         if "pic2" in c:
             lines.append(f'pic2 = "{c["pic2"]}"')
+        # P306: kit page TOMLs use `txt`, dd.* components use `text`. Accept
+        # both, and preserve the text attributes the firmware relies on —
+        # dropping them in the photo-screensaver rewrite made the clock/date/
+        # weather text unreadable on a user photo.
+        if "txt" in c:
+            lines.append(f'txt = "{c["txt"]}"')
         if "text" in c:
             lines.append(f'txt = "{c["text"]}"')
+        if "txt_maxl" in c:
+            lines.append(f'txt_maxl = {int(c["txt_maxl"])}')
         if "font" in c:
             lines.append(f'font = "{c["font"]}"')
+        for key in ("pco", "bco"):
+            if key in c:
+                lines.append(f'{key} = "{c[key]}"')
+        for key in ("xcen", "ycen"):
+            if key in c:
+                lines.append(f"{key} = {int(c[key])}")
         if "sendkey" in c:
             lines.append(f"sendkey = {int(c['sendkey'])}")
         if "sta" in c:
@@ -55,6 +69,16 @@ def _write_toml(path: str, page_name: str, comps: list[dict]) -> None:
         lines.append("")
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
+
+
+def _toml_list(app_toml_text: str, key: str) -> list[str]:
+    """Read a ``key = [ ... ]`` string array from an app.toml (P306: fonts
+    and pictures are both kit-defined now — no hardcoded resource lists)."""
+    return [
+        line.strip().strip('"')
+        for line in app_toml_text.split(key + " = [", 1)[1].split("]", 1)[0].split(",")
+        if line.strip().strip('"')
+    ]
 
 
 def _write_app_toml(kit_dir: str, design: dd.PanelDesign, dest_dir: str,
@@ -66,15 +90,11 @@ def _write_app_toml(kit_dir: str, design: dd.PanelDesign, dest_dir: str,
     # to nonexistent pages.
     pages = (list(BASE_PAGES) + [p.name for p in design.pages]
              + [dd.detail_name(i) for i in range(len(dd.light_items(design)))])
-    pictures = [
-        line.strip().strip('"')
-        for line in open(os.path.join(kit_dir, "app.toml"), encoding="utf-8")
-        .read()
-        .split("pictures = [", 1)[1]
-        .split("]", 1)[0]
-        .split(",")
-        if line.strip().strip('"')
-    ]
+    kit_app = open(os.path.join(kit_dir, "app.toml"), encoding="utf-8").read()
+    pictures = _toml_list(kit_app, "pictures")
+    # P306: the font list comes from the kit too (the screensaver tab needs
+    # real size/weight fonts); no hardcoded resources in the generator.
+    fonts = _toml_list(kit_app, "fonts")
     pictures = pictures + [p for p in (extra_pictures or []) if p not in pictures]
     out = [
         "format = 1",
@@ -91,8 +111,7 @@ def _write_app_toml(kit_dir: str, design: dd.PanelDesign, dest_dir: str,
     out += [f'    "{p}",' for p in pictures]
     out.append("]")
     out.append("fonts = [")
-    out.append('    "NotoSans24",')
-    out.append('    "NotoSans64",')
+    out += [f'    "{f}",' for f in fonts]
     out.append("]")
     with open(os.path.join(dest_dir, "app.toml"), "w", encoding="utf-8") as f:
         f.write("\n".join(out) + "\n")
