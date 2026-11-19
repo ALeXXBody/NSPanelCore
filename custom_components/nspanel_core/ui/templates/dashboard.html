@@ -329,7 +329,9 @@ function uploadBg(i, input) {
   fd.append('page', design.pages[i].name);
   fd.append('file', file);
   nspanelFetch('/nspanel_core/dashboard_upload_background', { method: 'POST', body: fd })
-    .then(r => r.json()).then(j => {
+    .then(r => r.text()).then(t => {
+      var j;
+      try { j = JSON.parse(t); } catch (e) { setStatus('Upload failed: ' + t, true); return; }
       if (j.error) setStatus('Upload failed: ' + j.error, true);
       else { setStatus('Photo stored', false); loadDesign(); }
     }).catch(e => setStatus('Upload failed: ' + e, true));

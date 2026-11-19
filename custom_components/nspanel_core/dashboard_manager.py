@@ -220,9 +220,16 @@ class DashboardService:
         P255 (the user's design): the photo is kept as-is (the screensaver
         variant) and processed to the dashboard variant at generate time.
         """
-        import imghdr
+        # P270: imghdr was REMOVED in Python 3.13 (the user's HA) — the
+        # sniff is PIL's job now (already a dependency).
+        import io
+        from PIL import Image
 
-        ext = ".png" if (imghdr.what(None, file_bytes) == "png") else ".jpg"
+        try:
+            fmt = Image.open(io.BytesIO(file_bytes)).format
+        except Exception:
+            return {"error": "the file is not a readable image"}
+        ext = ".png" if fmt == "PNG" else ".jpg"
         origins = _dash_dir(self.hass)
         safe = f"orig_{mac}_{page}{ext}"
         with open(os.path.join(origins, safe), "wb") as f:
@@ -233,7 +240,8 @@ class DashboardService:
             self._designs[mac] = design
         target = next((p for p in design.pages if p.name == page), None)
         if target is None:
-            return {"error": f"page {page} is not in the design"}
+            target = dd.DashPage(name=page, title=page)
+            design.pages.append(target)
         target.background_image = safe
         # the underlying task is async: persist through the running loop
         import asyncio

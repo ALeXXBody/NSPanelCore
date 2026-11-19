@@ -3,6 +3,8 @@
 // screensaver (the splash has no touch areas - a static image otherwise).
 int sys0=0,sys1=0,sys2=0
 baud=115200
+// P269: every touch carries its coordinates (the page swipe)
+sendxy=1
 dim=100
 recmod=0
 printh 00 00 00 ff ff ff 88 ff ff ff

@@ -55,6 +55,27 @@ int main() {
         unsigned char f[1] = {0x65};
         CHECK(nsp_touch_decode(f, 0).empty(), "zero length -> empty");
     }
-    printf(g_fail ? "\n%d FAILURES\n" : "\nALL PASSED\n", g_fail);
+    
+/* -- P269: the 0x67 coordinate frames (the swipe) -- */
+    {
+        unsigned char f1[] = {0x67, 0x01, 0xE0, 0x00, 0x50, 0x01, 0xFF, 0xFF, 0xFF};
+        auto v = nsp_touch_decode(f1, sizeof(f1));
+        CHECK(v.size() == 1, "0x67: one coordinate frame decoded");
+        CHECK(v[0].x == 480 && v[0].y == 80, "0x67: coordinates parsed");
+        CHECK(v[0].event == 1 && v[0].page == -1, "0x67: press, no page");
+
+        unsigned char f2[] = {0x67, 0x00, 0x64, 0x00, 0x64, 0x01, 0xFF, 0xFF, 0xFF,
+                              0x65, 0x08, 0x03, 0x01, 0xFF, 0xFF, 0xFF};
+        v = nsp_touch_decode(f2, sizeof(f2));
+        CHECK(v.size() == 2, "0x67: interleaved with 0x65 decoded");
+        CHECK(v[0].x == 100 && v[0].y == 100 && v[0].event == 1, "0x67: first coords");
+        CHECK(v[1].page == 8 && v[1].component == 3 && v[1].x == -1, "0x65: no coords");
+
+        unsigned char f3[] = {0x67, 0x01, 0xE0, 0x00, 0x50, 0x01, 0xFF, 0xFF};
+        v = nsp_touch_decode(f3, sizeof(f3));
+        CHECK(v.empty(), "0x67: truncated frame skipped");
+    }
+
+printf(g_fail ? "\n%d FAILURES\n" : "\nALL PASSED\n", g_fail);
     return g_fail ? 1 : 0;
 }

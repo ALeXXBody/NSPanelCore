@@ -40,6 +40,10 @@ extern "C" void nsp_relay_toggle_pub(int relay);  // P210
 void nsp_display_set_raw_mode(bool on);  // P208#5
 
 bool nsp_display_ready(void) { return s_display_ready; }
+/* P269: the swipe gesture state (the dash pages, the 0x67 coordinates) */
+static int s_swipe_page = -1;        // the dash page id the gesture is on
+static int s_swipe_x1 = -1, s_swipe_y1 = -1;
+static bool s_swipe_navigated = false;  // the release was a swipe -> suppress
 const char *nsp_display_warning(void) {
     return s_display_ready ? "" : "No response from the display.";
 }
@@ -238,9 +242,56 @@ void nsp_display_touch_task(void *) {
              * log — the relay-latency diagnosis (quick taps lost?) needs
              * the raw frames with their arrival spacing. */
             {
-                char l[64];
-                snprintf(l, sizeof(l), "touch: p=%d c=%d e=%d", page, component, event);
+                char l[80];
+                if (f.page == -1)  // P269: a coordinate frame
+                    snprintf(l, sizeof(l), "touch: x=%d y=%d e=%d", f.x, f.y, f.event);
+                else
+                    snprintf(l, sizeof(l), "touch: p=%d c=%d e=%d", page, component, event);
                 nsp_mqtt_publish_log(l);
+            }
+
+            /* P269: the SWIPE — the coordinate frames (0x67, sendxy=1)
+             * track the gesture on the dashboard pages: a horizontal drag
+             * of >= 100 px (and < 80 px vertical) navigates to the next
+             * (drag left) or previous (drag right) dashboard page, and the
+             * following component release is suppressed so a swipe over a
+             * tile never toggles it. */
+            if (f.page == -1) {  // a 0x67 coordinate frame
+                if (f.event == 1) {
+                    s_swipe_x1 = f.x;
+                    s_swipe_y1 = f.y;
+                    s_swipe_page = -2;       // the press seen; the page arrives in the 0x65
+                    s_swipe_navigated = false;
+                } else if (f.event == 0 && s_swipe_page >= 0 &&
+                           nsp_dash_is_dash_page(s_swipe_page)) {
+                    int dx = f.x - s_swipe_x1;
+                    int dy = f.y - s_swipe_y1;
+                    int count = nsp_dash_page_count();
+                    int idx = nsp_dash_page_index(s_swipe_page);
+                    if (count > 1 && idx >= 0 && abs(dx) >= 100 && abs(dy) < 80) {
+                        int next = (idx + (dx < 0 ? 1 : count - 1)) % count;
+                        int target = nsp_dash_page_id(next);
+                        char cmd[24];
+                        snprintf(cmd, sizeof(cmd), "dp=%d", target);
+                        nsp_display_send_command(cmd);
+                        s_swipe_navigated = true;
+                        char l[64];
+                        snprintf(l, sizeof(l), "swipe: dx=%d -> page %d", dx, target);
+                        nsp_mqtt_publish_log(l);
+                    }
+                    s_swipe_page = -1;
+                }
+                continue;  // the coordinate frames run no component chains
+            }
+            /* the 0x65 press reveals the page the gesture is on */
+            if (pressed && nsp_dash_is_dash_page(page)) {
+                s_swipe_page = page;  // the coords are already stashed
+            }
+            /* the suppressed release: the swipe already navigated */
+            if (s_swipe_navigated && !pressed && nsp_dash_is_dash_page(page)) {
+                s_swipe_navigated = false;
+                s_swipe_page = -1;
+                continue;
             }
             /* P208#4: wake on release from the screensaver pages only —
              * the old code navigated on press from EVERY page (mid-
@@ -250,7 +301,12 @@ void nsp_display_touch_task(void *) {
             } else if (nsp_dash_is_dash_page(page)) {
                 /* P234: dash pages publish ONLY — the manager owns every
                  * action there (it generated the layout). No local relay
-                 * chains can misfire on a page the manager re-authored. */
+                 * chains can misfire on a page the manager re-authored.
+                 * P269: the SWIPE — the coordinates (0x67, sendxy=1) track
+                 * the gesture; a horizontal drag >= 100 px navigates to the
+                 * next/previous dashboard page (the manager's dash_map
+                 * order), and the release's component event is suppressed
+                 * so a swipe over a tile never toggles it. */
             } else if (event == 0) {  // releases act (P210)
                 if (page == HMI_HOME_PAGE_ID) {
                     if (component == HMI_HOME_REL1) nsp_relay_toggle_pub(1);

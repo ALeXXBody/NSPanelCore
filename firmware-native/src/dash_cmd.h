@@ -19,3 +19,7 @@ bool nsp_dash_page(const int *pages, int count, int page);
 bool nsp_dash_map_apply(const std::string &payload);
 void nsp_dash_map_clear(void);
 bool nsp_dash_is_dash_page(int page);
+/* P269: the dash pages in the manager's order — the swipe navigates them. */
+int nsp_dash_page_count(void);
+int nsp_dash_page_id(int index);
+int nsp_dash_page_index(int page);

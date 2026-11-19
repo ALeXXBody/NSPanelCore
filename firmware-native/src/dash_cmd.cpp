@@ -177,6 +177,19 @@ bool nsp_dash_map_apply(const std::string &payload) {
 
 void nsp_dash_map_clear(void) { s_dash_page_count = 0; }
 
+/* P269: the dash pages in the pushed order — the swipe walks them. */
+int nsp_dash_page_count(void) { return s_dash_page_count; }
+
+int nsp_dash_page_id(int index) {
+    return (index >= 0 && index < s_dash_page_count) ? s_dash_pages[index] : -1;
+}
+
+int nsp_dash_page_index(int page) {
+    for (int i = 0; i < s_dash_page_count; i++)
+        if (s_dash_pages[i] == page) return i;
+    return -1;
+}
+
 bool nsp_dash_is_dash_page(int page) {
     return nsp_dash_page(s_dash_pages, s_dash_page_count, page);
 }
