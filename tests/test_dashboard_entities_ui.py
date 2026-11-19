@@ -127,24 +127,31 @@ def test_entities_load_on_page_init_independent_of_the_design():
     assert "nspanelFetch('/nspanel_core/dashboard_entities'" in load
     assert ".then(studioJson)" in load
     assert "entities = j.entities || []" in load
-    assert "renderEntityLibrary()" in load
+    assert "renderItems(); renderPreview();" in load
+    assert "renderEntityLibrary" not in load
     assert "Failed to load entities" in load
     design = _FNS["loadDesign"]
     assert "Promise.all" not in design
     assert "dashboard_entities" not in design   # decoupled
-    assert "renderEntityLibrary()" in design     # still refreshed on panel change
+    assert "renderEntityLibrary" not in design  # no orphaned library call
 
 
-def test_the_searchable_library_is_in_the_markup_and_wired_to_both_views():
+def test_entity_search_lives_in_the_items_step_with_no_library_block():
+    """P301: the Entity cells ARE the searchable surface — there is no
+    separate 'Home Assistant entities / Imported automatically…' block."""
     assert 'id="entity_filter"' in HTML
-    assert 'id="entity_library"' in HTML
-    assert "Home Assistant entities" in HTML
-    assert "Imported automatically from Home Assistant" in HTML
-    assert "oninput=\"entityQuery=this.value;renderEntityLibrary();renderItems()\"" in HTML
+    assert 'id="entity_library"' not in HTML
+    assert "renderEntityLibrary" not in HTML
+    assert "Imported automatically from Home Assistant" not in HTML
+    assert "Items (what sits on the photo)" in HTML
+    assert "<th>Entity</th>" in HTML
+    assert 'oninput="entityQuery=this.value;renderItems()"' in HTML
+    assert "addItem();return false;" in HTML  # Enter adds the first match
     assert "var entityQuery = \"\";" in HTML
     # the user-visible copy must not narrate the migration/history
-    copy = _between(HTML, "<h3 class=\"text-sm font-semibold\" style=\"color:#e8eaec;margin-bottom:.25rem\">Home Assistant entities", "oninput=")
-    for word in ("P291", "P292", "401", "Unauthorized", "regression"):
+    copy = _between(HTML, "Items (what sits on the photo)", "</section>")
+    for word in ("P291", "P292", "401", "Unauthorized", "regression",
+                 "Imported automatically"):
         assert word not in copy
 
 
@@ -176,17 +183,21 @@ console.log(JSON.stringify(entities.map(function (e) {
     assert out[2]["kitchen"] is False and out[2]["domain"] is True
 
 
-def test_entity_library_renders_friendly_rows_and_a_place_button():
+def test_entity_cells_search_every_domain_and_show_name_and_id():
     script = """
 %s
 %s
 %s
 %s
+%s
+%s
+%s
+%s
 var rendered = {};
-var document = { getElementById: function (id) {
+var document = { querySelector: function () {
   return {
-    get innerHTML() { return rendered[id] || ''; },
-    set innerHTML(v) { rendered[id] = v; }
+    get innerHTML() { return rendered.items || ''; },
+    set innerHTML(v) { rendered.items = v; }
   };
 } };
 var entities = [
@@ -194,15 +205,21 @@ var entities = [
   {entity_id: 'switch.fan', name: 'Ceiling Fan', domain: 'switch'}
 ];
 var entityQuery = 'kitchen';
-renderEntityLibrary();
-console.log(JSON.stringify({html: rendered.entity_library}));
-""" % (_FNS["esc"], _FNS["entityLabel"], _FNS["entityMatches"],
-       _FNS["renderEntityLibrary"])
+var design = {pages: [], items: [
+  {id: 'i1', page: 'p1', widget: 'light', entity_id: 'light.kitchen',
+   label: 'Kitchen', slot: 0}
+]};
+var selectedRoom = 'p1', selectedItemId = null;
+renderItems();
+console.log(JSON.stringify({html: rendered.items}));
+""" % (_FNS["esc"], _FNS["opt"], _FNS["widgetDomain"], _FNS["widgetLabel"],
+       _FNS["entityLabel"], _FNS["entityMatches"], _FNS["renderItems"],
+       _FNS["widgetFromEntity"])
     html = _node_run(script)["html"]
-    assert "Kitchen Light" in html
-    assert "light.kitchen" in html
-    assert "addEntityItem('light.kitchen')" in html
-    assert "Ceiling Fan" not in html  # filtered out
+    assert "Kitchen Light" in html and "light.kitchen" in html  # name · id
+    assert 'value="light.kitchen" selected' in html
+    assert "Ceiling Fan" not in html  # filtered out of the cell
+    assert "No Home Assistant entities" not in html
 
 
 def test_add_entity_item_places_in_first_free_slot_with_a_friendly_label():
@@ -230,9 +247,9 @@ console.log(JSON.stringify({items: design.items, called: called}));
     assert "items" in out["called"] and "preview" in out["called"]
 
 
-def test_item_dropdown_uses_widget_domain_and_keeps_the_selection():
-    """The original called entityOpts(it.entity_id): widgetDomain() returned
-    'light.kitchen' and the dropdown was empty for every saved item."""
+def test_item_dropdown_offers_all_entities_and_keeps_the_selection():
+    """P301: every HA entity is searchable in the Entity cell, regardless of
+    the row's Type; the current selection stays visible even under a filter."""
     assert "entityOpts(it.widget, it.entity_id)" in HTML
     script = """
 %s
@@ -262,14 +279,22 @@ var design = {mac: 'm', pages: [], items: [
 var selectedRoom = 'p1';
 var selectedItemId = null;
 renderItems();
-console.log(JSON.stringify({html: rendered.items}));
+var allHtml = rendered.items;
+var entityQuery = 'fan';   // the saved light must not vanish from its own cell
+renderItems();
+console.log(JSON.stringify({all: allHtml, filtered: rendered.items}));
 """ % (_FNS["esc"], _FNS["opt"], _FNS["widgetDomain"], _FNS["widgetLabel"],
        _FNS["entityLabel"], _FNS["entityMatches"], _FNS["renderItems"])
-    html = _node_run(script)["html"]
+    result = _node_run(script)
+    html = result["all"]
     assert 'value="light.hall" selected' in html
     assert "Hall Light" in html          # friendly label, not raw id
     assert "Kitchen Light" in html
-    assert "Ceiling Fan" not in html     # wrong domain for a light widget
+    assert "Ceiling Fan" in html         # every domain, not widget-filtered
+    filtered = result["filtered"]
+    assert 'value="light.hall" selected' in filtered  # current choice retained
+    assert "Hall Light" in filtered
+    assert "Kitchen Light" not in filtered
 
 
 # -------------------------------------------------------------- the backend

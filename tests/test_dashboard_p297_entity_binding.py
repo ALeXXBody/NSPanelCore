@@ -60,13 +60,18 @@ def _node_run(script: str):
 
 # ---------------------------------------------------------------- the items
 
-def test_add_paths_never_fabricate_an_entityless_item():
-    """+Add item / empty-slot click now target a slot and send the user to the
-    library; only addEntityItem() (which binds a real entity) creates a tile."""
+def test_add_paths_bind_real_entities_and_never_fabricate_a_blank_tile():
+    """P301: the Entity-cell search IS the add surface — + Add item binds the
+    first matching HA entity; a preview click targets its slot. No path may
+    create an entity-less tile."""
     script = _js("addItem", "slotClick", "addEntityItem", "entityLabel",
-                 "widgetFromEntity") + """
+                 "widgetFromEntity", "entityMatches") + """
 var design = {pages: [{name: 'p1'}], items: []};
-var entities = [{entity_id: 'light.x', name: 'X Light', domain: 'light'}];
+var entities = [
+  {entity_id: 'light.x', name: 'X Light', domain: 'light'},
+  {entity_id: 'switch.fan', name: 'Fan', domain: 'switch'}
+];
+var entityQuery = '';
 var selectedRoom = 'p1', selectedItemId = null, targetSlot = null;
 var SLOTS = [[0,0],[1,1],[2,2],[3,3],[4,4],[5,5]];
 var statusText = '';
@@ -77,27 +82,36 @@ var document = { getElementById: function () {
   return { focus: function () {}, scrollIntoView: function () {} };
 } };
 var out = {};
-addItem();
-out.afterAddButton = {count: design.items.length, target: targetSlot, status: statusText};
+addItem();   // empty search: first unused HA entity
+out.afterAddButton = {count: design.items.length, target: targetSlot, status: statusText,
+  item: JSON.parse(JSON.stringify(design.items[0]))};
 slotClick(4);
 out.afterSlotClick = {count: design.items.length, target: targetSlot, status: statusText};
-addEntityItem('light.x');
-out.afterLibraryAdd = {count: design.items.length, target: targetSlot,
-  item: JSON.parse(JSON.stringify(design.items[0]))};
+entityQuery = 'fan';
+addItem();   // search picks the fan, preview click picks its spot
+out.afterSearchAdd = {count: design.items.length, target: targetSlot,
+  item: JSON.parse(JSON.stringify(design.items[1])), status: statusText};
 addEntityItem('');
 out.afterEmptyAdd = {count: design.items.length, status: statusText};
+entityQuery = 'nothing-matches-this';
+addItem();
+out.afterNoMatch = {count: design.items.length, status: statusText};
 out.blankCount = design.items.filter(function (it) { return !it.entity_id; }).length;
 console.log(JSON.stringify(out));
 """
     out = _node_run(script)
-    assert out["afterAddButton"]["count"] == 0
-    assert "library" in out["afterAddButton"]["status"]
-    assert out["afterSlotClick"]["count"] == 0 and out["afterSlotClick"]["target"] == 4
-    assert out["afterLibraryAdd"]["count"] == 1
-    assert out["afterLibraryAdd"]["item"]["slot"] == 4          # honored the target
-    assert out["afterLibraryAdd"]["item"]["entity_id"] == "light.x"
-    assert out["afterLibraryAdd"]["target"] is None             # consumed
-    assert out["afterEmptyAdd"]["count"] == 1                   # empty refused
+    assert out["afterAddButton"]["count"] == 1
+    assert out["afterAddButton"]["item"]["entity_id"] == "light.x"
+    assert out["afterAddButton"]["item"]["slot"] == 0
+    assert out["afterSlotClick"]["count"] == 1 and out["afterSlotClick"]["target"] == 4
+    assert "search" in out["afterSlotClick"]["status"].lower()
+    assert out["afterSearchAdd"]["count"] == 2
+    assert out["afterSearchAdd"]["item"]["entity_id"] == "switch.fan"
+    assert out["afterSearchAdd"]["item"]["slot"] == 4       # honored the target
+    assert out["afterSearchAdd"]["target"] is None          # consumed
+    assert out["afterEmptyAdd"]["count"] == 2               # empty refused
+    assert out["afterNoMatch"]["count"] == 2                # no fake fallback
+    assert "No Home Assistant entities match" in out["afterNoMatch"]["status"]
     assert out["blankCount"] == 0
 
 
@@ -139,7 +153,6 @@ function setStatus(t) { rendered.status = t; }
 function renderPages() { rendered.calls.push('pages'); }
 function renderItems() { rendered.calls.push('items'); }
 function renderPreview() { rendered.calls.push('preview'); }
-function renderEntityLibrary() { rendered.calls.push('library'); }
 var document = { getElementById: function (id) {
   if (id === 'panel_sel') return {options: [{dataset: {}}, {dataset: {id: '7'}}], selectedIndex: 1};
   if (id === 'pane_panel') return {classList: {contains: function () { return false; }}};
