@@ -79,6 +79,7 @@ class NSPanelCoreManager:
         self._report_listeners: list = []
         self._relay_listeners: dict = {}
         self._relay_state: dict = {}
+        self._light_unsubs: dict[str, object] = {}  # P279: per-entity listeners
         self._mqtt_unsubs: list = []
         self._last_telemetry: dict[str, dict] = {}
         self._log_backlog: dict[str, list] = {}
@@ -199,6 +200,10 @@ class NSPanelCoreManager:
         _LOGGER.info("NSPanel Core manager started")
 
     async def async_stop(self) -> None:
+        # P279 HIGH fix: the state-mirroring listener leaked on restart/reload
+        dash = getattr(self, "dash", None)
+        if dash is not None:
+            dash.stop_state_listener()
         for unsub in self._mqtt_unsubs:
             try:
                 unsub()
@@ -1049,7 +1054,10 @@ class NSPanelCoreManager:
                     "mqttmanager/events",
                     json.dumps({"event_type": "register_request", "nspanel_id": panel.id}),
                 )
-        await self.async_save()
+        # P279 LOW fix: the panel re-registers every 5 min — the full store
+        # write + the config/dash re-push per register was waste
+        if hasattr(self, "_save_timer"):
+            self._schedule_save()
 
     async def _send_panel_config(self, panel: PanelConfig) -> None:
         """Deliver config to an accepted panel.
@@ -1297,8 +1305,11 @@ class NSPanelCoreManager:
                     _LOGGER.warning(
                         "OTA auto-trigger disabled for %s after %s consecutive failed attempts (manual trigger only)",
                         panel.name, streak)
+                    # P279 MEDIUM fix: LATCH the firmware kind only — the
+                    # return previously skipped the TFT evaluation too, so a
+                    # wedged firmware OTA blocked the dashboard delivery.
                     self._last_ota_trigger[f"{mac}/fw"] = now
-                    return
+                    fw_cooled = False  # latched: never auto-trigger the fw
             else:
                 streaks[mac] = 0
         # P208#1: TFT loop brake — if a TFT attempt was made and the panel's
@@ -1314,8 +1325,9 @@ class NSPanelCoreManager:
                     _LOGGER.warning(
                         "TFT auto-update disabled for %s after %s consecutive failed attempts (manual trigger only)",
                         panel.name, tstreak)
+                    # P279 MEDIUM fix: latch the TFT kind only
                     self._last_ota_trigger[f"{mac}/tft"] = now
-                    return
+                    tft_cooled = False
             else:
                 streaks[mac + ":tft"] = 0
         await self._maybe_trigger_firmware_ota(panel, report, fw_cooled=fw_cooled, tft_cooled=tft_cooled)
@@ -1703,9 +1715,10 @@ class NSPanelCoreManager:
         )
         self.config.lights.append(light)
         await self.async_save()
-        self._unsub.append(
-            async_track_state_change_event(self.hass, [ha_entity], self._on_light_state_event)
-        )
+        # P279 LOW fix: per-light tracking — remove_light never removed
+        # these, so the listener list grew without bound across churn
+        unsub = async_track_state_change_event(self.hass, [ha_entity], self._on_light_state_event)
+        self._light_unsubs[ha_entity] = unsub
         state = self.hass.states.get(ha_entity)
         if state is not None:
             await self._ingest_light_state(light, state)
@@ -1714,8 +1727,11 @@ class NSPanelCoreManager:
     async def remove_light(self, light_id: int) -> None:
         light = self._light_by_id(light_id)
         self.config.lights = [l for l in self.config.lights if l.id != light_id]
+        # P279 LOW fix: the entity's state listener goes with it
+        unsub = self._light_unsubs.pop(light.ha_entity, None)
+        if unsub is not None:
+            unsub()
         await self.async_save()
-        pass
 
     async def update_panel(self, panel_id: int, body: dict) -> None:
         panel = next((p for p in self.config.panels if p.id == panel_id), None)

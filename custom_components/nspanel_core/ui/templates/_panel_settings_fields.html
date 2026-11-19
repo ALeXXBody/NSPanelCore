@@ -446,7 +446,130 @@
                   <input class="outline-none rounded-none bg-base-300 border-neutral rounded-e-md border border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/name"
                   type="text" class="input" name="button2_custom_mqtt_payload" value="{{ settings.button2_custom_mqtt_payload }}">
                   <span class="inline-flex items-center px-3 text-sm border border-neutral rounded-e-0 rounded-s-md peer-focus/name:border-accent">
+                    <svg class="w-4 h-4" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <title>Right button MQTT payload</title>
+                      <path d="M7,9A2,2 0 0,1 5,7A2,2 0 0,1 7,5A2,2 0 0,1 9,7A2,2 0 0,1 7,9M20,3H4A1,1 0 0,0 3,4V10A1,1 0 0,0
+                        4,11H20A1,1 0 0,0 21,10V4A1,1 0 0,0 20,3M7,19A2,2 0 0,1 5,17A2,2 0 0,1 7,15A2,2 0 0,1 9,17A2,2 0 0,1
+                        7,19M20,13H4A1,1 0 0,0 3,14V20A1,1 0 0,0 4,21H20A1,1 0 0,0 21,20V14A1,1 0 0,0 20,13Z"></path>
+                    </svg>
+                  </span>
+                </div>
+              </div>
 </div>
+            </div>
+
+
+          </div>
+        </div>
+
+        <!-- Relay default modes-->
+        <div class="md:flex md:flex-wrap md:justify-between mt-4">
+          <!-- Relay 1 default mode -->
+
+          <div class="flex-auto mr-1">
+            <h3 class="block mb-2 text-sm font-medium">Relay 1 default mode</h3>
+            <ul
+              class="items-center w-full text-sm font-medium border border-neutral rounded-lg sm:flex bg-base-300">
+              <li class="w-full sm:border-b-0 sm:border-r border-neutral">
+                <div class="flex items-center ps-3">
+                  <input id="relay1_off" type="radio" name="relay1_default_mode" value="False"
+                  {% if not settings.relay1_default_mode %}checked{% endif %}
+                    class="w-4 h-4 radio radio-accent">
+                  <label for="relay1_off"
+                    class="w-full py-3 ms-2 text-sm font-medium">Off</label>
+                </div>
+              </li>
+              <li class="w-full border-t sm:border-t-0 border-neutral">
+                <div class="flex items-center ps-3">
+                  <input id="relay1_on" type="radio" name="relay1_default_mode" value="True"
+                  {% if settings.relay1_default_mode %}checked{% endif %}
+                    class="w-4 h-4 radio radio-accent">
+                  <label for="relay1_on" class="w-full py-3 ms-2 text-sm font-medium">On</label>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Relay 2 default mode-->
+          <div class="flex-auto ml-1">
+            <h3 class="block mb-2 text-sm font-medium">Relay 2 default mode</h3>
+            <ul
+              class="items-center w-full text-sm font-medium border border-neutral rounded-lg sm:flex bg-base-300">
+              <li class="w-full sm:border-b-0 sm:border-r border-neutral">
+                <div class="flex items-center ps-3">
+                  <input id="relay2_off" type="radio" name="relay2_default_mode" value="False"
+                  {% if not settings.relay2_default_mode %}checked{% endif %}
+                    class="w-4 h-4 radio radio-accent">
+                  <label for="relay2_off"
+                    class="w-full py-3 ms-2 text-sm font-medium">Off</label>
+                </div>
+              </li>
+              <li class="w-full border-t sm:border-t-0 border-neutral">
+                <div class="flex items-center ps-3">
+                  <input id="relay2_on" type="radio" name="relay2_default_mode" value="True"
+                  {% if settings.relay2_default_mode %}checked{% endif %}
+                    class="w-4 h-4 radio radio-accent">
+                  <label for="relay2_on" class="w-full py-3 ms-2 text-sm font-medium">On</label>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Relay register as light -->
+        <div class="md:flex md:flex-wrap md:justify-between mt-4">
+          <!-- Relay 1 -->
+          <div class="flex-auto mr-1">
+            <h3 class="block mb-2 text-sm font-medium">Register relay 1 as</h3>
+            <ul
+              class="items-center w-full text-sm font-medium border border-neutral rounded-lg sm:flex bg-base-300">
+              <li class="w-full sm:border-b-0 sm:border-r border-neutral">
+                <div class="flex items-center ps-3">
+                  <input id="relay1_is_not_light" type="radio" name="relay1_is_light" value="False"
+                  {% if not settings.relay1_is_light %}checked{% endif %}
+                    class="w-4 h-4 radio radio-accent">
+                  <label for="relay1_is_not_light"
+                    class="w-full py-3 ms-2 text-sm font-medium">Switch</label>
+                </div>
+              </li>
+              <li class="w-full border-t sm:border-t-0 border-neutral">
+                <div class="flex items-center ps-3">
+                  <input id="relay1_is_light" type="radio" name="relay1_is_light" value="True"
+                  {% if settings.relay1_is_light %}checked{% endif %}
+                    class="w-4 h-4 radio radio-accent">
+                  <label for="relay1_is_light" class="w-full py-3 ms-2 text-sm font-medium">Light</label>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Relay 2 -->
+          <div class="flex-auto ml-1">
+            <h3 class="block mb-2 text-sm font-medium">Register relay 2 as</h3>
+            <ul
+              class="items-center w-full text-sm font-medium border border-neutral rounded-lg sm:flex bg-base-300">
+              <li class="w-full sm:border-b-0 sm:border-r border-neutral">
+                <div class="flex items-center ps-3">
+                  <input id="relay2_is_not_light" type="radio" name="relay2_is_light" value="False"
+                  {% if not settings.relay2_is_light %}checked{% endif %}
+                    class="w-4 h-4 radio radio-accent">
+                  <label for="relay2_is_not_light"
+                    class="w-full py-3 ms-2 text-sm font-medium">Switch</label>
+                </div>
+              </li>
+              <li class="w-full border-t sm:border-t-0 border-neutral">
+                <div class="flex items-center ps-3">
+                  <input id="relay2_is_light" type="radio" name="relay2_is_light" value="True"
+                  {% if settings.relay2_is_light %}checked{% endif %}
+                    class="w-4 h-4 radio radio-accent">
+                  <label for="relay2_is_light" class="w-full py-3 ms-2 text-sm font-medium">Light</label>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Screen brightness -->
 <div data-section="screen" {% if moved_hidden %}style="display:none"{% endif %}>
         <div class="mt-4">
           <label for="screen_dim_level" class="block mb-2 text-sm font-medium">Screen brightness</label>
@@ -515,10 +638,10 @@
               </svg>
             </span>
           </div>
+</div>
         </div>
 
         <!-- Temperature calibration -->
-</div>
         <div class="mt-4">
           <label for="temperature_calibration" class="block mb-2 text-sm font-medium">Temperature calibration</label>
           <div class="flex flex-row-reverse">

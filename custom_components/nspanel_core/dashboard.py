@@ -226,6 +226,11 @@ class FirstRunSaveView(HomeAssistantView):
     requires_auth = False
 
     async def post(self, request, **kwargs):
+        # P279 MEDIUM fix: the first-run credentials are a ONE-TIME gate —
+        # an unauthenticated re-POST re-pointed every panel's broker.
+        s = _manager(request).config.settings
+        if s.first_run_done:
+            return web.json_response({"error": "the first run is already done"}, status=403)
         manager = _manager(request)
         form = await request.post()
         s = manager.config.settings
@@ -1060,8 +1065,11 @@ class OtaFileView(HomeAssistantView):
         model = request.query.get("model", "sonoff")
         if self._filename in ("eu", "us"):
             kind, name = "tft", ("gui_us.tft" if self._filename == "us" else "gui.tft")
-            # P234: a per-panel dashboard TFT being delivered takes precedence
-            override = manager.dash.tft_override()
+            # P234: a per-panel dashboard TFT being delivered takes
+            # precedence — for THAT panel only (P279 HIGH fix)
+            requester = manager._panel_by_topic(
+                request.query.get("panel", "") or self._filename)
+            override = manager.dash.tft_override(requester.mac if requester else None)
             path = override if override else (
                 manager.servable_path(kind, name) or _tft_file(self._filename)
             )
@@ -1309,7 +1317,7 @@ class SaveTftFileView(OtaUploadView):
             return err
         # Pin the exact uploaded bytes: mirror into any overlay copy that
         # would otherwise shadow the upload, and record proof metadata.
-        await manager.hass.async_add_executor_job(
+        proof = await manager.hass.async_add_executor_job(
             manager.note_custom_tft, filename
         )
         # P208#3: one awaited re-hash as the LAST step (serialized on the loop).
@@ -2055,8 +2063,11 @@ class DashboardSaveView(HomeAssistantView):
         manager = _manager(request)
         try:
             body = await request.json()
-            design = _dd.PanelDesign.from_dict(body.get("design", {}))
-        except (ValueError, TypeError, KeyError):
+            raw = body.get("design", {})
+            if not isinstance(raw, dict):
+                return web.json_response({"error": "malformed body"}, status=400)
+            design = _dd.PanelDesign.from_dict(raw)
+        except (ValueError, TypeError, KeyError, AttributeError):
             return web.json_response({"error": "malformed body"}, status=400)
         try:
             await manager.dash.async_save_design(design)
@@ -2110,17 +2121,24 @@ class DashboardPhotoView(HomeAssistantView):
         from aiohttp import web as _web
         import io as _io
 
-        with Image.open(os.path.join(origins, target.background_image)) as im:
-            im = im.convert("RGB")
-            base = bgp.cover_crop(im)
-            if variant == "dash":
-                base = base.filter(ImageFilter.GaussianBlur(bgp.DASH_BLUR))
-                base = ImageEnhance.Brightness(base).enhance(bgp.DASH_BRIGHTNESS)
-                base = ImageEnhance.Contrast(base).enhance(bgp.DASH_CONTRAST)
-        buf = _io.BytesIO()
-        base.save(buf, format="JPEG", quality=90)
+        def _render_photo():
+            with Image.open(os.path.join(origins, target.background_image)) as im:
+                im = im.convert("RGB")
+                base = bgp.cover_crop(im)
+                if variant == "dash":
+                    base = base.filter(ImageFilter.GaussianBlur(bgp.DASH_BLUR))
+                    base = ImageEnhance.Brightness(base).enhance(bgp.DASH_BRIGHTNESS)
+                    base = ImageEnhance.Contrast(base).enhance(bgp.DASH_CONTRAST)
+            buf = _io.BytesIO()
+            base.save(buf, format="JPEG", quality=90)
+            return buf.getvalue()
+
+        try:
+            body = await manager.hass.async_add_executor_job(_render_photo)
+        except Exception:  # noqa: BLE001 — a corrupt stored photo must not 500
+            return _web.Response(status=404, text="no photo")
         return _web.Response(
-            body=buf.getvalue(), content_type="image/jpeg",
+            body=body, content_type="image/jpeg",
             headers={"Cache-Control": "no-cache"})
 
 
@@ -2150,7 +2168,18 @@ class DashboardBackgroundUploadView(HomeAssistantView):
         file_bytes = file.file.read()
         if len(file_bytes) > 8 * 1024 * 1024:
             return web.json_response({"error": "file too large (max 8 MB)"}, status=400)
-        result = manager.dash.store_background(mac, page, file_bytes, file.filename or "")
+
+        def _validate_and_store():
+            from PIL import Image
+            import io
+            try:
+                fmt = Image.open(io.BytesIO(file_bytes)).format
+            except Exception:
+                return {"error": "the file is not a readable image"}
+            return manager.dash.store_background(
+                mac, page, file_bytes, file.filename or "")
+
+        result = await manager.hass.async_add_executor_job(_validate_and_store)
         status = 200 if result.get("ok") else 400
         return web.json_response(result, status=status)
 

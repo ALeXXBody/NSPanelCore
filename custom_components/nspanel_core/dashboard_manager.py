@@ -10,6 +10,7 @@ The manager owns everything the panel stores nothing:
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import logging
@@ -49,6 +50,7 @@ class DashboardService:
         self._designs: dict[str, dd.PanelDesign] = {}
         self._maps: dict[str, dict] = {}          # mac → component map (delivered)
         self._page_ids: dict[str, list[int]] = {}  # mac → dash page ids
+        self._delivered: dict[str, dd.PanelDesign] = {}  # P279: the design the DELIVERED TFT matches
         self._serving: dict | None = None          # the send-to-panel slot
         self._pushed_map: dict[str, str] = {}      # mac → tft md5 the map rode on
         self._unsub_state = None
@@ -117,9 +119,24 @@ class DashboardService:
 
     # -- send to panel -----------------------------------------------------
 
-    def tft_override(self) -> str | None:
-        """The per-panel TFT being delivered right now (serving slot)."""
-        if self._serving and os.path.isfile(self._serving["path"]):
+    def tft_override(self, requesting_mac: str | None = None) -> str | None:
+        """The per-panel TFT being delivered right now (serving slot).
+
+        P279 HIGH fix: the slot is per-mac and EXPIRES — a global, never
+        expiring slot served the WRONG panel's dashboard TFT to every
+        other panel and wedged all future sends when the target was
+        offline. Only the triggered panel's download is honored; the slot
+        ages out after 10 minutes."""
+        if not self._serving:
+            return None
+        import time as _t
+
+        if _t.time() - self._serving.get("ts", 0) > 600:
+            self._serving = None
+            return None
+        if requesting_mac and self._serving["mac"] != requesting_mac:
+            return None  # the other panels keep their stock TFT
+        if os.path.isfile(self._serving["path"]):
             return self._serving["path"]
         return None
 
@@ -154,14 +171,27 @@ class DashboardService:
         panel = self.manager._panel_by_mac(mac)
         if panel is None or not panel.accepted:
             return {"error": "panel not found or not accepted"}
+        # P279 MEDIUM fix: reserve the slot BEFORE the await — two concurrent
+        # sends both passed the check and both published tft_update
+        self._serving = {"mac": mac, "path": "", "md5": "", "ts": 0, "reserving": True}
         try:
             path, md5, cmap, page_ids = await self.async_generate(design)
         except Exception as exc:  # noqa: BLE001
+            self._serving = None
             _LOGGER.exception("dashboard generate/compile failed for %s", mac)
             return {"error": f"compile failed: {exc}"}
-        self._serving = {"mac": mac, "path": path, "md5": md5}
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.exception("dashboard generate/compile failed for %s", mac)
+            return {"error": f"compile failed: {exc}"}
+        import time as _t
+
+        self._serving = {"mac": mac, "path": path, "md5": md5, "ts": _t.time()}
         self._maps[mac] = cmap
         self._page_ids[mac] = list(page_ids)
+        # P279 HIGH fix: route the touches/mirroring against the design the
+        # DELIVERED TFT matches — the edited design desynced the routing and
+        # a press toggled the WRONG entity after a slot swap
+        self._delivered[mac] = copy.deepcopy(design)
         await self._save()
         await self.manager._publish(
             self._cmd_topic(mac),
@@ -256,8 +286,18 @@ class DashboardService:
 
     # -- the user's room photos -------------------------------------------
 
+    _MAC_RE = __import__("re").compile(r"^[a-f0-9]{12}$")
+    _PAGE_RE = __import__("re").compile(r"^dash_[a-z0-9_]{1,9}$")
+
     def store_background(self, mac: str, page: str, file_bytes: bytes,
                          filename: str) -> dict:
+        """..."""
+        # P279 HIGH fix: the raw mac/page built the file path — a crafted
+        # page ("../..") wrote attacker files OUTSIDE the origins dir.
+        if not self._MAC_RE.match(mac or ""):
+            return {"error": "invalid panel"}
+        if not self._PAGE_RE.match(page or ""):
+            return {"error": "invalid page name"}
         """Store a room photo upload and reference it in the design.
 
         P255 (the user's design): the photo is kept as-is (the screensaver
@@ -286,6 +326,11 @@ class DashboardService:
             target = dd.DashPage(name=page, title=page)
             design.pages.append(target)
         target.background_image = safe
+        try:
+            design.validate()
+        except dd.DesignError as exc:
+            design.pages.remove(target)
+            return {"error": str(exc)}
         # the underlying task is async: persist through the running loop
         import asyncio
 
@@ -302,7 +347,9 @@ class DashboardService:
         """Resolve a panel touch to an action. Releases only."""
         if event != 0:
             return
-        design = self._designs.get(mac)
+        # P279 HIGH fix: route against the DELIVERED design — the edited
+        # one desynced from the TFT on the panel (wrong-entity presses)
+        design = self._delivered.get(mac) or self._designs.get(mac)
         cmap = self._maps.get(mac)
         if design is None or not cmap:
             return
@@ -433,10 +480,13 @@ class DashboardService:
     # -- HA state mirroring ------------------------------------------------
 
     def start_state_listener(self) -> None:
+        self.stop_state_listener()  # P279 HIGH fix: no duplicate listeners
         @callback
         def _on_state(event: Event) -> None:
             entity_id = event.data["entity_id"]
             new_state = event.data.get("new_state")
+            if new_state is None:
+                return  # P279 MEDIUM fix: a removed entity crashed the listener
             for mac, design in self._designs.items():
                 cmap = self._maps.get(mac)
                 if not cmap or not self._page_ids.get(mac):

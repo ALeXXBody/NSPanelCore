@@ -160,7 +160,7 @@
 
       <h3 class="text-sm font-semibold" style="color:#e8eaec;margin:1rem 0 .5rem">Items (what sits on the photo)</h3>
       <table class="table is-fullwidth" id="items_tbl" style="background:transparent;color:#c8cbce">
-        <thead><tr><th>Room</th><th>Position</th><th>Widget</th><th>Entity</th><th>Label</th><th></th></tr></thead>
+        <thead><tr><th>Entity</th><th>Widget</th><th>Label</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
       <button class="studio-btn ghost" style="padding:5px 14px" onclick="addItem()">+ Add item</button>
@@ -169,21 +169,18 @@
       <p class="is-size-7" style="color:#8b9099;margin-bottom:.75rem">
         The panel's own settings — MOVED here from the settings page.
       </p>
-      <form id="panel_settings_form" style="display:contents">
-        <!-- every input stays inside THIS form — the groups are visual only -->
-        <div data-group="screen" style="margin-bottom:1rem">
-          <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">SCREEN &amp; SCREENSAVER</h4>
-          <div data-slot="screen"></div>
-        </div>
-        <div data-group="buttons" style="margin-bottom:1rem">
-          <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">PHYSICAL BUTTONS</h4>
-          <div data-slot="buttons"></div>
-        </div>
-        <div data-group="general">
-          <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">GENERAL</h4>
-          <div id="panel_settings_box"></div>
-        </div>
-      </form>
+      <div data-group="screen" style="margin-bottom:1rem">
+        <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">SCREEN &amp; SCREENSAVER</h4>
+        <div data-slot="screen"></div>
+      </div>
+      <div data-group="buttons" style="margin-bottom:1rem">
+        <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">PHYSICAL BUTTONS</h4>
+        <div data-slot="buttons"></div>
+      </div>
+      <div data-group="general">
+        <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">GENERAL</h4>
+        <div id="panel_settings_box"></div>
+      </div>
       <button class="studio-btn" style="margin-top:.75rem" onclick="savePanelSettings()">Save panel settings</button>
     </div>
   </div>
@@ -235,9 +232,14 @@ function loadDesign() {
   }).catch(e => setStatus('Failed to load: ' + e, true));
 }
 
+function esc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function opt(v, label, sel) {
   if (sel === undefined) { sel = label; label = v; }
-  return '<option value="' + v + '"' + (v === sel ? ' selected' : '') + '>' + label + '</option>';
+  return '<option value="' + esc(v) + '"' + (v === sel ? ' selected' : '') + '>' + esc(label) + '</option>';
 }
 
 function onWidgetChange(i, widget) {
@@ -259,12 +261,12 @@ function renderPages() {
       '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + p.title + '" onclick="event.stopPropagation()" onchange="design.pages[' + i + '].title=this.value;renderPreview()"></td>' +
       '<td onclick="event.stopPropagation()"><input type="file" accept="image/*" style="width:10rem;color:#8b9099" onchange="uploadBg(' + i + ', this)">' +
       (p.background_image ? '<span class="tag is-small" style="background:rgba(57,200,232,.15);color:#39c8e8">photo ✓</span>' : '<span class="tag is-small" style="background:rgba(255,255,255,.06);color:#5a6068">no photo — black screen</span>') + '</td>' +
-      '<td onclick="event.stopPropagation()"><button class="button is-small is-danger" onclick="design.pages.splice(' + i + ',1);renderPages();renderItems();renderPreview()">✕</button></td>' +
+      '<td onclick="event.stopPropagation()"><button class="button is-small is-danger" onclick="deletePage(' + i + ')">✕</button></td>' +
       '</tr>';
   }).join('');
   var ss = document.getElementById('scr_sel');
   ss.innerHTML = design.pages.map(function (p) {
-    return '<option value="' + p.name + '"' + (design.screensaver_page === p.name ? ' selected' : '') + '>' + p.title + '</option>';
+    return '<option value="' + esc(p.name) + '"' + (design.screensaver_page === p.name ? ' selected' : '') + '>' + esc(p.title) + '</option>';
   }).join('');
 }
 
@@ -306,8 +308,8 @@ function renderItems() {
     var sel = it.id === selectedItemId;
     return '<tr' + (sel ? ' style="outline:1px solid rgba(57,200,232,.4)"' : '') + '>' +
       '<td><select class="select is-small" style="background:#141821;color:#e8eaec;max-width:13rem" onchange="design.items[' + i + '].entity_id=this.value;design.items[' + i + '].widget=widgetFromEntity(this.value);renderItems();renderPreview()">' + entityOpts(it.entity_id) + '</select></td>' +
-      '<td><select class="select is-small" style="background:#141821;color:#e8eaec" onchange="design.items[' + i + '].widget=this.value;renderPreview()">' + widgetOpts(it.widget) + '</select></td>' +
-      '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + it.label + '" onchange="design.items[' + i + '].label=this.value;renderPreview()"></td>' +
+      '<td><select class="select is-small" style="background:#141821;color:#e8eaec" onchange="onWidgetChange(' + i + ', this.value)">' + widgetOpts(it.widget) + '</select></td>' +
+      '<td><input class="input is-small" maxlength="24" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + esc(it.label) + '" onchange="design.items[' + i + '].label=this.value;renderPreview()"></td>' +
       '<td><button class="button is-small is-danger" onclick="removeItem(\'' + it.id + '\')">✕</button></td>' +
       '</tr>';
   }).join('');
@@ -332,6 +334,15 @@ function slotClick(slot) {
   design.items.push(it);
   selectedItemId = it.id;
   renderItems(); renderPreview();
+}
+
+function deletePage(i) {
+  var name = design.pages[i].name;
+  // P279 HIGH fix: the orphaned items bricked every subsequent save
+  design.items = design.items.filter(function (it) { return it.page !== name; });
+  if (selectedRoom === name) selectedRoom = null;
+  design.pages.splice(i, 1);
+  renderPages(); renderItems(); renderPreview();
 }
 
 function addPage() {
@@ -454,7 +465,10 @@ function renderPreview() {
   l1.innerHTML = '<div class="pv-btnlbl">' + (b1 ? lbl(b1, "Left button") : "Left button") + '</div>';
   l2.innerHTML = '<div class="pv-btnlbl">' + (b2 ? lbl(b2, "Right button") : "Right button") + '</div>';
 
-  var activeRoom = design.pages.find(p => p.name === (design.screensaver_page || (design.pages[0] && design.pages[0].name)));
+  // P279 MEDIUM fix: no screensaver room chosen -> the plain screensaver
+  // (the panel keeps the authored one — the preview must not invent a photo)
+  var activeRoom = design.screensaver_page
+    ? design.pages.find(p => p.name === design.screensaver_page) : null;
   var isScr = view === 'scr' && activeRoom;
   document.getElementById('pv_scr').style.display = isScr ? 'block' : 'none';
   var tilesEl = document.getElementById('pv_tiles');
@@ -500,7 +514,7 @@ function renderPreview() {
       html += '<div class="studio-tile" style="left:' + s[0] + 'px;top:' + s[1] + 'px;' + selCls + '"' +
         ' onclick="slotClick(' + slot + ')">' +
         '<div class="sw" style="' + swStyle + '"></div>' +
-        '<div class="lbl">' + (taken.label || taken.entity_id || '?') + '</div>' +
+        '<div class="lbl">' + esc(taken.label || taken.entity_id || '?') + '</div>' +
         (val ? '<div class="val">' + val + '</div>' : '') +
         '</div>';
     } else {

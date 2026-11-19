@@ -89,7 +89,7 @@ class DashPage:
 
     def validate(self) -> None:
         if not _PAGE_NAME_RE.match(self.name or ""):
-            raise DesignError(f"page name {self.name!r}: dash_ + a-z/0-9/_ (max 25)")
+            raise DesignError(f"page name {self.name!r}: dash_ + a-z/0-9/_ (max 14)")
         if not _NAME_RE.match(self.title or ""):
             raise DesignError(f"page title {self.title!r}: too long or invalid")
         if self.background and not __import__("re").compile(
@@ -178,7 +178,7 @@ GRID_SLOTS = [
 ]
 TILE_W, TILE_H = 150, 110
 BTN_H = 88
-LBL_H = 20
+LBL_H = 26
 
 _TEXT_SAFETY = {**{c: " " for c in range(32)}, ord('"'): "'", ord("\\"): "/"}
 
