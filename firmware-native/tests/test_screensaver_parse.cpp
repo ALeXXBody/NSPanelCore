@@ -156,6 +156,47 @@ int main() {
     CHECK(!has(ecmds, "screensaver.wWind.txt=\"\\u00ff\\xFFbad\""),
           "raw escape bytes never reach the display");
 
+    /* ---- P306 Step 5: the exact payload build_panel_screensaver_config() publishes ----
+     * This is the same JSON the studio save path emits (json.dumps -> \\u00b0C),
+     * so a firmware panel parses the manager's real contract, not a hand-made twin. */
+    NspScreensaverConfig pub_cfg;
+    const std::string published =
+        "{\"clock\":{\"font\":\"xlarge\",\"weight\":\"bold\",\"color\":\"#39c8e8\",\"align\":\"right\"},"
+        "\"date\":{\"font\":\"medium\",\"weight\":\"bold\",\"color\":\"#8b93a1\",\"align\":\"left\"},"
+        "\"weather\":{\"outside_temp\":true,\"room_temp\":true,\"forecast\":true,\"wind\":true,"
+        "\"rain\":true,\"sunrise_sunset\":true,"
+        "\"outside_temp_override\":\"21.0\\u00b0C\",\"room_temp_override\":\"19.5\\u00b0C\"}}";
+    CHECK(nsp_screensaver_parse(published, pub_cfg) && pub_cfg.valid,
+          "published manager payload accepted");
+    CHECK(pub_cfg.clock.font_id == 7 && pub_cfg.clock.align == 2 && pub_cfg.clock.pco == 0x3E5D,
+          "published clock maps to xlarge bold, right, #39c8e8");
+    CHECK(pub_cfg.date.font_id == 3 && pub_cfg.date.align == 0 && pub_cfg.date.pco == 0x8C94,
+          "published date maps to medium bold, left, #8b93a1");
+    CHECK(pub_cfg.flags.outside_temp && pub_cfg.flags.room_temp && pub_cfg.flags.forecast &&
+          pub_cfg.flags.wind && pub_cfg.flags.rain && pub_cfg.flags.sunrise_sunset,
+          "published weather flags all on");
+    CHECK(pub_cfg.outside_override == "21.0" + DEG + "C", "published outside override decoded");
+    CHECK(pub_cfg.room_override == "19.5" + DEG + "C", "published room override decoded");
+
+    auto pub_style = nsp_screensaver_style_commands(pub_cfg);
+    CHECK(has(pub_style, "screensaver.curTime.font=7"), "published style drives the panel clock font");
+    CHECK(has(pub_style, "screensaver.curTime.xcen=2"), "published style drives the panel clock align");
+    CHECK(has(pub_style, "mini.curDay.font=3"), "published style drives the panel date font");
+
+    const std::string published_weather =
+        "{\"icon\":\"sunny\",\"temp\":\"21.0\\u00b0C\",\"wind\":\"12 km/h\","
+        "\"sunrise\":\"06:12\",\"sunset\":\"19:45\",\"maxmin\":\"23\\u00b0C/9\\u00b0C\","
+        "\"prepro\":\"0.2 mm\",\"forecast\":[{\"day\":\"Mon\",\"icon\":\"sunny\","
+        "\"maxmin\":\"23\\u00b0C/9\\u00b0C\",\"prepro\":\"mm 20%\",\"wind\":\"12 km/h\"}]}";
+    NspWeatherData pub_w;
+    CHECK(nsp_weather_parse(published_weather, pub_w) && pub_w.valid, "published weather payload accepted");
+    auto pub_wcmds = nsp_weather_commands(pub_w, pub_cfg, "18.0" + DEG + "C");
+    CHECK(safe(pub_wcmds), "published weather commands safe");
+    CHECK(has(pub_wcmds, "screensaver.wOutTemp.txt=\"21.0" + DEG + "C\""),
+          "published outside override wins over weather topic value");
+    CHECK(has(pub_wcmds, "screensaver.wRoomTemp.txt=\"19.5" + DEG + "C\""),
+          "published room override wins over the panel sensor");
+
     printf(g_fail ? "\n%d FAILURES\n" : "\nALL PASSED\n", g_fail);
     return g_fail ? 1 : 0;
 }
