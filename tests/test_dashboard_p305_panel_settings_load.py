@@ -98,15 +98,17 @@ console.log(JSON.stringify({box: box.innerHTML, status: status}));
     assert out["status"]
 
 
-def test_screensaver_picker_lives_in_the_pagebar_and_pages_have_a_number_column():
-    bar = HTML[HTML.index('<div class="studio-pagebar">'):]
-    bar = bar[:bar.index("</div>")]
-    assert 'for="scr_sel"' in bar
-    assert "Picture shown on the screensaver:" in bar
-    assert "# column" in bar
-    assert "Editing" not in bar
+def test_screensaver_picker_lives_in_the_screensaver_pane():
+    # P308: "Picture shown on the screensaver:" belongs to the
+    # Build-the-screensaver tab, not the dashboard design pane.
+    pane = HTML[HTML.index('id="pane_screensaver"'):]
+    pane = pane[:pane.index("</div>\n    </div>")] if "</div>\n    </div>" in pane else pane
+    assert 'for="scr_sel"' in pane
+    assert "Picture shown on the screensaver:" in pane
+    assert "Editing" not in pane
+    design_pane = HTML[HTML.index('id="pane_design"'):HTML.index('id="pane_panel"')]
+    assert "scr_sel" not in design_pane      # moved out of the design pane
     step1 = HTML[HTML.index('<span class="studio-step-title">Pages</span>'):]
     step1 = step1[:step1.index('id="pane_panel"')]
-    assert "scr_sel" not in step1          # moved out of step 1
     assert "<th>#</th>" in step1
     assert "studio-page-pick" in HTML

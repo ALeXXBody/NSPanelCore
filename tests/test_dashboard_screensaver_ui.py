@@ -81,6 +81,8 @@ class _Req:
         self.query = query or {}
         self.match_info = match_info or {}
         self.headers = {"Cookie": "nspanel_session=sess"} if cookie else {}
+        if self.headers.get("Cookie"):
+            self.headers["Content-Type"] = "application/json"
         self._body = body
 
     async def json(self):
@@ -107,8 +109,12 @@ def test_get_view_renders_real_stored_values_and_real_entity_options():
     assert 'value="medium" selected' in html
     for flag in ("show_ss_wind", "show_ss_sunrise_sunset"):
         assert re.search(r'name="%s"[^>]*\bchecked\b' % flag, html), flag
-    assert re.search(r'value="sensor\.outside"\s+selected>Outside Temperature', html)
-    assert re.search(r'value="sensor\.inside"\s*>Inside Temperature', html)
+    # P308: the entity choice is a type-to-filter box — the stored value lives
+    # in the hidden input, the options in the hidden source select.
+    assert 'name="ss_outside_temp_entity" id="ss_outside_temp_entity" value="sensor.outside"' in html
+    assert 'name="ss_room_temp_entity" id="ss_room_temp_entity" value=""' in html
+    assert re.search(r'<option value="sensor\.outside">Outside Temperature</option>', html)
+    assert re.search(r'<option value="sensor\.inside">Inside Temperature</option>', html)
     assert 'value="light.kitchen"' not in html      # only temp-capable domains
 
     # All fifteen persisted fields are editable, and the form targets the

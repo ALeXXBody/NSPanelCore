@@ -57,11 +57,10 @@ def test_every_user_facing_label_says_page():
         "<b>2</b> Build pages",
         "the dots below the tiles are your pages",
         '<label for="scr_sel">Picture shown on the screensaver:</label>',
-        'Use the # column below to pick the page you want to edit.',
         '<span class="studio-step-title">Pages</span>',
         "Each page is one screen on the panel.",
         "<th>#</th><th>Page name</th><th>Picture</th>",
-        "+ Add page",
+        'title="Add a page after this one"',      # P308: + on every page row
         "put it on the page selected above",
         "add it to this page",
         "Add a Home Assistant entity to this page",
@@ -70,6 +69,8 @@ def test_every_user_facing_label_says_page():
         "No items on this page",
     ):
         assert copy in HTML, copy
+    # P308: the separate add button is gone — pages are added from the rows.
+    assert "+ Add page" not in HTML
 
 
 def test_page_identifiers_are_renamed_everywhere():
@@ -89,6 +90,7 @@ def test_new_page_defaults_and_numbered_page_pick():
 var design = {pages: [], items: [], screensaver_page: ''};
 var selectedPage = null, status = '';
 function renderPreview() {}
+function renderItems() {}
 function setStatus(t) { status = t; }
 var tb = {innerHTML: ''}, ss = {innerHTML: '', value: ''};
 var document = {

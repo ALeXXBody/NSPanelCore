@@ -821,12 +821,26 @@ class DashboardScreensaverSaveView(HomeAssistantView):
         panel = next((p for p in manager.config.panels if p.id == panel_id), None)
         if panel is None:
             return web.json_response({"error": "Panel not found"}, status=404)
-        try:
-            body = await request.json()
-        except (ValueError, TypeError):
-            return web.json_response({"error": "malformed body"}, status=400)
-        if not isinstance(body, dict):
-            return web.json_response({"error": "malformed body"}, status=400)
+        # P308: the form must save from EVERY submission path. The studio's
+        # inline JS posts JSON, but a plain form post (urlencoded/multipart)
+        # must not die with "malformed body" — accept both transports.
+        if "application/json" in (request.headers.get("Content-Type") or ""):
+            try:
+                body = await request.json()
+            except (ValueError, TypeError):
+                return web.json_response({"error": "malformed body"}, status=400)
+            if not isinstance(body, dict):
+                return web.json_response({"error": "malformed body"}, status=400)
+        else:
+            try:
+                form = await request.post()
+            except (ValueError, TypeError, AssertionError):
+                return web.json_response({"error": "malformed body"}, status=400)
+            body = {k: str(v) for k, v in form.items() if not hasattr(v, "file")}
+            # Checkboxes: presence = checked (an absent flag means unchecked —
+            # skipping it would silently keep the old value).
+            for flag in SS_FLAGS:
+                body[flag] = flag in form
 
         updates: dict[str, Any] = {}
         errors: dict[str, str] = {}
@@ -2573,12 +2587,9 @@ class DashboardBackgroundUploadView(HomeAssistantView):
             return web.json_response({"error": "file too large (max 8 MB)"}, status=400)
 
         def _validate_and_store():
-            from PIL import Image
-            import io
-            try:
-                Image.open(io.BytesIO(file_bytes)).format
-            except Exception:
-                return {"error": "the file is not a readable image"}
+            reject = _dd.image_reject_error(file_bytes)
+            if reject:
+                return {"error": reject}
             return manager.dash.store_background(
                 mac, page, file_bytes, filename)
 

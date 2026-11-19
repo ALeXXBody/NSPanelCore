@@ -308,11 +308,10 @@ class DashboardService:
         import io
         from PIL import Image
 
-        try:
-            fmt = Image.open(io.BytesIO(file_bytes)).format
-        except Exception:
-            return {"error": "the file is not a readable image"}
-        ext = ".png" if fmt == "PNG" else ".jpg"
+        reject = dd.image_reject_error(file_bytes)
+        if reject:
+            return {"error": reject}
+        ext = ".png" if Image.open(io.BytesIO(file_bytes)).format == "PNG" else ".jpg"
         origins = _dash_dir(self.hass)
         safe = f"orig_{mac}_{page}{ext}"
         with open(os.path.join(origins, safe), "wb") as f:
@@ -358,11 +357,10 @@ class DashboardService:
         import secrets
         from PIL import Image
 
-        try:
-            fmt = Image.open(io.BytesIO(file_bytes)).format
-        except Exception:
-            return {"error": "the file is not a readable image"}
-        ext = ".png" if fmt == "PNG" else ".jpg"
+        reject = dd.image_reject_error(file_bytes)
+        if reject:
+            return {"error": reject}
+        ext = ".png" if Image.open(io.BytesIO(file_bytes)).format == "PNG" else ".jpg"
         safe = f"gal_{mac}_{secrets.token_hex(6)}{ext}"
         with open(os.path.join(_dash_dir(self.hass), safe), "wb") as f:
             f.write(file_bytes)

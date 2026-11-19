@@ -33,6 +33,25 @@ class DesignError(ValueError):
     """Invalid dashboard design — the message is user-facing."""
 
 
+def image_reject_error(file_bytes: bytes) -> str | None:
+    """P308: WHY a photo upload was rejected — the user-facing reason.
+
+    Returns None when PIL can open the bytes. HEIC (every iPhone photo by
+    default) gets its own actionable message instead of a generic one.
+    """
+    import io
+    from PIL import Image
+
+    try:
+        Image.open(io.BytesIO(file_bytes)).format
+        return None
+    except Exception:
+        if (len(file_bytes) > 11 and file_bytes[4:8] == b"ftyp"
+                and file_bytes[8:10] in (b"he", b"mi", b"ms")):
+            return "HEIC photos are not supported — use JPG or PNG"
+        return "the file is not a readable image"
+
+
 @dataclass
 class DashItem:
     """One entity placement on one dash page."""

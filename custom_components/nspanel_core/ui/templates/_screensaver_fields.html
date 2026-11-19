@@ -4,15 +4,25 @@
 {% macro ss_option(name, current, value, label) -%}
 <option value="{{ value }}" {% if current == value %}selected{% endif %}>{{ label }}</option>
 {%- endmacro %}
-{% macro ss_entity_select(name, current) -%}
-<select name="{{ name }}" id="{{ name }}" class="ss-control">
-  <option value="" {% if not current %}selected{% endif %}>Use the global / panel sensor</option>
+{# P308: the entity choice is a type-to-filter search box. The visible search
+   input never submits — the hidden input keeps the field name so the saved
+   payload is unchanged — and the option list is rendered server-side into a
+   hidden [data-ss-source] select that the studio's JS filters. #}
+{% macro ss_entity_picker(name, current) -%}
+<div class="ss-entity-picker" data-ss-picker="{{ name }}">
+  <input type="hidden" name="{{ name }}" id="{{ name }}" value="{{ current }}">
+  <input type="search" class="ss-control ss-entity-search" autocomplete="off"
+         placeholder="Type to filter Home Assistant sensors…">
+  <div class="ss-entity-list" style="display:none"></div>
+</div>
+<select data-ss-source="{{ name }}" hidden aria-hidden="true" tabindex="-1">
+  <option value="">Use the global / panel sensor</option>
   {%- for entity in entities %}
-  <option value="{{ entity.entity_id }}" {% if entity.entity_id == current %}selected{% endif %}>{{ entity.label }}</option>
+  <option value="{{ entity.entity_id }}">{{ entity.label }}</option>
   {%- endfor %}
 </select>
 {%- endmacro %}
-<form id="screensaver_form" data-authed data-panel-id="{{ panel_info.data.id }}"
+<form id="screensaver_form" data-panel-id="{{ panel_info.data.id }}"
       action="/nspanel_core/api/screensaver_save/{{ panel_info.data.id }}" method="post">
   <div class="p-4 bg-base-100 rounded-md shadow-lg w-full" data-section="screensaver">
 
@@ -81,7 +91,6 @@
     <div class="divider my-4"></div>
 
     <span class="block mb-2 text-xl">Weather details</span>
-    <p class="text-xs opacity-60 mb-3">Each detail can be hidden. Leave the entity on the global / panel sensor to use the shared weather feed or the panel's own temperature sensor.</p>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="screensaver-weather-row">
         <label class="flex items-center gap-2 text-sm">
@@ -90,7 +99,7 @@
           Show outside temperature
         </label>
         <label for="ss_outside_temp_entity" class="block mt-1 text-xs opacity-70">Home Assistant sensor</label>
-        {{ ss_entity_select('ss_outside_temp_entity', panel_info.data.ss_outside_temp_entity) }}
+        {{ ss_entity_picker('ss_outside_temp_entity', panel_info.data.ss_outside_temp_entity) }}
       </div>
       <div class="screensaver-weather-row">
         <label class="flex items-center gap-2 text-sm">
@@ -99,7 +108,7 @@
           Show room temperature
         </label>
         <label for="ss_room_temp_entity" class="block mt-1 text-xs opacity-70">Home Assistant sensor</label>
-        {{ ss_entity_select('ss_room_temp_entity', panel_info.data.ss_room_temp_entity) }}
+        {{ ss_entity_picker('ss_room_temp_entity', panel_info.data.ss_room_temp_entity) }}
       </div>
       <div class="screensaver-weather-row">
         <label class="flex items-center gap-2 text-sm">

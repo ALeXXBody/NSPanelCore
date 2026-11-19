@@ -108,23 +108,24 @@ var out = {};
 out.slug = pageSlug('Living Room 2!');
 addPage();
 out.added = JSON.parse(JSON.stringify(design.pages[1]));
+out.selectedAfterAdd = selectedPage;      // P308: the new page becomes the edit target
 renamePage(0, 'Kitchen');
 out.renamed = JSON.parse(JSON.stringify(design.pages[0]));
 out.itemPage = design.items[0].page;
 out.screensaver = design.screensaver_page;
-out.selectedPage = selectedPage;
-out.unique = uniquePageName(pageSlug('Kitchen'), 1);  // page 0 already has it
+out.selectedPage = selectedPage;out.unique = uniquePageName(pageSlug('Kitchen'), 1);  // page 0 already has it
 out.calls = calls;
 console.log(JSON.stringify(out));
 """
     out = _node_run(script)
     assert out["slug"] == "livingroo"   # firmware-safe: dash_ + max 9 chars
     assert out["added"]["name"] == "dash_newpage"
+    assert out["selectedAfterAdd"] == "dash_newpage"   # P308: new page selected
     assert out["renamed"] == {"name": "dash_kitchen", "title": "Kitchen",
                               "background_image": ""}
     assert out["itemPage"] == "dash_kitchen"      # items rebound atomically
     assert out["screensaver"] == "dash_kitchen"
-    assert out["selectedPage"] == "dash_kitchen"
+    assert out["selectedPage"] == "dash_newpage"  # still on the page addPage chose
     assert out["unique"] == "dash_kitchen_2"
     assert "save" in out["calls"]
 

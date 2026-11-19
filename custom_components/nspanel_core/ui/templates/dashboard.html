@@ -124,6 +124,15 @@
     font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
   .studio-subtab:hover { color: #c8cbce; }
   .studio-subtab.active { color: #06222b; background: #39c8e8; border-color: #39c8e8; }
+  /* P308: the weather-detail sensor search boxes */
+  .ss-entity-search { background:#141821; color:#e8eaec; border:1px solid #2a2f3a;
+    border-radius:8px; padding:6px 10px; width:100%; font-size:13px; }
+  .ss-entity-list { background:#141821; border:1px solid #2a2f3a; border-radius:8px;
+    margin-top:4px; max-height:180px; overflow-y:auto; position:relative; z-index:30; }
+  .ss-entity-item { padding:6px 10px; font-size:12px; color:#c8cbce; cursor:pointer;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ss-entity-item:hover { background:rgba(57,200,232,.15); color:#39c8e8; }
+  .ss-entity-item.dim { color:#8b9099; }
   .studio-tabpane { display: none; border: 1px solid #2a2f3a; border-radius: 0 12px 12px 12px;
     background: #0d1016; padding: 16px; }
   .studio-tabpane.active { display: block; }
@@ -255,6 +264,11 @@
       <section class="studio-step plain">
         <div class="studio-step-head"><span class="studio-step-num">5</span><span class="studio-step-title">Build the screensaver</span></div>
         <p class="studio-step-desc">Style the clock and date, choose the weather details, then save. The preview above shows every change before it reaches the panel.</p>
+        <div class="studio-pagebar">
+          <label for="scr_sel">Picture shown on the screensaver:</label>
+          <select id="scr_sel" onchange="design.screensaver_page=this.value;renderPreview()"
+                  style="background:#141821;color:#e8eaec;border:1px solid #2a2f3a;border-radius:8px;padding:4px 10px"></select>
+        </div>
         <div id="screensaver_settings_box">
           <p class="text-sm opacity-60">Choose a panel above to load its screensaver settings.</p>
         </div>
@@ -262,13 +276,6 @@
     </div>
 
     <div class="studio-tabpane" id="pane_design">
-      <div class="studio-pagebar">
-        <label for="scr_sel">Picture shown on the screensaver:</label>
-        <select id="scr_sel" onchange="design.screensaver_page=this.value;renderPreview()"
-                style="background:#141821;color:#e8eaec;border:1px solid #2a2f3a;border-radius:8px;padding:4px 10px"></select>
-        <span class="hint">Use the # column below to pick the page you want to edit.</span>
-      </div>
-
       <section class="studio-step">
         <div class="studio-step-head"><span class="studio-step-num">1</span><span class="studio-step-title">Pages</span></div>
         <p class="studio-step-desc">Each page is one screen on the panel. Type a name and press Enter — that name becomes the page on the panel.</p>
@@ -277,7 +284,6 @@
             <thead><tr><th>#</th><th>Page name</th><th>Picture</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
-          <button class="studio-btn ghost" style="padding:5px 14px" onclick="addPage()">+ Add page</button>
         </div>
       </section>
 
@@ -475,7 +481,8 @@ function renderPages() {
       '<td onclick="event.stopPropagation()"><input type="file" accept="image/*" style="width:10rem;color:#8b9099" onchange="uploadBg(' + i + ', this)">' +
       (p.background_image ? '<span class="tag is-small" style="background:rgba(57,200,232,.15);color:#39c8e8">photo ✓</span>' : '<span class="tag is-small" style="background:rgba(255,255,255,.06);color:#5a6068">no photo — black screen</span>') +
       ' <button class="button is-small is-ghost" style="color:#39c8e8" onclick="document.getElementById(\'photo_gallery\').scrollIntoView({behavior:\'smooth\',block:\'nearest\'})">gallery</button></td>' +
-      '<td onclick="event.stopPropagation()"><button class="button is-small is-danger" onclick="deletePage(' + i + ')">✕</button></td>' +
+      '<td onclick="event.stopPropagation()"><button class="button is-small is-ghost" style="color:#39c8e8" onclick="addPage(' + i + ')" title="Add a page after this one">+</button>' +
+      ' <button class="button is-small is-danger" onclick="deletePage(' + i + ')">✕</button></td>' +
       '</tr>';
   }).join('');
   var ss = document.getElementById('scr_sel');
@@ -635,14 +642,17 @@ function uniquePageName(base, exceptIndex) {
   }
   return root.slice(0, 11) + '_' + Date.now().toString(36).slice(-2);
 }
-function addPage() {
+function addPage(afterIndex) {
   var title = 'New page';
   var page = { name: uniquePageName(pageSlug(title)), title: title,
                background: 'bg_plain', background_image: '' };
-  design.pages.push(page);
-  renderPages(); renderPreview();
+  // P308: the + on a page row inserts right after it; no argument appends.
+  var at = (typeof afterIndex === 'number' && afterIndex >= -1) ? afterIndex + 1 : design.pages.length;
+  design.pages.splice(at, 0, page);
+  selectedPage = page.name;
+  renderPages(); renderItems(); renderPreview();
   var inputs = document.querySelectorAll('#pages_tbl tbody input.input');
-  var last = inputs[inputs.length - 1];
+  var last = inputs[at] || inputs[inputs.length - 1];
   if (last && last.focus) last.focus();
   setStatus('Type a page name — the internal name is created from it.', false);
 }
@@ -761,7 +771,7 @@ function uploadGalleryPhotos(input) {
   var jobs = files.map(function (file) {
     return new Promise(function (resolve) {
       var reader = new FileReader();
-      reader.onerror = function () { resolve(''); };
+      reader.onerror = function () { resolve({ name: file.name, ok: false, error: 'could not read the file' }); };
       reader.onload = function () {
         var data = String(reader.result || '').split(',')[1] || '';
         nspanelFetch('/nspanel_core/dashboard_gallery', {
@@ -769,16 +779,23 @@ function uploadGalleryPhotos(input) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ panel: mac, filename: file.name, data: data })
         }).then(studioJson)
-          .then(function (j) { resolve(j.name || ''); })
-          .catch(function () { resolve(''); });
+          .then(function (j) { resolve({ name: file.name, ok: true, photo: j.name || '' }); })
+          .catch(function (e) { resolve({ name: file.name, ok: false, error: String(e && e.message || e) }); });
       };
       reader.readAsDataURL(file);
     });
   });
-  Promise.all(jobs).then(function (names) {
-    var ok = names.filter(Boolean).length;
+  // P308: a rejected file was swallowed silently — the user saw "the page
+  // refreshed without any picture" with no reason. Report every failure.
+  Promise.all(jobs).then(function (results) {
+    var ok = results.filter(function (r) { return r.ok && r.photo; });
+    var bad = results.filter(function (r) { return !r.ok || !r.photo; });
     input.value = '';
-    setStatus(ok ? ('Added ' + ok + ' photo(s) to the gallery') : 'No photos were added', !ok);
+    var msg = ok.length ? ('Added ' + ok.length + ' photo(s) to the gallery') : 'No photos were added';
+    if (bad.length) msg += ' — failed: ' + bad.map(function (r) {
+      return r.name + ' (' + r.error + ')';
+    }).join('; ');
+    setStatus(msg, bad.length > 0 && !ok.length);
     return loadGallery();
   });
 }
@@ -857,7 +874,14 @@ function loadPanelSettings() {
   if (settingsLoading) return; // P297: no duplicate fetches from tab + zone jumps
   settingsLoading = true;
   box.innerHTML = '<p class="text-sm opacity-60">Loading…</p>';
-  nspanelFetch('/nspanel_core/dashboard/panel_settings?panel_id=' + panelId)
+  var fetchP;
+  try {
+    fetchP = nspanelFetch('/nspanel_core/dashboard/panel_settings?panel_id=' + panelId);
+  } catch (e) {
+    // a synchronous failure must never leave the loader flag stuck
+    fetchP = Promise.reject(e);
+  }
+  fetchP
     .then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)))
     .then(t => {
       settingsLoading = false;
@@ -915,7 +939,15 @@ function loadScreensaverSettings() {
   if (screensaverLoading) return;
   screensaverLoading = true;
   box.innerHTML = '<p class="text-sm opacity-60">Loading…</p>';
-  nspanelFetch('/nspanel_core/dashboard/screensaver_settings?panel_id=' + panelId)
+  var fetchP;
+  try {
+    fetchP = nspanelFetch('/nspanel_core/dashboard/screensaver_settings?panel_id=' + panelId);
+  } catch (e) {
+    // a synchronous failure must never leave the loader flag stuck — the
+    // settings would then never load again until a page reload
+    fetchP = Promise.reject(e);
+  }
+  fetchP
     .then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)))
     .then(function (t) {
       screensaverLoading = false;
@@ -956,6 +988,58 @@ function bindScreensaverBehavior() {
   if (!form || typeof form.querySelectorAll !== 'function') return;
   form.querySelectorAll('select, input').forEach(function (el) {
     el.addEventListener('change', renderScreensaverPreview);
+  });
+  ssBindEntityPickers(form);
+}
+
+/* P308: the weather-detail sensor pickers — type-to-filter search boxes over
+ * the server-rendered option list ([data-ss-source]). The hidden input keeps
+ * the field name, so the saved payload is identical to the old <select>. */
+function ssBindEntityPickers(form) {
+  if (!form || typeof form.querySelectorAll !== 'function') return;
+  form.querySelectorAll('[data-ss-picker]').forEach(function (picker) {
+    var name = picker.dataset.ssPicker;
+    var hidden = picker.querySelector('input[type=hidden]');
+    var search = picker.querySelector('.ss-entity-search');
+    var list = picker.querySelector('.ss-entity-list');
+    var source = document.querySelector('select[data-ss-source="' + name + '"]');
+    if (!hidden || !search || !list || !source) return;
+    var options = Array.prototype.slice.call(source.options).map(function (o) {
+      return { id: o.value, label: o.text };
+    });
+    function chosen() {
+      return options.find(function (o) { return o.id && o.id === hidden.value; }) || null;
+    }
+    function showList(q) {
+      q = String(q || '').toLowerCase().trim();
+      var matches = options.filter(function (o) {
+        return !o.id || !q || o.label.toLowerCase().indexOf(q) !== -1 ||
+               o.id.toLowerCase().indexOf(q) !== -1;
+      });
+      list.innerHTML = matches.map(function (o) {
+        var text = o.id ? (o.label + '  ·  ' + o.id) : 'Use the global / panel sensor';
+        return '<div class="ss-entity-item' + (o.id ? '' : ' dim') + '" data-v="' + esc(o.id) + '">' + esc(text) + '</div>';
+      }).join('');
+      list.style.display = matches.length ? 'block' : 'none';
+      Array.prototype.forEach.call(list.children, function (item) {
+        item.addEventListener('mousedown', function (ev) {
+          ev.preventDefault();
+          hidden.value = item.dataset.v;
+          var c = chosen();
+          search.value = c ? c.label : '';
+          list.style.display = 'none';
+          hidden.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      });
+    }
+    var cur = chosen();
+    if (cur) search.value = cur.label;
+    else if (hidden.value) search.value = hidden.value;
+    search.addEventListener('focus', function () { showList(search.value); });
+    search.addEventListener('input', function () { showList(search.value); });
+    search.addEventListener('blur', function () {
+      setTimeout(function () { list.style.display = 'none'; }, 150);
+    });
   });
 }
 
@@ -1056,7 +1140,11 @@ function renderPreview() {
       sbg.className = 'bg';
       sbg.src = '/nspanel_core/dashboard_photo?panel=' + encodeURIComponent(currentMac()) +
         '&page=' + encodeURIComponent(scrPage.name) + '&variant=scr&r=' + Date.now();
-      sbg.onerror = function () { sbg.style.display = 'none'; };
+      sbg.onerror = function () {
+        sbg.style.display = 'none';
+        if (scrPage.background_image)
+          setStatus('The screensaver photo could not be loaded — re-upload it.', true);
+      };
     } else {
       sbg.style.display = 'none';
       if (sbg.removeAttribute) sbg.removeAttribute('src');
@@ -1082,7 +1170,13 @@ function renderPreview() {
     bg.className = 'bg dash';
     bg.src = '/nspanel_core/dashboard_photo?panel=' + encodeURIComponent(currentMac()) +
       '&page=' + encodeURIComponent(page.name) + '&variant=dash&r=' + Date.now();
-    bg.onerror = function () { bg.style.display = 'none'; };
+    // P308: a chosen photo that will not load must say so — silently hiding
+    // the background looked like "the page refreshed without any picture".
+    bg.onerror = function () {
+      bg.style.display = 'none';
+      if (page.background_image)
+        setStatus('The photo on "' + (page.title || page.name) + '" could not be loaded — re-upload it.', true);
+    };
   }
   var pageItems = design.items.filter(it => it.page === page.name);
   var html = '';
