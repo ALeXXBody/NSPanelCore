@@ -146,14 +146,14 @@
       <div class="studio-tab" data-tab="panel" onclick="setTab('panel')">Panel settings</div>
     </div>
     <div class="studio-tabpane active" id="pane_design">
-      <h3 class="text-sm font-semibold" style="color:#e8eaec;margin-bottom:.5rem">Rooms (dashboard pages)</h3>
+      <h3 class="text-sm font-semibold" style="color:#e8eaec;margin-bottom:.5rem">Pages</h3>
       <table class="table is-fullwidth" id="pages_tbl" style="background:transparent;color:#c8cbce">
-        <thead><tr><th>Room title</th><th>Photo</th><th></th></tr></thead>
+        <thead><tr><th>Page title</th><th>Photo</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
-      <button class="studio-btn ghost" style="padding:5px 14px" onclick="addPage()">+ Add room</button>
+      <button class="studio-btn ghost" style="padding:5px 14px" onclick="addPage()">+ Add page</button>
       <p class="is-size-7" style="color:#8b9099;margin:.5rem 0 1rem">
-        Screensaver background from room:
+        Screensaver background from page:
         <select id="scr_sel" onchange="design.screensaver_page=this.value;renderPreview()"
                 style="background:#141821;color:#e8eaec;border:1px solid #2a2f3a;border-radius:8px;padding:4px 10px"></select>
       </p>
@@ -318,12 +318,12 @@ function addPage() {
   renderPages(); renderPreview();
 }
 function addItem() {
-  if (!selectedRoom) { setStatus('Select a room first (click its row)', true); return; }
+  if (!selectedRoom) { setStatus('Select a page first (click its row)', true); return; }
   var used = design.items.filter(it => it.page === selectedRoom).map(it => it.slot);
   for (var s = 0; s < 6; s++) {
     if (used.indexOf(s) === -1) { slotClick(s); return; }
   }
-  setStatus('All 6 positions are taken in this room', true);
+  setStatus('All 6 positions are taken in this page', true);
 }
 
 function uploadBg(i, input) {
