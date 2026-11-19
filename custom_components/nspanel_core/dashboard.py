@@ -2326,16 +2326,44 @@ class DashboardBackgroundUploadView(HomeAssistantView):
         if not await _nspanel_auth_ok(request):
             return web.json_response({"error": "Unauthorized"}, status=401)
         manager = _manager(request)
-        try:
-            data = await request.post()
-            mac = str(data.get("panel", ""))
-            page = str(data.get("page", ""))
-            file = data.get("file")
-        except Exception:  # noqa: BLE001
-            return web.json_response({"error": "malformed upload"}, status=400)
-        if not mac or not page or file is None or not getattr(file, "file", None):
-            return web.json_response({"error": "panel, page and file required"}, status=400)
-        file_bytes = file.file.read()
+        mac = page = filename = ""
+        file_bytes = None
+        # P291b: accept BOTH transports. The studio now sends JSON with the
+        # image base64-encoded — some browser/proxy paths dropped the
+        # multipart parts entirely (the user's "panel, page and file required"
+        # even though the FormData was built correctly). Multipart stays for
+        # older clients; the specific error below names the missing field.
+        if "application/json" in request.headers.get("Content-Type", ""):
+            try:
+                body = await request.json()
+            except Exception:  # noqa: BLE001
+                return web.json_response({"error": "malformed upload"}, status=400)
+            mac = str(body.get("panel", ""))
+            page = str(body.get("page", ""))
+            filename = str(body.get("filename", ""))
+            import base64 as _base64
+            try:
+                file_bytes = _base64.b64decode(str(body.get("data", "")), validate=True)
+            except Exception:  # noqa: BLE001
+                return web.json_response(
+                    {"error": "the file is not a readable image"}, status=400)
+        else:
+            try:
+                data = await request.post()
+                mac = str(data.get("panel", ""))
+                page = str(data.get("page", ""))
+                file = data.get("file")
+                if file is not None and getattr(file, "file", None):
+                    file_bytes = file.file.read()
+                    filename = file.filename or ""
+            except Exception:  # noqa: BLE001
+                return web.json_response({"error": "malformed upload"}, status=400)
+        missing = [name for name, value in (("panel", mac), ("page", page)) if not value]
+        if file_bytes is None:
+            missing.append("file")
+        if missing:
+            return web.json_response(
+                {"error": "missing " + ", ".join(missing)}, status=400)
         if len(file_bytes) > 8 * 1024 * 1024:
             return web.json_response({"error": "file too large (max 8 MB)"}, status=400)
 
@@ -2343,11 +2371,11 @@ class DashboardBackgroundUploadView(HomeAssistantView):
             from PIL import Image
             import io
             try:
-                fmt = Image.open(io.BytesIO(file_bytes)).format
+                Image.open(io.BytesIO(file_bytes)).format
             except Exception:
                 return {"error": "the file is not a readable image"}
             return manager.dash.store_background(
-                mac, page, file_bytes, file.filename or "")
+                mac, page, file_bytes, filename)
 
         result = await manager.hass.async_add_executor_job(_validate_and_store)
         status = 200 if result.get("ok") else 400

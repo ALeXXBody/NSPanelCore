@@ -224,7 +224,14 @@ function loadDesign() {
   if (document.getElementById('pane_panel').classList.contains('active')) loadPanelSettings();
   document.getElementById('panel_settings_box').innerHTML =
     '<p class="text-sm opacity-60">Choose a panel to load its settings.</p>';
-  if (!mac) { document.getElementById('pv_frame').style.opacity = .35; return; }
+  if (!mac) {
+    // P291b: never leave a stale design on screen with an empty selector —
+    // the old pages kept their file inputs and uploaded an empty panel id.
+    design = { mac: "", pages: [], items: [], screensaver_page: "" };
+    selectedRoom = null; selectedItemId = null;
+    renderPages(); renderItems(); renderPreview();
+    document.getElementById('pv_frame').style.opacity = .35; return;
+  }
   document.getElementById('pv_frame').style.opacity = 1;
   Promise.all([
     nspanelFetch('/nspanel_core/dashboard_design?panel=' + mac, { credentials: 'same-origin' })
@@ -369,17 +376,31 @@ function addItem() {
 function uploadBg(i, input) {
   var file = input.files[0];
   if (!file) return;
-  var fd = new FormData();
-  fd.append('panel', currentMac());
-  fd.append('page', design.pages[i].name);
-  fd.append('file', file);
-  nspanelFetch('/nspanel_core/dashboard_upload_background', { method: 'POST', body: fd })
-    .then(r => r.text()).then(t => {
+  // P291b: the panel selector can show the placeholder while an older design
+  // is still on screen — fall back to the mac the design was loaded for.
+  var mac = currentMac() || design.mac;
+  var page = design.pages[i] ? design.pages[i].name : "";
+  if (!mac || !page) {
+    setStatus('Upload failed: select a panel and a page first', true); return;
+  }
+  // P291b: JSON + base64 instead of FormData — the multipart parts were
+  // arriving empty on the user's browser (the server saw no panel/page/file).
+  var reader = new FileReader();
+  reader.onerror = function () { setStatus('Upload failed: could not read the file', true); };
+  reader.onload = function () {
+    var data = String(reader.result || '').split(',')[1] || '';
+    nspanelFetch('/nspanel_core/dashboard_upload_background', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ panel: mac, page: page, filename: file.name, data: data })
+    }).then(r => r.text()).then(t => {
       var j;
       try { j = JSON.parse(t); } catch (e) { setStatus('Upload failed: ' + t, true); return; }
       if (j.error) setStatus('Upload failed: ' + j.error, true);
       else { setStatus('Photo stored', false); loadDesign(); }
     }).catch(e => setStatus('Upload failed: ' + e, true));
+  };
+  reader.readAsDataURL(file);
 }
 
 function saveDesign() {

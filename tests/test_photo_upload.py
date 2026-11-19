@@ -55,15 +55,21 @@ class _FileField:
 
 
 class _UploadRequest:
-    """The aiohttp surface the view consumes (post + headers + query)."""
+    """The aiohttp surface the view consumes (post/json + headers + query)."""
 
-    def __init__(self, fields: dict, cookie: str = ""):
+    def __init__(self, fields: dict, cookie: str = "", json_body: dict | None = None):
         self._fields = fields
+        self._json = json_body
         self.headers = {"Cookie": cookie}
+        if json_body is not None:
+            self.headers["Content-Type"] = "application/json"
         self.query = {}
 
     async def post(self):
         return self._fields
+
+    async def json(self):
+        return self._json
 
 
 def _fields(**overrides):
@@ -158,6 +164,48 @@ def test_upload_view_stores_a_valid_multipart_photo(tmp_path):
     svc.hass.add_job.assert_called_once()
 
 
+def test_upload_view_accepts_the_studio_json_path(tmp_path):
+    """P291b: the studio's base64 JSON transport stores the same photo."""
+    import base64
+
+    svc = _service(tmp_path)
+    mgr = _mgr(svc, with_session=True)
+    body = {
+        "panel": MAC, "page": PAGE, "filename": "photo.jpg",
+        "data": base64.b64encode(_jpeg()).decode(),
+    }
+    with patch("nspanel_core.dashboard._manager", return_value=mgr):
+        resp = _run(
+            DashboardBackgroundUploadView().post(
+                _UploadRequest({}, cookie=f"{SESSION_COOKIE}=sess", json_body=body)
+            )
+        )
+    assert resp.status == 200, resp.text
+    stored = svc.design(MAC).pages[0].background_image
+    assert stored.startswith("orig_")
+    assert (tmp_path / "nspanel_core_dashboards" / stored).exists()
+
+
+def test_upload_view_names_the_missing_field(tmp_path):
+    """P291b: 'panel, page and file required' hid which value was empty."""
+    import base64
+
+    svc = _service(tmp_path)
+    mgr = _mgr(svc, with_session=True)
+    with patch("nspanel_core.dashboard._manager", return_value=mgr):
+        resp = _run(
+            DashboardBackgroundUploadView().post(
+                _UploadRequest(
+                    {}, cookie=f"{SESSION_COOKIE}=sess",
+                    json_body={"panel": "", "page": PAGE,
+                               "data": base64.b64encode(_jpeg()).decode()},
+                )
+            )
+        )
+    assert resp.status == 400
+    assert "missing panel" in resp.text
+
+
 def test_upload_view_rejects_a_non_image(tmp_path):
     svc = _service(tmp_path)
     mgr = _mgr(svc, with_session=True)
@@ -183,7 +231,7 @@ def test_upload_view_rejects_missing_fields(tmp_path):
             )
         )
     assert resp.status == 400
-    assert "required" in resp.text
+    assert "missing" in resp.text and "file" in resp.text
 
 
 def test_upload_view_admits_the_manager_session_cookie(tmp_path):
@@ -260,6 +308,18 @@ def test_every_studio_endpoint_uses_the_session_gate(tmp_path, view, method):
     with patch("nspanel_core.dashboard._manager", return_value=member):
         resp = _run(handler(_MemberRequest()))
     assert resp.status != 401, f"{view.__name__} rejected its own session"
+
+
+def test_studio_js_uses_the_robust_upload_transport():
+    """P291b: the inline studio JS must not rely on the dropped FormData."""
+    html = (REPO / "custom_components" / "nspanel_core" / "ui" /
+            "templates" / "dashboard.html").read_text()
+    assert "readAsDataURL(file)" in html
+    assert "dashboard_upload_background" in html
+    assert "'Content-Type': 'application/json'" in html
+    assert "currentMac() || design.mac" in html
+    # the stale-design guard clears the old pages when the selector is empty
+    assert "design = { mac: \"\", pages: [], items: [], screensaver_page: \"\" };" in html
 
 
 def test_store_background_rejects_a_bad_mac_and_a_traversal_page(tmp_path):
