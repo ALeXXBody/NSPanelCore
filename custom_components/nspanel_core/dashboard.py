@@ -2189,9 +2189,13 @@ class DashboardDesignView(HomeAssistantView):
 
     url = f"{URL_BASE}/dashboard_design"
     name = "nspanel_core:dashboard_design"
-    requires_auth = True
+    # P291: the studio is reached by a plain navbar link — the P287 manager
+    # session cookie is the credential, not HA's Bearer-only middleware.
+    requires_auth = False
 
     async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.json_response({"error": "Unauthorized"}, status=401)
         manager = _manager(request)
         mac = request.query.get("panel", "")
         design = manager.dash.design(mac)
@@ -2209,9 +2213,11 @@ class DashboardSaveView(HomeAssistantView):
 
     url = f"{URL_BASE}/dashboard_save"
     name = "nspanel_core:dashboard_save"
-    requires_auth = True
+    requires_auth = False  # P291: the studio's session-cookie gate, below
 
     async def post(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.json_response({"error": "Unauthorized"}, status=401)
         from .dashboard_design import DesignError
 
         manager = _manager(request)
@@ -2235,9 +2241,11 @@ class DashboardSendView(HomeAssistantView):
 
     url = f"{URL_BASE}/dashboard_send"
     name = "nspanel_core:dashboard_send"
-    requires_auth = True
+    requires_auth = False  # P291: the studio's session-cookie gate, below
 
     async def post(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.json_response({"error": "Unauthorized"}, status=401)
         manager = _manager(request)
         try:
             body = await request.json()
@@ -2309,9 +2317,14 @@ class DashboardBackgroundUploadView(HomeAssistantView):
 
     url = f"{URL_BASE}/dashboard_upload_background"
     name = "nspanel_core:dashboard_upload_background"
-    requires_auth = True
+    # P291: HA's requires_auth only accepts a Bearer token / HA session —
+    # the studio's P287 24h cookie was left out, so every upload 401'd in
+    # the middleware before this handler ran. Use the studio's own gate.
+    requires_auth = False
 
     async def post(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.json_response({"error": "Unauthorized"}, status=401)
         manager = _manager(request)
         try:
             data = await request.post()
@@ -2346,11 +2359,13 @@ class DashboardEntitiesView(HomeAssistantView):
 
     url = f"{URL_BASE}/dashboard_entities"
     name = "nspanel_core:dashboard_entities"
-    requires_auth = True
+    requires_auth = False  # P291: the studio's session-cookie gate, below
 
     _DOMAINS = ("light", "switch", "scene", "sensor", "climate")
 
     async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.json_response({"error": "Unauthorized"}, status=401)
         manager = _manager(request)
         out = []
         for state in manager.hass.states.async_all():

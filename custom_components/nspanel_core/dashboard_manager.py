@@ -331,10 +331,11 @@ class DashboardService:
         except dd.DesignError as exc:
             design.pages.remove(target)
             return {"error": str(exc)}
-        # the underlying task is async: persist through the running loop
-        import asyncio
-
-        self.hass.loop.create_task(self._save())
+        # P291: this method runs INSIDE hass.async_add_executor_job (a worker
+        # thread). loop.create_task() from a foreign thread is not thread-safe
+        # — the save could be dropped or raise on HA's debug loop. add_job()
+        # marshals the coroutine onto the loop via call_soon_threadsafe.
+        self.hass.add_job(self._save())
         return {"ok": True, "stored": safe}
 
     def origins_dir(self) -> str:
