@@ -162,11 +162,18 @@
     </div>
     <div class="studio-tabpane" id="pane_panel">
       <p class="is-size-7" style="color:#8b9099;margin-bottom:.75rem">
-        The panel's own settings — the same ones the settings page shows, moved here.
+        The panel's own settings — MOVED here from the settings page.
       </p>
-      <div id="panel_settings_box" style="color:#c8cbce">
-        <p class="text-sm opacity-60">Choose a panel to load its settings.</p>
+      <div data-group="screen" style="margin-bottom:1rem">
+        <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">SCREEN &amp; SCREENSAVER</h4>
       </div>
+      <div data-group="buttons" style="margin-bottom:1rem">
+        <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">PHYSICAL BUTTONS</h4>
+      </div>
+      <div data-group="general">
+        <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">GENERAL</h4>
+      </div>
+      <form id="panel_settings_form" style="display:contents"></form>
       <button class="studio-btn" style="margin-top:.75rem" onclick="savePanelSettings()">Save panel settings</button>
     </div>
   </div>
@@ -321,7 +328,18 @@ function loadPanelSettings() {
       var typeSel = document.getElementById('panel_type');
       if (typeSel) typeSel.addEventListener('change', renderPreview);
       renderPreview();  // the button-zone labels + the device frame follow the settings
-      box.querySelector('form')?.addEventListener('submit', function (ev) {
+      var form = box.querySelector('form');
+      if (!form) return;
+      // relocate the moved sections into their dedicated groups (P266:
+      // the button + screen settings live here, REMOVED from the settings page)
+      ['buttons', 'screen'].forEach(function (sec) {
+        var wrap = box.querySelector('[data-section="' + sec + '"]');
+        var group = document.querySelector('[data-group="' + sec + '"]');
+        if (wrap && group) group.appendChild(wrap);
+        wrap?.removeAttribute('style');
+      });
+      form.id = 'panel_settings_form';
+      form.addEventListener('submit', function (ev) {
         ev.preventDefault();
         var fd = new FormData(ev.target);
         fetch(ev.target.action, { method: 'POST', credentials: 'same-origin', body: fd })
@@ -331,7 +349,7 @@ function loadPanelSettings() {
     });
 }
 function savePanelSettings() {
-  var form = document.querySelector('#panel_settings_box form');
+  var form = document.getElementById('panel_settings_form');
   if (!form) return;
   fetch(form.action, { method: 'POST', credentials: 'same-origin', body: new FormData(form) })
     .then(() => setStatus('Panel settings saved', false))

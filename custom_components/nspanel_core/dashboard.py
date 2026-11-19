@@ -538,6 +538,7 @@ class EditPanelView(HomeAssistantView):
         ctx = _panel_settings_context(manager, panel)
         ctx["page_title"] = f"{panel.name} — settings"
         ctx["nspanels"] = _panels_context(manager)
+        ctx["moved_hidden"] = True  # P266: the moved sections live ONLY in the studio
         html = _render("edit_nspanel.html", **ctx)
         return web.Response(text=html, content_type="text/html")
 
