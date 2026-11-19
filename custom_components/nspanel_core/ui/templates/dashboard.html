@@ -176,6 +176,18 @@
         <tbody></tbody>
       </table>
       <button class="studio-btn ghost" style="padding:5px 14px" onclick="addItem()">+ Add item</button>
+
+      <div style="margin-top:1rem;border-top:1px solid #2a2f3a;padding-top:.75rem">
+        <h3 class="text-sm font-semibold" style="color:#e8eaec;margin-bottom:.25rem">Home Assistant entities</h3>
+        <p class="is-size-7" style="color:#8b9099;margin:.25rem 0 .6rem">
+          Imported automatically from Home Assistant. Type to filter by name or entity id, then use + to place one on the selected page.
+        </p>
+        <input id="entity_filter" class="input is-small" type="search"
+               placeholder="Filter entities by name or id…"
+               style="background:#141821;color:#e8eaec;border-color:#2a2f3a;margin-bottom:.6rem"
+               oninput="entityQuery=this.value;renderEntityLibrary();renderItems()">
+        <div id="entity_library" style="max-height:15rem;overflow:auto;border:1px solid #2a2f3a;border-radius:8px"></div>
+      </div>
     </div>
     <div class="studio-tabpane" id="pane_panel">
       <div class="studio-subtabs" id="panel_subtabs">
@@ -192,6 +204,7 @@
 <script>
 var design = { mac: "", pages: [], items: [], screensaver_page: "" };
 var entities = [];
+var entityQuery = "";      // P292: the studio's text filter over the entity library
 var selectedRoom = null;   // the page name whose preview + items are shown
 var selectedItemId = null; // the item being placed/moved
 var panelId = null;
@@ -217,6 +230,35 @@ function setTab(t) {
   if (t === 'panel' && panelId) loadPanelSettings();
 }
 
+/* P292: parse a studio response defensively. The save error the user saw —
+ * "unexpected non-whitespace character after JSON data at line 1 column 4" —
+ * is a plain-text "401: Unauthorized" body being fed to r.json(). Reading the
+ * text FIRST and including the HTTP status makes that failure legible, and
+ * pairing it with nspanelFetch (which attaches + refreshes the Bearer token)
+ * removes the cause. Mirrors the pattern already used by uploadBg. */
+function studioJson(r) {
+  return r.text().then(function (t) {
+    var j;
+    try { j = JSON.parse(t); }
+    catch (e) { throw new Error('HTTP ' + r.status + ' — ' + String(t).slice(0, 120)); }
+    if (j && j.error) throw new Error(j.error);
+    return j;
+  });
+}
+
+/* P292: HA entities are imported independently of the design. They are loaded
+ * on page init and on every panel change, so a design-load failure (or no
+ * panel selected yet) can never hide the library the user asked for. */
+function loadEntities() {
+  return nspanelFetch('/nspanel_core/dashboard_entities', { credentials: 'same-origin' })
+    .then(studioJson)
+    .then(function (j) {
+      entities = j.entities || [];
+      renderEntityLibrary(); renderItems(); renderPreview();
+    })
+    .catch(function (e) { setStatus('Failed to load entities: ' + e, true); });
+}
+
 function loadDesign() {
   var mac = currentMac();
   var sel = document.getElementById('panel_sel');
@@ -230,19 +272,20 @@ function loadDesign() {
     design = { mac: "", pages: [], items: [], screensaver_page: "" };
     selectedRoom = null; selectedItemId = null;
     renderPages(); renderItems(); renderPreview();
-    document.getElementById('pv_frame').style.opacity = .35; return;
+    document.getElementById('pv_frame').style.opacity = .35;
+    renderEntityLibrary();
+    return;
   }
   document.getElementById('pv_frame').style.opacity = 1;
-  Promise.all([
-    nspanelFetch('/nspanel_core/dashboard_design?panel=' + mac, { credentials: 'same-origin' })
-      .then(r => r.text()).then(t => { try { return JSON.parse(t); } catch (e) { throw new Error('HTTP ' + r.status + ' — ' + t.slice(0, 120)); } }),
-    nspanelFetch('/nspanel_core/dashboard_entities', { credentials: 'same-origin' })
-      .then(r => r.text()).then(t => { try { return JSON.parse(t); } catch (e) { throw new Error('HTTP ' + r.status + ' — ' + t.slice(0, 120)); } })
-  ]).then(([dj, ej]) => {
-    design = dj.design; design.mac = mac;
-    entities = ej.entities || [];
-    renderPages(); renderItems(); renderPreview();
-  }).catch(e => setStatus('Failed to load: ' + e, true));
+  // P292: fetch the design on its own. Entity loading is decoupled so one
+  // failure can no longer take the other down with it.
+  nspanelFetch('/nspanel_core/dashboard_design?panel=' + mac, { credentials: 'same-origin' })
+    .then(studioJson)
+    .then(function (dj) {
+      design = dj.design; design.mac = mac;
+      renderPages(); renderItems(); renderPreview();
+    })
+    .catch(function (e) { setStatus('Failed to load design: ' + e, true); });
 }
 
 function esc(s) {
@@ -300,6 +343,65 @@ function widgetLabel(w) {
             scene: 'Scene', sensor: 'Sensor', climate: 'Climate' })[w] || w;
 }
 
+/* ---- P292: the searchable entity library --------------------------------
+ * Friendly name + raw entity_id, filtered by case-insensitive text, with a
+ * + button that places the entity on the current page in the first free slot. */
+function entityLabel(e) {
+  return (e && (e.name || e.friendly_name)) || (e && e.entity_id) || '';
+}
+
+function entityMatches(e, q) {
+  if (!q) return true;
+  var needle = String(q).toLowerCase().trim();
+  if (!needle) return true;
+  var hay = [e.entity_id, e.name, e.friendly_name, e.domain]
+    .filter(Boolean).join(' ').toLowerCase();
+  return hay.indexOf(needle) !== -1;
+}
+
+function renderEntityLibrary() {
+  var box = document.getElementById('entity_library');
+  if (!box) return;
+  var matches = entities.filter(function (e) { return entityMatches(e, entityQuery); });
+  if (!matches.length) {
+    box.innerHTML = '<div class="text-sm opacity-60" style="padding:.6rem">' +
+      (entities.length ? 'No entities match “' + esc(entityQuery) + '”.' : 'No Home Assistant entities imported yet.') +
+      '</div>';
+    return;
+  }
+  box.innerHTML = matches.map(function (e) {
+    var id = e.entity_id;
+    return '<div style="display:flex;align-items:center;gap:.5rem;padding:.35rem .6rem;border-bottom:1px solid #232833">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="color:#e8eaec;font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(entityLabel(e)) + '</div>' +
+        '<div style="color:#8b9099;font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(id) + '</div>' +
+      '</div>' +
+      '<button class="button is-small" style="background:rgba(57,200,232,.15);color:#39c8e8;flex:none" ' +
+        'title="Place on the selected page" ' +
+        'onclick="addEntityItem(\'' + esc(id) + '\')">+</button>' +
+      '</div>';
+  }).join('');
+}
+
+function addEntityItem(entity_id) {
+  if (!selectedRoom) { setStatus('Select a page first (click its row)', true); return; }
+  var used = design.items.filter(function (it) { return it.page === selectedRoom; })
+    .map(function (it) { return it.slot; });
+  var slot = -1;
+  for (var s = 0; s < SLOTS.length; s++) {
+    if (used.indexOf(s) === -1) { slot = s; break; }
+  }
+  if (slot === -1) { setStatus('All ' + SLOTS.length + ' positions are taken in this page', true); return; }
+  var ent = entities.find(function (e) { return e.entity_id === entity_id; }) || {};
+  design.items.push({
+    id: 'item' + Date.now(), page: selectedRoom, slot: slot,
+    widget: widgetFromEntity(entity_id), entity_id: entity_id,
+    label: entityLabel(ent) || entity_id
+  });
+  renderItems(); renderPreview();
+  setStatus('Added ' + entityLabel(ent) + ' to ' + selectedRoom, false);
+}
+
 function selectRoom(name) {
   selectedRoom = name; selectedItemId = null;
   renderPages(); renderItems(); renderPreview();
@@ -313,14 +415,22 @@ function renderItems() {
   };
   var entityOpts = function (widget, sel) {
     var dom = widgetDomain(widget);
-    return entities.filter(function (e) { return e.domain === dom; })
-      .map(function (e) { return opt(e.entity_id, sel); }).join('');
+    var allowed = entities.filter(function (e) { return e.domain === dom; });
+    var shown = allowed.filter(function (e) { return entityMatches(e, entityQuery); });
+    // P292: never hide the current selection — it may be the only thing
+    // keeping a saved design valid when the library is being text-filtered.
+    if (sel && !shown.some(function (e) { return e.entity_id === sel; })) {
+      var cur = allowed.find(function (e) { return e.entity_id === sel; });
+      shown = [cur || { entity_id: sel, name: sel }].concat(shown);
+    }
+    if (!shown.length) return opt('', 'No matching entities', sel);
+    return shown.map(function (e) { return opt(e.entity_id, entityLabel(e), sel); }).join('');
   };
   var rows = design.items.filter(it => it.page === selectedRoom).map(function (it) {
     var i = design.items.indexOf(it);
     var sel = it.id === selectedItemId;
     return '<tr' + (sel ? ' style="outline:1px solid rgba(57,200,232,.4)"' : '') + '>' +
-      '<td><select class="select is-small" style="background:#141821;color:#e8eaec;max-width:13rem" onchange="design.items[' + i + '].entity_id=this.value;design.items[' + i + '].widget=widgetFromEntity(this.value);renderItems();renderPreview()">' + entityOpts(it.entity_id) + '</select></td>' +
+      '<td><select class="select is-small" style="background:#141821;color:#e8eaec;max-width:13rem" onchange="design.items[' + i + '].entity_id=this.value;design.items[' + i + '].widget=widgetFromEntity(this.value);renderItems();renderPreview()">' + entityOpts(it.widget, it.entity_id) + '</select></td>' +
       '<td><select class="select is-small" style="background:#141821;color:#e8eaec" onchange="onWidgetChange(' + i + ', this.value)">' + widgetOpts(it.widget) + '</select></td>' +
       '<td><input class="input is-small" maxlength="24" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + esc(it.label) + '" onchange="design.items[' + i + '].label=this.value;renderPreview()"></td>' +
       '<td><button class="button is-small is-danger" onclick="removeItem(\'' + it.id + '\')">✕</button></td>' +
@@ -404,27 +514,26 @@ function uploadBg(i, input) {
 }
 
 function saveDesign() {
-  return fetch('/nspanel_core/dashboard_save', {
+  return nspanelFetch('/nspanel_core/dashboard_save', {
     method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ design: design })
-  }).then(r => r.json()).then(j => {
-    if (j.error) { setStatus('Save failed: ' + j.error, true); return false; }
+  }).then(studioJson).then(function () {
     setStatus('Design saved', false); return true;
-  }).catch(e => { setStatus('Save failed: ' + e, true); return false; });
+  }).catch(function (e) { setStatus('Save failed: ' + e, true); return false; });
 }
 
 function sendPanel() {
-  saveDesign().then(ok => {
+  saveDesign().then(function (ok) {
     if (!ok) return;
-    fetch('/nspanel_core/dashboard_send', {
+    var mac = currentMac() || design.mac;
+    nspanelFetch('/nspanel_core/dashboard_send', {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mac: currentMac() })
-    }).then(r => r.json()).then(j => {
-      if (j.error) setStatus('Send failed: ' + j.error, true);
-      else setStatus('Compiling + sending (' + j.bytes + ' bytes) — the panel reflashes in under a minute', false);
-    }).catch(e => setStatus('Send failed: ' + e, true));
+      body: JSON.stringify({ mac: mac })
+    }).then(studioJson).then(function (j) {
+      setStatus('Compiling + sending (' + j.bytes + ' bytes) — the panel reflashes in under a minute', false);
+    }).catch(function (e) { setStatus('Send failed: ' + e, true); });
   });
 }
 
@@ -612,5 +721,6 @@ setInterval(function () {
 }, 1000);
 setView('dash');
 initZoneJumps();
+loadEntities();  // P292: import HA entities on load, independent of any design
 </script>
 {% endblock %}
