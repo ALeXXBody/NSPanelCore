@@ -95,6 +95,7 @@
     padding: 9px 20px; cursor: pointer; }
   .studio-btn.ghost { background: transparent; color: #8b9099; border: 1px solid #2a2f3a; }
 </style>
+<script src="/nspanel_core/static/panel_settings.js?version={{ static_ver }}"></script>
 {% endblock %}
 
 {% block content %}
@@ -117,6 +118,10 @@
   </div>
 </div>
 <div id="status" class="text-sm" style="min-height:1.4rem;color:#39c8e8"></div>
+
+{# P290: the moved fields' background picker — the overlays live in the shared
+   settings partial, so the modal must exist at page level for both pages. #}
+{% include '_background_selector_modal.html' %}
 
 <div class="flex flex-wrap gap-8 mt-4 items-start">
   <!-- THE PREVIEW: the physical panel's representation, as the settings page shows it -->
@@ -403,10 +408,12 @@ function sendPanel() {
 }
 
 /* ---- the panel settings sub-tabs ---------------------------------------
- * All three groups stay INSIDE the server-rendered form: the sub-tabs only
- * toggle visibility. (The old code physically moved the sections out of the
- * form into external slots — the headings showed while the inputs silently
- * disappeared from FormData on save.) */
+ * All three groups are rendered BY THE SERVER inside the form — the sub-tabs
+ * only toggle visibility. (The old code physically moved the sections into
+ * external slots — the headings showed while the inputs silently disappeared
+ * from FormData on save. P289 then built "general" by moving every other
+ * child, which swallowed the wrapper holding the buttons section: no nodes
+ * are moved any more — the partial renders [data-section="general"] itself.) */
 var panelSubTab = 'screen';
 function setPanelSubTab(sec) {
   panelSubTab = sec;
@@ -415,24 +422,12 @@ function setPanelSubTab(sec) {
   });
   var form = document.querySelector('#panel_settings_box form');
   if (!form) return;
-  var screen = form.querySelector('[data-section="screen"]');
-  var buttons = form.querySelector('[data-section="buttons"]');
-
-  // group everything else into a single "general" section — once, in place
-  var general = form.querySelector('[data-section="general"]');
-  if (!general) {
-    general = document.createElement('div');
-    general.dataset.section = 'general';
-    var host = screen ? screen.parentElement : (buttons ? buttons.parentElement : form);
-    Array.from(host.children).forEach(function (child) {
-      if (child !== screen && child !== buttons) general.appendChild(child);
-    });
-    host.appendChild(general);
-  }
   ['screen', 'buttons', 'general'].forEach(function (s) {
     var el = form.querySelector('[data-section="' + s + '"]');
     if (el) el.style.display = (s === sec) ? '' : 'none';
   });
+  // the moved fields' conditional controls are re-evaluated on every switch
+  if (typeof update_shown_elements === 'function') update_shown_elements();
 }
 function loadPanelSettings() {
   var box = document.getElementById('panel_settings_box');
@@ -450,11 +445,14 @@ function loadPanelSettings() {
         el.style.background = '#141821'; el.style.color = '#e8eaec';
         el.style.borderColor = '#2a2f3a';
       });
-      var typeSel = document.getElementById('panel_type');
-      if (typeSel) typeSel.addEventListener('change', renderPreview);
       var form = box.querySelector('form');
       if (!form) return;
       form.id = 'panel_settings_form';
+      // P290: the behavior that came WITH the moved fields (button modes,
+      // detached lights, panel type) must be bound AFTER they are injected.
+      bindPanelSettingsBehavior();
+      var typeSel = document.getElementById('panel_type');
+      if (typeSel) typeSel.addEventListener('change', renderPreview);
       setPanelSubTab(panelSubTab);
       form.addEventListener('submit', function (ev) {
         ev.preventDefault();
