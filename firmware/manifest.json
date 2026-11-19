@@ -1,39 +1,40 @@
 {
- "version": "0.1.14",
- "notes": "Native firmware 0.1.14 \u2014 screensaver clock/date styling and weather details rendered on the panel.",
+ "version": "0.1.15",
+ "notes": "Native firmware 0.1.15 \u2014 OTA/display hardening after the dead-panel incident; proven display content.",
  "files": {
   "firmware/sonoff/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/native-firmware-0.1.14.bin",
-   "md5": "35aa4bfc38952c5cfd186b0e32bfb16f"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/native-firmware-0.1.15.bin",
+   "md5": "9270b92629967c95151f1d666e7c0e65"
   },
   "firmware/sonoff/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "firmware/custom/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/native-firmware-0.1.14.bin",
-   "md5": "35aa4bfc38952c5cfd186b0e32bfb16f"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/native-firmware-0.1.15.bin",
+   "md5": "9270b92629967c95151f1d666e7c0e65"
   },
   "firmware/custom/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "tft/gui.tft": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/gui.tft",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/custom_components/nspanel_core/tft/gui.tft",
    "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
   },
   "tft/gui_us.tft": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/gui_us.tft",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/custom_components/nspanel_core/tft/gui_us.tft",
    "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
   }
  },
  "changes": {
-  "bug_fixes": [],
-  "features": [
-   "Screensaver clock and date support font size, weight, color, and alignment chosen in the Dashboard studio.",
-   "Screensaver can show outside temperature, inside temperature, forecast, wind, rain, and sunrise/sunset details on the panel.",
-   "Per-panel temperature sources can use a Home Assistant sensor or the panel/default source."
+  "bug_fixes": [
+   "A stalled display update can no longer reboot the panel (the relay self-off / dead-panel loop).",
+   "Display restart now returns the screen from the splash and re-syncs the relay buttons.",
+   "The bootloader now rolls a failed update back to the previous firmware instead of leaving the panel dark.",
+   "Panel display content reverted to the proven pre-0.2.7 files."
   ],
+  "features": [],
   "breaking": []
  }
 }
