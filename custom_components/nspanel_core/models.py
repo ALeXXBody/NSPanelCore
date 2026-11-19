@@ -267,6 +267,7 @@ class GlobalSettings:
     firmware_manifest_url: str = "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/manifest.json"
     firmware_auto_check_hours: int = 24
     firmware_active_version: str = ""
+    nspanel_sessions: dict = field(default_factory=dict)  # P286: the session tokens
     firmware_latest_version: str = ""
     firmware_latest_changes: dict = field(default_factory=dict)
     firmware_last_check: str = ""

@@ -23,6 +23,11 @@ class NSPanelCorePanel extends HTMLElement {
          * server-side against the HA auth store. */
         document.cookie = "nspanel_token=" + encodeURIComponent(t) +
           "; path=/; max-age=3600; SameSite=Strict";
+        // P287: exchange the short-lived HA token for the manager's 24h
+        // session cookie. The response sets an httponly cookie that EVERY
+        // navigation carries (sidebar, Integrations links, new tabs) —
+        // no 5-minute expiry, no referer tricks.
+        this._exchangeSession(t);
         // P281: the gated pages verify the token from the URL — keep the
         // iframe's credential current (one src refresh per token rotation)
         if (this._frame) {
@@ -54,6 +59,20 @@ class NSPanelCorePanel extends HTMLElement {
       try { this._pushToken(); } catch (e) {}
     });
     this.appendChild(iframe);
+  }
+
+  _exchangeSession(token) {
+    try {
+      fetch("/nspanel_core/auth_session", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + token
+        },
+        body: "{}"
+      }).catch(function () {});
+    } catch (e) {}
   }
 
   _pushToken() {

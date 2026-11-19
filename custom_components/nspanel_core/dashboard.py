@@ -63,6 +63,32 @@ _TEMPLATE_CACHE = {}
 # Set by the manager from manifest.json (read in the executor) at startup.
 _DASHBOARD_VERSION = "v0.0.0"
 
+
+def _static_cache_version() -> str:
+    """Cache-buster derived from the CONTENT of the UI static assets.
+
+    Every asset URL (and the sidebar's panel.js module URL) carries this
+    instead of the app version. A hotfix force-moved onto an existing
+    version tag (same version NUMBER) must still invalidate the browser
+    cache — otherwise the old panel.js keeps running and the fix never
+    takes effect no matter how many times the user refreshes.
+    """
+    try:
+        import hashlib as _hashlib
+        import pathlib as _pathlib
+        root = _pathlib.Path(__file__).parent / "ui" / "static"
+        h = _hashlib.sha256()
+        for path in sorted(root.rglob("*")):
+            if path.is_file():
+                h.update(str(path.relative_to(root)).encode("utf-8"))
+                h.update(path.read_bytes())
+        return h.hexdigest()[:12]
+    except Exception:  # noqa: BLE001 — no static dir (tests) → stable fallback
+        return "static"
+
+
+_STATIC_VERSION = _static_cache_version()
+
 UI_DIR = pathlib.Path(__file__).parent / "ui"
 TEMPLATES_DIR = UI_DIR / "templates"
 STATIC_DIR = UI_DIR / "static"
@@ -144,6 +170,7 @@ def _render(template_name: str, request=None, **context) -> str:
     template = _TEMPLATE_CACHE[template_name]
     context.setdefault("notifications", [])
     context.setdefault("version", _DASHBOARD_VERSION)
+    context.setdefault("static_ver", _STATIC_VERSION)
     context.setdefault("has_unread_messages", False)
     context.setdefault("max_live_log_messages", 100)
     context.setdefault("mqtt_password", "")
@@ -166,12 +193,60 @@ def _render(template_name: str, request=None, **context) -> str:
     return template.render(**context)
 
 
+SESSION_COOKIE = "nspanel_session"
+SESSION_TTL = 24 * 3600
+
+
+class AuthSessionView(HomeAssistantView):
+    """P286: the session exchange — the HA access token (5-minute
+    lifetime) is validated ONCE and exchanged for a long-lived manager
+    session cookie. The studio's JS calls this on load; every navigation
+    then carries the session cookie automatically (the sidebar, the
+    Integrations links, new tabs)."""
+
+    url = f"{URL_BASE}/auth_session"
+    name = "nspanel_core:auth_session"
+    requires_auth = True  # the native Bearer validation of the fresh token
+
+    async def post(self, request, **kwargs):
+        import secrets as _secrets
+        import time as _time
+
+        manager = _manager(request)
+        token = _secrets.token_hex(32)
+        sessions = manager.config.settings.nspanel_sessions
+        now = _time.time()
+        sessions = {k: v for k, v in (sessions or {}).items() if v > now}
+        sessions[token] = now + SESSION_TTL
+        if len(sessions) > 50:
+            sessions = dict(sorted(sessions.items(), key=lambda kv: kv[1])[-50:])
+        manager.config.settings.nspanel_sessions = sessions
+        await manager.async_save()
+        resp = web.json_response({"ok": True})
+        resp.set_cookie(SESSION_COOKIE, token, max_age=SESSION_TTL,
+                        path="/", httponly=True, samesite="Strict")
+        return resp
+
+
 async def _nspanel_auth_ok(request):
     """P281: the studio/settings pages verify the viewer's identity —
     HA login token (the Bearer header for the fetches, the ?ha_token=
     parameter for the iframe page loads). The device-facing endpoints
     (the OTA downloads, the panel's config fetch) stay token-less."""
     manager = _manager(request)
+    import time as _time
+
+    # the manager's own session first (the 24h cookie — no HA token expiry)
+    import re as _re
+    cookie_hdr = request.headers.get("Cookie", "")
+    if not isinstance(cookie_hdr, str):
+        cookie_hdr = ""  # test doubles / non-standard header containers
+    m = _re.search(r"(?:^|;\s*)nspanel_session=([^;]+)", cookie_hdr)
+    if m:
+        sessions = manager.config.settings.nspanel_sessions or {}
+        tok = m.group(1)
+        if tok in sessions and sessions[tok] > _time.time():
+            return True
     hass = getattr(manager, "hass", None)
     if hass is None:
         return True  # the test doubles: no hass — the auth-less HA semantics
@@ -190,7 +265,7 @@ async def _nspanel_auth_ok(request):
     # Integrations links, new tabs) carries it automatically. The URL
     # parameter remains the bootstrap fallback.
     import re as _re
-    m = _re.search(r"(?:^|;\s*)nspanel_token=([^;]+)", request.headers.get("Cookie", ""))
+    m = _re.search(r"(?:^|;\s*)nspanel_token=([^;]+)", cookie_hdr)
     if m:
         tok = m.group(1)
         try:
@@ -2327,6 +2402,7 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
     # Register via HA (enforces requires_auth + auth middleware). The old
     # direct add_route bypassed auth entirely even with requires_auth=True.
     views = [
+        AuthSessionView,  # P287: the session exchange (was never registered)
         MainPageView,
         FirstRunView,       # P216: the first-run gate (was missing — /first_run 404'd)
         FirstRunSaveView,   # P216: the first-run save
@@ -2424,7 +2500,7 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
                 # that cached an older panel.js keeps running it forever (the
                 # v1.3.2 file pointed the iframe at /nspanel_core and rendered a
                 # blank panel even after the server was fixed).
-                module_url=f"{URL_BASE}/static/panel.js?v={_DASHBOARD_VERSION}",
+                module_url=f"{URL_BASE}/static/panel.js?v={_STATIC_VERSION}",
                 embed_iframe=True,
                 config={"url": UI_PATH},
                 require_admin=True,

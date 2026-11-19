@@ -41,6 +41,7 @@ try {
       var d = ev.data;
       if (d && d.type === "nspanel-hass-token" && typeof d.access_token === "string" && d.access_token) {
         nspanelLiveToken = d.access_token;
+        nspanelEnsureSession();  // P287: rotate the session with the token
         // Hide the login banner directly (cheap DOM removal; the global
         // nspanelRecheckLogin would also work here).
         try {
@@ -111,6 +112,26 @@ function nspanelRecheckLogin() {
     else nspanelShowLoginBanner();
   } catch (e) {}
 }
+var _nspSessionToken = "";
+/* P287: exchange the (short-lived) HA access token for the manager's
+ * long-lived session cookie once per token. The response sets an httponly
+ * cookie that every PLAIN navigation carries — including the Integrations
+ * page links, which send no Authorization header at all. */
+async function nspanelEnsureSession() {
+  try {
+    var tok = nspanelGetToken();
+    if (!tok || tok === _nspSessionToken) return;
+    _nspSessionToken = tok;
+    await nspanelFetch("/nspanel_core/auth_session", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: "{}"
+    });
+  } catch (e) {}
+}
+document.addEventListener("DOMContentLoaded", function () { nspanelEnsureSession(); });
+
 function nspanelClientId() {
   var base = "";
   try {
