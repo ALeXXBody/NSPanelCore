@@ -338,6 +338,51 @@ class DashboardService:
         self.hass.add_job(self._save())
         return {"ok": True, "stored": safe}
 
+    # -- the reusable photo gallery (P298) ---------------------------------
+
+    _GALLERY_RE = __import__("re").compile(
+        r"^gal_[a-f0-9]{12}_[a-f0-9]{12}\.(jpg|png)$")
+
+    def store_gallery_photo(self, mac: str, file_bytes: bytes,
+                            filename: str = "") -> dict:
+        """Keep an uploaded photo once, reusable on any page of this panel.
+
+        The per-page store_background() above deliberately overwrites one
+        orig_<mac>_<page> file. A gallery needs many pictures, so each upload
+        gets its own random, path-safe name matching dashboard_design's
+        _BGIMG_RE (which is the same reference a page's background_image uses).
+        """
+        if not self._MAC_RE.match(mac or ""):
+            return {"error": "invalid panel"}
+        import io
+        import secrets
+        from PIL import Image
+
+        try:
+            fmt = Image.open(io.BytesIO(file_bytes)).format
+        except Exception:
+            return {"error": "the file is not a readable image"}
+        ext = ".png" if fmt == "PNG" else ".jpg"
+        safe = f"gal_{mac}_{secrets.token_hex(6)}{ext}"
+        with open(os.path.join(_dash_dir(self.hass), safe), "wb") as f:
+            f.write(file_bytes)
+        return {"ok": True, "name": safe}
+
+    def gallery_photos(self, mac: str) -> list[dict]:
+        """List this panel's stored gallery photos, newest first."""
+        if not self._MAC_RE.match(mac or ""):
+            return []
+        origins = _dash_dir(self.hass)
+        prefix = f"gal_{mac}_"
+        out = []
+        for name in os.listdir(origins):
+            if not name.startswith(prefix) or not self._GALLERY_RE.match(name):
+                continue
+            path = os.path.join(origins, name)
+            out.append({"name": name, "modified": os.path.getmtime(path)})
+        out.sort(key=lambda p: p["modified"], reverse=True)
+        return [{"name": p["name"]} for p in out]
+
     def origins_dir(self) -> str:
         return _dash_dir(self.hass)
 

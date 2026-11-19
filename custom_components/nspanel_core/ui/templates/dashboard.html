@@ -52,8 +52,20 @@
     background: #0d1016;
     box-shadow: inset 0 0 0 1px #232833, 0 0 24px rgba(57,200,232,.06);
   }
-  .studio-screen img.bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  .studio-screen img.bg.dash { filter: brightness(.42) blur(2px) contrast(.9); transform: scale(1.04); }
+  /* P298: the live-preview image is #pv_bg inside .pv-screen-inner. The old
+   * `.studio-screen img.bg` rule never matched it, so an uploaded photo was
+   * drawn unstyled (no size / no cover) — the user saw "nothing happen".
+   * The server already produces the darkened dash variant; no CSS filter. */
+  #pv_bg.bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .studio-gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:.5rem; margin-top:.6rem; }
+  .studio-gallery-item { border:1px solid #2a2f3a; border-radius:8px; overflow:hidden;
+    cursor:pointer; background:#141821; transition:border-color .15s; }
+  .studio-gallery-item:hover { border-color:#39c8e8; }
+  .studio-gallery-item.selected { border-color:#39c8e8; box-shadow:0 0 0 1px #39c8e8; }
+  .studio-gallery-item img { display:block; width:100%; height:64px; object-fit:cover; }
+  .studio-gallery-item span { display:block; font-size:10px; color:#8b9099; padding:3px 5px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .studio-gallery-item b { display:block; font-size:10px; color:#39c8e8; padding:0 5px 4px; }
   .studio-tile {
     position: absolute; width: 150px; height: 110px;
     border-radius: 10px; background: rgba(13,16,22,.82);
@@ -173,6 +185,16 @@
                 style="background:#141821;color:#e8eaec;border:1px solid #2a2f3a;border-radius:8px;padding:4px 10px"></select>
       </p>
 
+      <div style="border-top:1px solid #2a2f3a;padding-top:.75rem;margin-bottom:1rem">
+        <h3 class="text-sm font-semibold" style="color:#e8eaec;margin-bottom:.25rem">Photo gallery</h3>
+        <p class="is-size-7" style="color:#8b9099;margin:.25rem 0 .5rem">
+          Upload photos here once, then click one to put it on the selected page.
+        </p>
+        <input id="gallery_upload" type="file" accept="image/*" multiple
+               style="width:100%;color:#8b9099" onchange="uploadGalleryPhotos(this)">
+        <div id="photo_gallery" class="studio-gallery"></div>
+      </div>
+
       <h3 class="text-sm font-semibold" style="color:#e8eaec;margin:1rem 0 .5rem">Items (what sits on the photo)</h3>
       <table class="table is-fullwidth" id="items_tbl" style="background:transparent;color:#c8cbce">
         <thead><tr><th>Entity</th><th>Widget</th><th>Label</th><th></th></tr></thead>
@@ -212,6 +234,7 @@ var entityQuery = "";      // P292: the studio's text filter over the entity lib
 var selectedRoom = null;   // the page name whose preview + items are shown
 var selectedItemId = null; // the item being placed/moved
 var targetSlot = null;     // P297: slot chosen on the preview, waiting for an entity
+var galleryPhotos = [];    // P298: the panel's reusable photo library
 var settingsLoading = false; // P297: one settings fetch at a time
 var panelId = null;
 var view = "dash";
@@ -293,7 +316,7 @@ function loadDesign() {
       // blank-tile path. They are not entities — drop them on load so the
       // studio can never display a static icon pretending to be an item.
       design.items = (design.items || []).filter(function (it) { return !!it.entity_id; });
-      renderPages(); renderItems(); renderPreview();
+      renderPages(); renderItems(); renderPreview(); loadGallery();
     })
     .catch(function (e) { setStatus('Failed to load design: ' + e, true); });
 }
@@ -348,9 +371,10 @@ function renderPages() {
   tb.innerHTML = design.pages.map(function (p, i) {
     var sel = p.name === selectedRoom;
     return '<tr' + (sel ? ' style="outline:1px solid rgba(57,200,232,.4)"' : '') + ' onclick="selectRoom(\'' + p.name + '\')" style="cursor:pointer">' +
-      '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + p.title + '" onclick="event.stopPropagation()" onchange="design.pages[' + i + '].title=this.value;renderPreview()"></td>' +
+      '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + p.title + '" placeholder="Room name" onclick="event.stopPropagation()" onchange="renamePage(' + i + ', this.value)"></td>' +
       '<td onclick="event.stopPropagation()"><input type="file" accept="image/*" style="width:10rem;color:#8b9099" onchange="uploadBg(' + i + ', this)">' +
-      (p.background_image ? '<span class="tag is-small" style="background:rgba(57,200,232,.15);color:#39c8e8">photo ✓</span>' : '<span class="tag is-small" style="background:rgba(255,255,255,.06);color:#5a6068">no photo — black screen</span>') + '</td>' +
+      (p.background_image ? '<span class="tag is-small" style="background:rgba(57,200,232,.15);color:#39c8e8">photo ✓</span>' : '<span class="tag is-small" style="background:rgba(255,255,255,.06);color:#5a6068">no photo — black screen</span>') +
+      ' <button class="button is-small is-ghost" style="color:#39c8e8" onclick="document.getElementById(\'photo_gallery\').scrollIntoView({behavior:\'smooth\',block:\'nearest\'})">gallery</button></td>' +
       '<td onclick="event.stopPropagation()"><button class="button is-small is-danger" onclick="deletePage(' + i + ')">✕</button></td>' +
       '</tr>';
   }).join('');
@@ -444,7 +468,7 @@ function addEntityItem(entity_id) {
 
 function selectRoom(name) {
   selectedRoom = name; selectedItemId = null;
-  renderPages(); renderItems(); renderPreview();
+  renderPages(); renderItems(); renderPreview(); renderGallery();
 }
 
 function renderItems() {
@@ -514,11 +538,53 @@ function deletePage(i) {
   renderPages(); renderItems(); renderPreview();
 }
 
+/* P298: the internal page name is a short firmware-safe id (dash_ + up to 9
+ * chars). It used to be a meaningless dash_roomN counter — now it is derived
+ * from the room name the user types, so "Kitchen" becomes dash_kitchen. */
+function pageSlug(title) {
+  return String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 9) || 'room';
+}
+function uniquePageName(base, exceptIndex) {
+  var used = design.pages.map(function (p, i) {
+    return i === exceptIndex ? '' : p.name;
+  });
+  var root = ('dash_' + base).slice(0, 14); // _PAGE_NAME_RE: dash_ + max 9
+  if (used.indexOf(root) === -1) return root;
+  for (var n = 2; n < 100; n++) {
+    var suffix = '_' + n;
+    var cand = root.slice(0, 14 - suffix.length) + suffix;
+    if (used.indexOf(cand) === -1) return cand;
+  }
+  return root.slice(0, 11) + '_' + Date.now().toString(36).slice(-2);
+}
 function addPage() {
-  var n = design.pages.length + 1;
-  // the internal name is generated once and never shown — the widgets bind to it
-  design.pages.push({ name: 'dash_room' + n, title: 'Room ' + n, background: 'bg_plain', background_image: '' });
+  var title = 'New room';
+  var page = { name: uniquePageName(pageSlug(title)), title: title,
+               background: 'bg_plain', background_image: '' };
+  design.pages.push(page);
   renderPages(); renderPreview();
+  var inputs = document.querySelectorAll('#pages_tbl tbody input.input');
+  var last = inputs[inputs.length - 1];
+  if (last && last.focus) last.focus();
+  setStatus('Type a room name in the Title box — the page name is created from it.', false);
+}
+/* Renaming rebinds the items and the screensaver choice atomically, so the
+ * studio can never leave tiles pointing at a page name that no longer exists. */
+function renamePage(i, title) {
+  var p = design.pages[i];
+  if (!p) return;
+  var clean = String(title || '').trim().replace(/[^A-Za-z0-9_\- ]/g, '').slice(0, 32);
+  if (!clean) { renderPages(); return; }
+  var oldName = p.name;
+  var newName = uniquePageName(pageSlug(clean), i);
+  p.title = clean;
+  p.name = newName;
+  design.items.forEach(function (it) { if (it.page === oldName) it.page = newName; });
+  if (design.screensaver_page === oldName) design.screensaver_page = newName;
+  if (selectedRoom === oldName) selectedRoom = newName;
+  renderPages(); renderItems(); renderPreview(); renderGallery();
+  setStatus('Renamed to "' + clean + '" — saved.', false);
+  saveDesign();
 }
 /* P297: "+ Add item" no longer fabricates an entity-less tile. It sends the
  * user to the entity library — the only place an item can be born. */
@@ -559,6 +625,83 @@ function uploadBg(i, input) {
     }).catch(e => setStatus('Upload failed: ' + e, true));
   };
   reader.readAsDataURL(file);
+}
+
+/* ---- P298: the photo gallery ------------------------------------------
+ * Photos are stored once per panel (not once per page), so the same picture
+ * can be reused on several pages without re-uploading it. */
+function loadGallery() {
+  var mac = currentMac() || design.mac;
+  if (!mac) { galleryPhotos = []; renderGallery(); return; }
+  return nspanelFetch('/nspanel_core/dashboard_gallery?panel=' + encodeURIComponent(mac),
+                      { credentials: 'same-origin' })
+    .then(studioJson)
+    .then(function (j) {
+      galleryPhotos = j.photos || [];
+      renderGallery();
+    })
+    .catch(function (e) { setStatus('Failed to load photos: ' + e, true); });
+}
+function renderGallery() {
+  var el = document.getElementById('photo_gallery');
+  if (!el) return;
+  var room = design.pages.find(function (p) { return p.name === selectedRoom; });
+  var current = room ? room.background_image : '';
+  if (!galleryPhotos.length) {
+    el.innerHTML = '<p class="is-size-7" style="color:#5a6068;margin:0">No photos yet — upload one above.</p>';
+    return;
+  }
+  var mac = encodeURIComponent(currentMac() || design.mac || '');
+  el.innerHTML = galleryPhotos.map(function (p) {
+    var url = '/nspanel_core/dashboard_gallery_image?panel=' + mac +
+              '&photo=' + encodeURIComponent(p.name);
+    var used = p.name === current;
+    return '<div class="studio-gallery-item' + (used ? ' selected' : '') + '"' +
+      ' onclick="applyGalleryPhoto(\'' + p.name + '\')"' +
+      ' title="Use this photo on ' + esc(room ? room.title : 'the selected page') + '">' +
+      '<img src="' + url + '" alt="' + esc(p.name) + '">' +
+      '<span>' + esc(p.name) + '</span>' +
+      (used ? '<b>✓ on this page</b>' : '') + '</div>';
+  }).join('');
+}
+function uploadGalleryPhotos(input) {
+  var files = Array.prototype.slice.call(input.files || []);
+  if (!files.length) return;
+  var mac = currentMac() || design.mac;
+  if (!mac) { setStatus('Select a panel first', true); return; }
+  setStatus('Uploading ' + files.length + ' photo(s)…', false);
+  var jobs = files.map(function (file) {
+    return new Promise(function (resolve) {
+      var reader = new FileReader();
+      reader.onerror = function () { resolve(''); };
+      reader.onload = function () {
+        var data = String(reader.result || '').split(',')[1] || '';
+        nspanelFetch('/nspanel_core/dashboard_gallery', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ panel: mac, filename: file.name, data: data })
+        }).then(studioJson)
+          .then(function (j) { resolve(j.name || ''); })
+          .catch(function () { resolve(''); });
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+  Promise.all(jobs).then(function (names) {
+    var ok = names.filter(Boolean).length;
+    input.value = '';
+    setStatus(ok ? ('Added ' + ok + ' photo(s) to the gallery') : 'No photos were added', !ok);
+    return loadGallery();
+  });
+}
+function applyGalleryPhoto(name) {
+  if (!selectedRoom) { setStatus('Select a page first (click its row)', true); return; }
+  var room = design.pages.find(function (p) { return p.name === selectedRoom; });
+  if (!room) { setStatus('Select a page first (click its row)', true); return; }
+  room.background_image = name;
+  renderPages(); renderPreview(); renderGallery();
+  setStatus('Using this photo on ' + room.title + ' — saved.', false);
+  saveDesign();
 }
 
 function saveDesign() {
@@ -698,7 +841,8 @@ function renderPreview() {
     tilesEl.innerHTML = '';
     bg.style.display = activeRoom.background_image ? 'block' : 'none';
     bg.className = 'bg';
-    bg.src = '/nspanel_core/dashboard_photo?panel=' + currentMac() + '&page=' + activeRoom.name + '&variant=scr&r=' + Date.now();
+    bg.src = '/nspanel_core/dashboard_photo?panel=' + encodeURIComponent(currentMac()) +
+      '&page=' + encodeURIComponent(activeRoom.name) + '&variant=scr&r=' + Date.now();
     bg.onerror = function () { bg.style.display = 'none'; };
     tickClock();
     scaleScreen();
@@ -708,7 +852,8 @@ function renderPreview() {
   if (!room) { bg.style.display = 'none'; tilesEl.innerHTML = ''; scaleScreen(); return; }
   bg.style.display = room.background_image ? 'block' : 'none';
   bg.className = 'bg dash';
-  bg.src = '/nspanel_core/dashboard_photo?panel=' + currentMac() + '&page=' + room.name + '&variant=dash&r=' + Date.now();
+  bg.src = '/nspanel_core/dashboard_photo?panel=' + encodeURIComponent(currentMac()) +
+    '&page=' + encodeURIComponent(room.name) + '&variant=dash&r=' + Date.now();
   bg.onerror = function () { bg.style.display = 'none'; };
   var pageItems = design.items.filter(it => it.page === room.name);
   var html = '';

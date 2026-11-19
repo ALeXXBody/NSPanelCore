@@ -2430,6 +2430,70 @@ class DashboardBackgroundUploadView(HomeAssistantView):
         return web.json_response(result, status=status)
 
 
+class DashboardGalleryView(HomeAssistantView):
+    """P298: the per-panel photo library — list it, and upload into it."""
+
+    url = f"{URL_BASE}/dashboard_gallery"
+    name = "nspanel_core:dashboard_gallery"
+    requires_auth = False  # the studio's session-cookie gate, as for uploads
+
+    async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.json_response({"error": "Unauthorized"}, status=401)
+        manager = _manager(request)
+        mac = str(request.query.get("panel", ""))
+        return web.json_response({"photos": manager.dash.gallery_photos(mac)})
+
+    async def post(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.json_response({"error": "Unauthorized"}, status=401)
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            return web.json_response({"error": "malformed upload"}, status=400)
+        mac = str(body.get("panel", ""))
+        import base64 as _base64
+        try:
+            file_bytes = _base64.b64decode(str(body.get("data", "")), validate=True)
+        except Exception:  # noqa: BLE001
+            return web.json_response(
+                {"error": "the file is not a readable image"}, status=400)
+        if not file_bytes:
+            return web.json_response({"error": "missing file"}, status=400)
+        if len(file_bytes) > 8 * 1024 * 1024:
+            return web.json_response({"error": "file too large (max 8 MB)"}, status=400)
+        manager = _manager(request)
+
+        def _store():
+            return manager.dash.store_gallery_photo(mac, file_bytes)
+
+        result = await manager.hass.async_add_executor_job(_store)
+        return web.json_response(result, status=200 if result.get("ok") else 400)
+
+
+class DashboardGalleryImageView(HomeAssistantView):
+    """P298: serve a stored gallery photo (raw bytes for the thumbnail grid)."""
+
+    url = f"{URL_BASE}/dashboard_gallery_image"
+    name = "nspanel_core:dashboard_gallery_image"
+    requires_auth = False
+
+    async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+        manager = _manager(request)
+        mac = str(request.query.get("panel", ""))
+        photo = str(request.query.get("photo", ""))
+        service = manager.dash
+        if (not photo.startswith(f"gal_{mac}_")
+                or not service._GALLERY_RE.match(photo)):
+            return web.Response(status=404, text="no photo")
+        path = _os.path.join(service.origins_dir(), photo)
+        if not _os.path.isfile(path):
+            return web.Response(status=404, text="no photo")
+        return web.FileResponse(path, headers={"Cache-Control": "no-cache"})
+
+
 class DashboardEntitiesView(HomeAssistantView):
     """GET: HA entities for the editor's picker (controllable domains)."""
 
@@ -2560,6 +2624,8 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         DashboardSaveView,
         DashboardSendView,
         DashboardBackgroundUploadView,
+        DashboardGalleryView,
+        DashboardGalleryImageView,
         DashboardEntitiesView,
     ]
     for view_cls in views:
