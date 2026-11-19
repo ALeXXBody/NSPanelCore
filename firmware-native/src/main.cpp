@@ -87,6 +87,8 @@ extern "C" void app_main(void) {
     g_mac = macbuf;
 
     // Display FIRST, gently — never blocks the network path (P130).
+    nsp_temperature();  // P279 LOW fix: the ADC unit initialized once at boot
+                        // (two concurrent first calls raced the unit creation)
     nsp_relay_init();
     nsp_display_init();
     nsp_display_touch_task_start();
@@ -119,10 +121,12 @@ extern "C" void app_main(void) {
             }
             // Status report every 30s, version included
             if (now - s_last_report_us > (int64_t)STATUS_REPORT_PERIOD_MS * 1000) {
-                uint32_t heap = esp_get_free_heap_size();
-                uint32_t total = esp_get_free_heap_size() + heap;
-                (void)total;
-                int pct = 100 - (int)((100ULL * heap) / 320000);
+                uint32_t heap = esp_get_minimum_free_heap_size();
+                /* P279 LOW fix: the percentage double-counted the free heap
+                 * and went negative past 320 KB free. */
+                int pct = (int)((100ULL * heap) / 320000);
+                if (pct < 0) pct = 0;
+                if (pct > 100) pct = 100;
                 nsp_mqtt_publish_status_report(
                     nsp_wifi_ip(), nsp_wifi_rssi(), pct,
                     nsp_temperature(), nsp_display_warning());

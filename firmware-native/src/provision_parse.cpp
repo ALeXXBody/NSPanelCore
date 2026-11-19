@@ -20,10 +20,15 @@ bool nsp_provision_field(const std::string &body, const char *key, std::string &
             char c = body[i];
             if (c == '\\' && i + 1 < body.size()) {
                 char n = body[i + 1];
-                if (n != '"') return false;  // unknown escape: reject
-                value.push_back('"');
-                i++;
-                continue;
+                /* P279 MEDIUM fix: a password with a BACKSLASH was
+                 * silently dropped to an empty string (auth then failed
+                 * with no visible cause). json.dumps escapes the standard
+                 * set — unescape the common ones, reject the exotic. */
+                if (n == '"') { value.push_back('"'); i++; continue; }
+                if (n == '\\') { value.push_back('\\'); i++; continue; }
+                if (n == 'n') { value.push_back('\n'); i++; continue; }
+                if (n == 't') { value.push_back('\t'); i++; continue; }
+                return false;  // the exotic escapes: reject
             }
             if (c == '"') {
                 out = value;

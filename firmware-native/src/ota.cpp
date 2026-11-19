@@ -527,6 +527,18 @@ static void nsp_tft_task(void *) {
                 }
                 s_last_progress_us = esp_timer_get_time();
             }
+            /* P279 MEDIUM fix: a truncated 0x08 (the offset bytes missing)
+             * fell through to the "0x05 accepted" path — the next block
+             * streamed while the display expected a resend, desyncing the
+             * transfer with the panel's md5 reporting "correct". */
+            if (resp[0] == 0x08 && rlen < 5) {
+                char l[80];
+                snprintf(l, sizeof(l), "TFT: truncated 0x08 reply (%d bytes) — retrying block", rlen);
+                nsp_mqtt_publish_log(l);
+                offset -= (long long)got;
+                resent = true;
+                continue;
+            }
             if (rlen == 0) {
                 if (offset >= file_size) break;  // last block: silence = done
                 /* P242: cap the no-reply retries — the display stopping
@@ -692,7 +704,13 @@ void nsp_tft_start() {
         return;
     }
     s_state = OTA_FS;
-    xTaskCreatePinnedToCore(nsp_tft_task, "tft", 12288, nullptr, 1, nullptr, 0);  /* P244: 8 KB was one 4 KB buffer away from overflow */
+    /* P279 MEDIUM fix: the spawn result was discarded — a failed spawn
+     * left s_state busy forever (every later update rejected as busy). */
+    if (xTaskCreatePinnedToCore(nsp_tft_task, "tft", 12288, nullptr, 1, nullptr, 0) != pdPASS) {
+        nsp_mqtt_publish_log("TFT: task spawn FAILED (memory?)");
+        s_state = OTA_IDLE;
+        return;
+    }
 }
 
 /* Rail #4: watchdog — call from the 1s housekeeping loop. */

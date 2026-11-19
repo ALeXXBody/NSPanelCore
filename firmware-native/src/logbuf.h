@@ -7,6 +7,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <mutex>
 
 class NspLogBuf {
 public:
@@ -17,6 +18,9 @@ public:
     size_t size() const;
 
 private:
+    /* P279 MEDIUM fix: the buffer was written from 5+ tasks with no lock —
+     * the concurrent std::string assignments could corrupt the heap. */
+    mutable std::mutex mtx_;
     std::vector<std::string> lines_;
     size_t cap_;
     size_t next_ = 0;

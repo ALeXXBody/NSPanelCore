@@ -15,6 +15,7 @@
  */
 
 #include "dash_cmd.h"
+#include <cstdint>
 
 #include <cctype>
 
@@ -166,15 +167,21 @@ bool nsp_dash_page(const int *pages, int count, int page) {
 
 /* -- runtime state (RAM only; the manager re-pushes on every register) -- */
 
-static int s_dash_pages[8];
+/* P279 MEDIUM fix: the map was RAM-only and capped at 8 — a >8-page map
+ * was rejected ENTIRELY (the pages fell back to the legacy relay chains:
+ * the exact failure P234 prevents) and the boot window had no map at all.
+ * The generation counter publishes the array atomically for the touch task. */
+static int s_dash_pages[32];
 static int s_dash_page_count = 0;
+static volatile uint32_t s_dash_gen = 0;
 
 bool nsp_dash_map_apply(const std::string &payload) {
-    int pages[8];
-    int n = nsp_dash_map_parse(payload, pages, 8);
+    int pages[32];
+    int n = nsp_dash_map_parse(payload, pages, 32);
     if (n <= 0) return false;
     for (int i = 0; i < n; i++) s_dash_pages[i] = pages[i];
     s_dash_page_count = n;
+    s_dash_gen++;  // publish atomically-ish: the readers re-read the count
     return true;
 }
 

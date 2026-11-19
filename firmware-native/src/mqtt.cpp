@@ -264,6 +264,11 @@ void nsp_mqtt_start(const std::string &hostname) {
     esp_mqtt_client_register_event(s_mqtt, MQTT_EVENT_DISCONNECTED,
                                    [](void *, esp_event_base_t, int32_t, void *) {
                                        s_mqtt_up = false;  // P184 fail-safe: the status page reflects reality
+                                       /* P279 LOW fix: a dropped final fragment left
+                                        * stale reassembly state — the next complete
+                                        * message dispatched as prefix+garbage. */
+                                       s_frag_active = false;
+                                       s_frag_data.clear();
                                    }, nullptr);
     esp_mqtt_client_register_event(s_mqtt, MQTT_EVENT_DATA, nsp_mqtt_data, nullptr);
     esp_mqtt_client_start(s_mqtt);

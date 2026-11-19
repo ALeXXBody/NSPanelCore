@@ -48,17 +48,24 @@ const char *nsp_display_warning(void) {
     return s_display_ready ? "" : "No response from the display.";
 }
 
+/* P279 MEDIUM fix (F11): the display writes are UNSYNCHRONIZED between the
+ * MQTT task and the touch task (the swipe's dp=, the page nav, the clock) —
+ * interleaved mid-command bytes garbled the wire. One mutex serializes
+ * every command write; the TFT streamer bypasses it (it owns the UART in
+ * raw mode). */
+static portMUX_TYPE s_display_cmd_mux = portMUX_INITIALIZER_UNLOCKED;
+
 void nsp_display_send(const char *data, size_t len) {  // P210: shared with the TFT streamer
     uart_write_bytes(DISPLAY_UART, data, len);
 }
 
-/* P279 HIGH fix: the clock/relay/dash writes were NOT gated on raw mode —
- * the MQTT task injected their bytes into a running whmi-wris block
- * transfer, corrupting the image mid-stream while progress read 100%. */
 void nsp_display_send_command(const char *cmd) {
-    if (s_display_raw_mode) return;  // the TFT upload owns the wire
-    nsp_display_send(cmd, strlen(cmd));
-    nsp_display_send(END_SEQ, 3);
+    if (s_display_raw_mode) return;  // P279 HIGH fix: the TFT upload owns the wire
+    size_t len = strlen(cmd);
+    taskENTER_CRITICAL(&s_display_cmd_mux);
+    uart_write_bytes(DISPLAY_UART, cmd, len);
+    uart_write_bytes(DISPLAY_UART, END_SEQ, 3);
+    taskEXIT_CRITICAL(&s_display_cmd_mux);
 }
 
 void nsp_display_drain(int ms) {  // P210: shared
@@ -237,12 +244,34 @@ void nsp_display_set_raw_mode(bool on) { s_display_raw_mode = on; }
 void nsp_display_touch_task(void *) {
     /* P184: decode extracted to touch_decode.cpp (HOST-UNIT-TESTED). */
     uint8_t buf[64];
+    /* P279 MEDIUM fix: a frame SPLIT across two reads was lost on both
+     * sides (the decoder sees no terminator, then no header) — a steady
+     * per-touch probability, the "quick taps lost" suspect. A residual
+     * buffer carries the unconsumed tail into the next read. */
+    static uint8_t resid[16];
+    static size_t resid_len = 0;
     for (;;) {
-        int n = uart_read_bytes(DISPLAY_UART, buf, sizeof(buf), pdMS_TO_TICKS(200));
+        int n = uart_read_bytes(DISPLAY_UART, buf, sizeof(buf) - resid_len, pdMS_TO_TICKS(200));
+        if (n > 0 && resid_len) {
+            memmove(buf + resid_len, buf, n);
+            memcpy(buf, resid, resid_len);
+            n += resid_len;
+            resid_len = 0;
+        }
         /* P208#6: a negative UART result cast to size_t scanned out of
          * bounds; also skip while another sequence owns the UART (P208#5). */
         if (n <= 0 || s_display_raw_mode) continue;
         auto frames = nsp_touch_decode(buf, (size_t)n);
+        if (!frames.empty()) {
+            size_t used = frames.back().consumed + (frames.front().page == -1 || frames.front().consumed ? 0 : 0);
+            // the consumed offsets are per-frame relative to the decode start —
+            // walk them to find the total consumed bytes
+            size_t total = 0;
+            for (const auto &fr : frames) total += fr.consumed;
+            resid_len = (size_t)n > total ? (size_t)n - total : 0;
+            if (resid_len > sizeof(resid)) resid_len = sizeof(resid);
+            memcpy(resid, buf + total, resid_len);
+        }
         for (const auto &f : frames) {
             int page = f.page, component = f.component, event = f.event;
             bool pressed = (event == 1);
@@ -269,7 +298,7 @@ void nsp_display_touch_task(void *) {
                     s_swipe_x1 = f.x;
                     s_swipe_y1 = f.y;
                     s_swipe_page = -2;       // the press seen; the page arrives in the 0x65
-                    s_swipe_navigated = false;
+                    s_swipe_navigated = false;  // P279 LOW fix: never sticky
                 } else if (f.event == 0 && s_swipe_page >= 0 &&
                            nsp_dash_is_dash_page(s_swipe_page)) {
                     int dx = f.x - s_swipe_x1;
@@ -292,8 +321,11 @@ void nsp_display_touch_task(void *) {
                 continue;  // the coordinate frames run no component chains
             }
             /* the 0x65 press reveals the page the gesture is on */
-            if (pressed && nsp_dash_is_dash_page(page)) {
-                s_swipe_page = page;  // the coords are already stashed
+            if (pressed) {
+                s_swipe_navigated = false;  // P279 LOW fix: a new press clears the suppression
+                if (nsp_dash_is_dash_page(page)) {
+                    s_swipe_page = page;  // the coords are already stashed
+                }
             }
             /* the suppressed release: the swipe already navigated */
             if (s_swipe_navigated && !pressed && nsp_dash_is_dash_page(page)) {
