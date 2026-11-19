@@ -276,6 +276,9 @@ _BOOTSTRAP_HTML = (
     "if(d.type==='nspanel-hass-token'&&d.access_token){"
     "location.replace('" + UI_PATH + "?ha_token='+"
     "encodeURIComponent(d.access_token));}});"
+    "var _ask=function(){try{parent.postMessage("
+    "{type:'nspanel-token-request'},location.origin);}catch(e){}};"
+    "_ask();setInterval(_ask,1500);"
     "setTimeout(function(){document.getElementById('s').textContent="
     "'Still connecting — reopen NSPanel Core from the sidebar or the app "
     "menu.';},8000);</script>")

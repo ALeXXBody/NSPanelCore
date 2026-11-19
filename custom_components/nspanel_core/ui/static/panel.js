@@ -13,7 +13,8 @@
 class NSPanelCorePanel extends HTMLElement {
   set hass(h) {
     try {
-      const t = h && h.auth && h.auth.data && h.auth.data.access_token;
+      this._hassRef = h;  // P310: keep the live hass for late token polling
+      const t = this._extractToken(h);
       if (t && t !== this._liveToken) {
         this._liveToken = t;
         this._pushToken();
@@ -33,6 +34,41 @@ class NSPanelCorePanel extends HTMLElement {
         if (this._frame) this._loadWithToken(t);
       }
     } catch (e) {}
+  }
+
+  /* P310 (the companion app): the app delivers the access token ASYNC via
+   * its external bus ("externalAuthSetToken" fills auth.data later) — the
+   * first `set hass` may run BEFORE any token exists and hass is never
+   * reassigned afterwards. Extract from every known shape and keep polling
+   * the live hass until a token appears. */
+  _extractToken(h) {
+    const a = h && h.auth;
+    if (!a) return "";
+    return (a.data && a.data.access_token) ||
+           (typeof a.accessToken === "string" && a.accessToken) ||
+           (a.tokens && a.tokens.access_token) ||
+           (a.data && a.data.auth && a.data.auth.access_token) || "";
+  }
+
+  _startTokenPoll() {
+    if (this._poll) return;
+    this._pollStart = this._pollStart || Date.now();
+    this._poll = setInterval(() => {
+      try {
+        if (this._liveToken) { clearInterval(this._poll); this._poll = null; return; }
+        const h = this._hassRef ||
+          (document.querySelector("home-assistant") || {}).hass;
+        const tok = this._extractToken(h);
+        if (tok && tok !== this._liveToken) {
+          this._liveToken = tok;
+          this._exchangeSession(tok);
+          if (this._frame) this._loadWithToken(tok);
+        }
+        if (Date.now() - this._pollStart > 120000) {
+          clearInterval(this._poll); this._poll = null;
+        }
+      } catch (e) {}
+    }, 2000);
   }
 
   connectedCallback() {
@@ -57,6 +93,7 @@ class NSPanelCorePanel extends HTMLElement {
      * never lands (no hass), fall back to the cookie path after a grace
      * period so cookie-carrying users still get the page. */
     iframe.src = "about:blank";
+    this._startTokenPoll();
     if (this._liveToken) {
       this._loadWithToken(this._liveToken);
     } else {
