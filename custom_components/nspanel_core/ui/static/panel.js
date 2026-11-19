@@ -56,8 +56,14 @@ class NSPanelCorePanel extends HTMLElement {
     this._poll = setInterval(() => {
       try {
         if (this._liveToken) { clearInterval(this._poll); this._poll = null; return; }
-        const h = this._hassRef ||
-          (document.querySelector("home-assistant") || {}).hass;
+        // P310: the shim is an IFRAME — its own document has no
+        // <home-assistant>; the HA frontend's document (the PARENT) does.
+        let h = this._hassRef;
+        if (!h) {
+          try { h = window.parent.document.querySelector("home-assistant").hass; }
+          catch (e1) {}
+          if (!h) { try { h = window.parent.hass; } catch (e2) {} }
+        }
         const tok = this._extractToken(h);
         if (tok && tok !== this._liveToken) {
           this._liveToken = tok;
@@ -74,6 +80,34 @@ class NSPanelCorePanel extends HTMLElement {
   connectedCallback() {
     if (this._done) return;
     this._done = true;
+
+    /* P310: the connecting bootstrap page asks THIS shim for the token —
+     * base.js (the inner page) cannot answer because it has not loaded yet.
+     * Answer with whatever the live hass holds and load the frame. */
+    try {
+      window.addEventListener("message", (ev) => {
+        try {
+          if (!ev || ev.origin !== window.location.origin) return;
+          const d = ev.data || {};
+          if (d.type === "nspanel-token-request") {
+            let tok = this._liveToken;
+            if (!tok) {
+              try {
+                const ha = window.parent.document.querySelector("home-assistant");
+                tok = this._extractToken(ha && ha.hass);
+              } catch (e1) {}
+            }
+            if (tok) {
+              this._liveToken = tok;
+              if (this._frame) this._loadWithToken(tok);
+              if (ev.source) ev.source.postMessage(
+                { type: "nspanel-hass-token", access_token: tok },
+                window.location.origin);
+            }
+          }
+        } catch (e2) {}
+      });
+    } catch (e0) {}
 
     this.style.cssText = "display:block;width:100%;height:100%;min-height:100vh;";
 
