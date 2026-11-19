@@ -257,16 +257,83 @@ def component_map(design: PanelDesign) -> dict[str, dict[str, int]]:
         *[(p.name, dash_components(design, p)) for p in design.pages],
     ):
         out[page_name] = {c["name"]: n for n, c in enumerate(comps, start=1)}
+    # P274: the light detail pages — the entity cards on the panel
+    for i, item in enumerate(light_items(design)):
+        out[detail_name(i)] = {
+            c["name"]: cid for cid, c in enumerate(
+                detail_components(design, item, i), start=1)
+        }
     return out
 
 
 def page_ids(design: PanelDesign) -> list[int]:
-    """Nextion page ids for the dash-enabled pages (menu + dash pages).
+    """Nextion page ids for the dash-enabled pages (menu + dash pages +
+    the light detail pages).
 
     Base page order (fixed by the kit): page0=0, screensaver=1, home=2,
-    mini=3, room=4, spare=5, scenes=6, then dash pages from 7.
+    mini=3, room=4, spare=5, scenes=6, then dash pages from 7, then the
+    light detail pages (P274: the entity cards on the panel).
     """
     ids = [MENU_PAGE_ID]
-    for n, _p in enumerate(design.pages):
-        ids.append(7 + n)
+    for i, _p in enumerate(design.pages):
+        ids.append(7 + i)
+    ids += detail_page_ids(design)
     return ids
+
+
+# -- the detail pages (P274): the entity cards ON the panel ---------------
+
+COLOR_PRESETS = [
+    ("white", (255, 255, 255)), ("warm", (255, 180, 100)),
+    ("red", (255, 60, 60)), ("green", (70, 230, 90)),
+    ("blue", (70, 140, 255)), ("purple", (190, 90, 255)),
+]
+
+
+def light_items(design: PanelDesign) -> list[DashItem]:
+    """The light/RGB items in the design order — each gets a detail page."""
+    return [i for i in design.items if i.widget in ("light", "rgb_light")]
+
+
+def detail_name(n: int) -> str:
+    return f"det{n}"
+
+
+def detail_components(design: PanelDesign, item: DashItem, n: int) -> list[dict]:
+    """The entity card ON the panel: the on/off tile, the brightness
+    minus/percent/plus, the RGB color swatches, back."""
+    rgb = item.widget == "rgb_light"
+    comps: list[dict] = [
+        {"name": "bg", "type": "picture", "x": 0, "y": 0, "w": 480, "h": 320,
+         "pic": "bg_plain"},
+        {"name": "title", "type": "text", "x": 10, "y": 20, "w": 380, "h": 30,
+         "text": clean_text(item.label, 24), "font": "NotoSans24"},
+        {"name": "pwr", "type": "dual-state-button", "x": 165, "y": 60,
+         "w": 150, "h": 88, "pic": "btn_off", "pic2": "btn_on", "sendkey": 3},
+        {"name": "minus", "type": "hotspot", "x": 30, "y": 150, "w": 90, "h": 90,
+         "sendkey": 3},
+        {"name": "minus_pic", "type": "picture", "x": 30, "y": 150, "w": 90, "h": 90,
+         "pic": "btn_minus"},
+        {"name": "pct", "type": "text", "x": 165, "y": 150, "w": 150, "h": 90,
+         "text": "--", "font": "NotoSans64"},
+        {"name": "plus", "type": "hotspot", "x": 360, "y": 150, "w": 90, "h": 90,
+         "sendkey": 3},
+        {"name": "plus_pic", "type": "picture", "x": 360, "y": 150, "w": 90, "h": 90,
+         "pic": "btn_plus"},
+    ]
+    if rgb:
+        for k, (cname, _rgbv) in enumerate(COLOR_PRESETS):
+            x = 30 + k * 75
+            comps.append({"name": f"c{k}", "type": "picture", "x": x, "y": 255,
+                          "w": 60, "h": 60, "pic": f"sw_{cname}", "sendkey": 3})
+    comps.append({"name": "back", "type": "hotspot", "x": 400, "y": 20, "w": 70, "h": 30,
+                  "sendkey": 3})
+    comps.append({"name": "back_pic", "type": "picture", "x": 400, "y": 20, "w": 70, "h": 30,
+                  "pic": "btn_scenes"})
+    return comps
+
+
+def detail_page_ids(design: PanelDesign) -> list[int]:
+    """The detail pages' ids — after the dash pages (7..7+n-1)."""
+    n = len(design.pages)
+    return [7 + n + i for i in range(len(light_items(design)))]

@@ -2170,11 +2170,21 @@ class DashboardEntitiesView(HomeAssistantView):
         for state in manager.hass.states.async_all():
             domain = state.entity_id.split(".", 1)[0]
             if domain in self._DOMAINS:
+                # P275: the live state drives the per-widget styles — the
+                # RGB tile wears its color, the climate shows the temp
+                attrs = state.attributes
+                bright = attrs.get("brightness")
+                rgb = attrs.get("rgb_color")
                 out.append(
                     {
                         "entity_id": state.entity_id,
-                        "name": state.attributes.get("friendly_name", state.entity_id),
+                        "name": attrs.get("friendly_name", state.entity_id),
                         "domain": domain,
+                        "state": state.state,
+                        "brightness": round(int(bright) * 100 / 255) if bright else None,
+                        "rgb_color": rgb,
+                        "temperature": attrs.get("current_temperature"),
+                        "unit": attrs.get("unit_of_measurement"),
                     }
                 )
         out.sort(key=lambda e: (e["domain"], e["name"]))

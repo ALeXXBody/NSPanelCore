@@ -197,9 +197,29 @@ def generate_source(
         )
         open(os.path.join(src, "pages", page.name + ".nx"), "w").close()
 
+    # P274: the LIGHT DETAIL PAGES — the entity cards on the panel: the
+    # on/off tile, the brightness minus/percent/plus, the RGB swatches.
+    lights = dd.light_items(design)
+    for i, item in enumerate(lights):
+        name = dd.detail_name(i)
+        _write_toml(
+            os.path.join(src, "pages", name + ".page.toml"),
+            name,
+            dd.detail_components(design, item, i),
+        )
+        open(os.path.join(src, "pages", name + ".nx"), "w").close()
+    extra_pictures = extra_pictures + [
+        f"det{i}_sw{k}" for i in range(len(lights)) for k, _c in enumerate(dd.COLOR_PRESETS)
+    ] if False else extra_pictures  # the swatch resources are kit-level (sw_*)
     _write_app_toml(kit_dir, design, src, extra_pictures=extra_pictures)
 
     cmap = dd.component_map(design)
+    # the detail pages' maps (the manager routes the detail presses)
+    for i, item in enumerate(lights):
+        cmap[dd.detail_name(i)] = {
+            c["name"]: cid for cid, c in enumerate(
+                dd.detail_components(design, item, i), start=1)
+        }
     with open(os.path.join(workdir, "component_map.json"), "w", encoding="utf-8") as f:
         json.dump(cmap, f, indent=2, sort_keys=True)
     with open(os.path.join(workdir, "page_ids.json"), "w", encoding="utf-8") as f:

@@ -482,12 +482,26 @@ function renderPreview() {
     var taken = pageItems.find(it => it.slot === slot);
     if (taken) {
       var selCls = taken.id === selectedItemId ? ' box-shadow:0 0 0 2px rgba(57,200,232,.7);' : '';
-      var kind = (taken.widget === 'sensor' || taken.widget === 'climate');
+      var ent = entities.find(e => e.entity_id === taken.entity_id) || {};
+      var on = (ent.state || '').toLowerCase() === 'on';
+      // P275: each widget wears its own style
+      var swStyle = 'background:' + (on ? '#39c8e8' : '#20242d') + ';';
+      var val = '';
+      if (taken.widget === 'rgb_light') {
+        var rgb = ent.rgb_color;
+        if (on && rgb) swStyle = 'background:rgb(' + rgb.join(',') + ');';
+      }
+      if (taken.widget === 'climate' && ent.temperature !== undefined)
+        val = ent.temperature + (ent.unit === '°F' ? '°F' : '°');
+      else if (taken.widget === 'sensor' && ent.state && ent.state !== 'unavailable')
+        val = ent.state + (ent.unit || '');
+      else if ((taken.widget === 'light') && on && ent.brightness !== undefined)
+        val = ent.brightness + '%';
       html += '<div class="studio-tile" style="left:' + s[0] + 'px;top:' + s[1] + 'px;' + selCls + '"' +
         ' onclick="slotClick(' + slot + ')">' +
-        '<div class="sw"></div>' +
+        '<div class="sw" style="' + swStyle + '"></div>' +
         '<div class="lbl">' + (taken.label || taken.entity_id || '?') + '</div>' +
-        (kind ? '<div class="val">--</div>' : '') +
+        (val ? '<div class="val">' + val + '</div>' : '') +
         '</div>';
     } else {
       html += '<div class="studio-slot" style="left:' + s[0] + 'px;top:' + s[1] + 'px"' +

@@ -194,12 +194,55 @@ def test_touch_routes_to_service_call():
     assert any(p.get("payload") == "page dash_kitchen" for p in nav)
 
 
-def test_touch_on_item_toggles_light():
+def test_touch_on_light_item_opens_detail():
+    # P274: the light/RGB tiles open the entity card (the detail page) —
+    # the on/off, the intensity, the color live there
     svc, mgr = _svc()
     comp = svc._maps["e465b849a100"]["dash_kitchen"]["b0"]
     svc.on_touch("e465b849a100", 7, comp, 0)
+    import json as _json
+    nav = [p for t, p in mgr.published if p.get("command") == "dash"]
+    assert any(p.get("payload") == "dp=8" for p in nav), nav
+
+
+def test_touch_on_switch_item_toggles():
+    svc, mgr = _svc()
+    design = svc._designs["e465b849a100"]
+    design.items[0].widget = "switch"
+    design.items[0].entity_id = "switch.plug"
+    comp = svc._maps["e465b849a100"]["dash_kitchen"]["b0"]
+    svc.on_touch("e465b849a100", 7, comp, 0)
     assert any(
-        d == ("light", "toggle", {"entity_id": "light.kitchen"})
+        d == ("switch", "toggle", {"entity_id": "switch.plug"})
+        for d in svc.hass.services.calls
+    )
+
+
+def test_detail_brightness_minus_plus():
+    svc, mgr = _svc()
+    dmap = svc._maps["e465b849a100"]["det0"]
+    svc.on_touch("e465b849a100", 8, dmap["minus"], 0)
+    assert any(
+        d == ("light", "turn_on", {"entity_id": "light.kitchen", "brightness_step": -64})
+        for d in svc.hass.services.calls
+    )
+    svc.on_touch("e465b849a100", 8, dmap["plus"], 0)
+    assert any(
+        d == ("light", "turn_on", {"entity_id": "light.kitchen", "brightness_step": 64})
+        for d in svc.hass.services.calls
+    )
+
+
+def test_detail_color_preset():
+    # the swatches exist on RGB items only — the plain light detail has none
+    svc, mgr = _svc()
+    svc._designs["e465b849a100"].items[0].widget = "rgb_light"
+    svc._maps["e465b849a100"] = dd.component_map(svc._designs["e465b849a100"])
+    dmap = svc._maps["e465b849a100"]["det0"]
+    svc.on_touch("e465b849a100", 8, dmap["c2"], 0)  # the red preset
+    assert any(
+        d == ("light", "turn_on",
+              {"entity_id": "light.kitchen", "rgb_color": [255, 60, 60]})
         for d in svc.hass.services.calls
     )
 

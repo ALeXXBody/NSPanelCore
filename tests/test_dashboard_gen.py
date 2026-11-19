@@ -108,8 +108,11 @@ def test_component_map_matches_firmware_conventions():
 
 
 def test_page_ids_are_base_seven_plus_dash():
+    # the room menu (4) + two dash pages (7, 8) + the light detail page (9:
+    # the design's single light item gets an entity-card detail page)
     ids = dd.page_ids(_design())
-    assert ids == [4, 7, 8]  # room menu + two dash pages
+    # the two light-type items (light + RGB) get two detail pages
+    assert ids == [4, 7, 8, 9, 10]
 
 
 # -- generator ------------------------------------------------------------

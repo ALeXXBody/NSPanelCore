@@ -210,6 +210,31 @@ class DashboardService:
                     json.dumps({"command": "dash", "payload": stmt}),
                 )
             )
+        # P274: the light items also mirror the brightness into their
+        # detail page's percent text, and the on/off into its tile
+        if item.widget in ("light", "rgb_light"):
+            cmap = self._maps.get(mac) or {}
+            lights = dd.light_items(self._designs.get(mac) or dd.PanelDesign(mac=mac))
+            idx = lights.index(item) if item in lights else -1
+            if idx < 0:
+                return
+            page_map = cmap.get(dd.detail_name(idx)) or {}
+            pct = page_map.get("pct")
+            pwr = page_map.get("pwr")
+            bright = state.attributes.get("brightness")
+            if pct is not None:
+                on = (state.state or "").lower() == "on"
+                shown = "--" if not on else (
+                    f"{round(int(bright) * 100 / 255)}%" if bright else "0%")
+                self.hass.async_create_task(self.manager._publish(
+                    const.panel_topic(mac, "command"),
+                    json.dumps({"command": "dash",
+                                "payload": f'pct.txt="{dd.clean_text(shown, 8)}"'})))
+            if pwr is not None:
+                self.hass.async_create_task(self.manager._publish(
+                    const.panel_topic(mac, "command"),
+                    json.dumps({"command": "dash",
+                                "payload": f"pwr.val={1 if (state.state or '').lower() == 'on' else 0}"})))
 
     # -- the user's room photos -------------------------------------------
 
@@ -277,6 +302,25 @@ class DashboardService:
                 self._dash(mac, "page home")
             return
 
+        # a DETAIL page (P274): the component -> the entity's action
+        detail = self._detail_context(mac, page, cmap, design)
+        if detail is not None:
+            item, dmap = detail
+            if dmap.get("back") == component:
+                self._dash(mac, "page room")
+            elif dmap.get("minus") == component:
+                self._light_call(item, {"brightness_step": -64})
+            elif dmap.get("plus") == component:
+                self._light_call(item, {"brightness_step": 64})
+            else:
+                for k, (cname, rgbv) in enumerate(dd.COLOR_PRESETS):
+                    if dmap.get(f"c{k}") == component:
+                        self._light_call(item, {"rgb_color": list(rgbv)})
+                        return
+                if dmap.get("pwr") == component:
+                    self._run_item(item)  # the dual-state toggle
+            return
+
         # a dash page
         page_name = next((n for n, i in dash_pages.items() if i == page), None)
         if page_name is None:
@@ -289,7 +333,13 @@ class DashboardService:
             if item.page != page_name:
                 continue
             if page_map.get(f"b{item.slot}") == component:
-                self._run_item(item)
+                # P274: the light/RGB tiles open their DETAIL page (the
+                # entity card: the on/off, the intensity, the color) —
+                # the switch tiles keep the direct toggle.
+                if item.widget in ("light", "rgb_light"):
+                    self._open_detail(mac, item)
+                else:
+                    self._run_item(item)
                 return
 
     @callback
@@ -300,6 +350,35 @@ class DashboardService:
                 json.dumps({"command": "dash", "payload": stmt}),
             )
         )
+
+    # -- P274: the light detail pages (the entity cards on the panel) -----
+
+    def _detail_context(self, mac: str, page: int, cmap: dict, design):
+        """The (item, component map) for a light detail page, if |page| is one."""
+        n_dash = len(design.pages)
+        lights = dd.light_items(design)
+        idx = page - (7 + n_dash)
+        if idx < 0 or idx >= len(lights):
+            return None
+        item = lights[idx]
+        return item, (cmap.get(dd.detail_name(idx)) or {})
+
+    def _open_detail(self, mac: str, item: dd.DashItem) -> None:
+        """Navigate the panel to the item's detail page (dp=<id>)."""
+        design = self._designs.get(mac)
+        lights = dd.light_items(design)
+        idx = lights.index(item) if item in lights else -1
+        if idx < 0:
+            return
+        page_id = (7 + len(design.pages)) + idx
+        self._dash(mac, f"dp={page_id}")
+
+    @callback
+    def _light_call(self, item: dd.DashItem, data: dict) -> None:
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                "light", "turn_on", {"entity_id": item.entity_id, **data},
+                blocking=False))
 
     @callback
     def _run_item(self, item: dd.DashItem) -> None:
