@@ -45,6 +45,7 @@ def _make_manager(with_panel=True, first_run_done=False):
     else:
         mgr.config.panels = []
     mgr.hass = MagicMock()
+    mgr.hass.auth = None  # P281: the auth-less HA — the gated views stay open
     mgr.hass.async_add_executor_job = AsyncMock(side_effect=lambda fn, *a, **k: fn(*a, **k))
     mgr.async_save = AsyncMock()
     return mgr

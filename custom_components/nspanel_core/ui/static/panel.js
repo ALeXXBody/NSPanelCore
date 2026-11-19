@@ -17,6 +17,15 @@ class NSPanelCorePanel extends HTMLElement {
       if (t && t !== this._liveToken) {
         this._liveToken = t;
         this._pushToken();
+        // P281: the gated pages verify the token from the URL — keep the
+        // iframe's credential current (one src refresh per token rotation)
+        if (this._frame) {
+          const want = "/nspanel_core/ui?ha_token=" + encodeURIComponent(t);
+          if (this._frame.src.indexOf("ha_token=") === -1 ||
+              decodeURIComponent(this._frame.src.split("ha_token=")[1] || "") !== t) {
+            this._frame.src = want;
+          }
+        }
       }
     } catch (e) {}
   }
@@ -28,7 +37,9 @@ class NSPanelCorePanel extends HTMLElement {
     this.style.cssText = "display:block;width:100%;height:100%;min-height:100vh;";
 
     const iframe = document.createElement("iframe");
-    iframe.src = "/nspanel_core/ui";
+    iframe.src = this._liveToken
+      ? "/nspanel_core/ui?ha_token=" + encodeURIComponent(this._liveToken)
+      : "/nspanel_core/ui";
     iframe.title = "NSPanel Core";
     iframe.style.cssText = "border:0;width:100%;height:100%;min-height:100vh;display:block;";
     iframe.setAttribute("allowfullscreen", "");

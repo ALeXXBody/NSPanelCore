@@ -166,6 +166,35 @@ def _render(template_name: str, request=None, **context) -> str:
     return template.render(**context)
 
 
+async def _nspanel_auth_ok(request):
+    """P281: the studio/settings pages verify the viewer's identity —
+    HA login token (the Bearer header for the fetches, the ?ha_token=
+    parameter for the iframe page loads). The device-facing endpoints
+    (the OTA downloads, the panel's config fetch) stay token-less."""
+    manager = _manager(request)
+    hass = getattr(manager, "hass", None)
+    if hass is None:
+        return True  # the test doubles: no hass — the auth-less HA semantics
+    auth = getattr(hass, "auth", None)
+    if auth is None:
+        return True  # the auth-less HA: everything stays open
+    hdr = request.headers.get("Authorization", "")
+    if hdr.startswith("Bearer "):
+        try:
+            if await auth.async_validate_token(hdr[7:]):
+                return True
+        except Exception:  # noqa: BLE001
+            pass
+    qp = request.query.get("ha_token", "")
+    if qp:
+        try:
+            if await auth.async_validate_token(qp):
+                return True
+        except Exception:  # noqa: BLE001
+            pass
+    return False
+
+
 def _manager(request) -> Any:
     hass: HomeAssistant = request.app["hass"]
     entry_id = hass.data.get(f"{DOMAIN}_entry_id")
@@ -208,6 +237,9 @@ class FirstRunView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         manager = _manager(request)
         if manager.config.settings.first_run_done:
             return _redirect(request, UI_PATH)
@@ -302,6 +334,9 @@ class MainPageView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         manager = _manager(request)
         # P216/P222: the first-run gate is for FRESH installs only. An
         # existing install (any accepted panel) must NEVER be gated — the
@@ -452,6 +487,9 @@ class EditPanelView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         manager = _manager(request)
         try:
             panel_id = int(request.match_info["panel_id"])
@@ -557,6 +595,9 @@ class DashboardPanelSettingsView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         manager = _manager(request)
         try:
             panel_id = int(request.query.get("panel_id", ""))
@@ -709,6 +750,9 @@ class GlobalScenesView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         manager = _manager(request)
         scenes_ctx = [
             {"id": s.id, "name": s.name, "ha_entity": s.ha_entity, "page_id": s.page_id}
@@ -730,6 +774,9 @@ class RelayGroupsView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         manager = _manager(request)
         panels_by_mac = {p.mac: p for p in manager.config.panels}
         groups = []
@@ -759,6 +806,9 @@ class WeatherTimeView(HomeAssistantView):
 
     async def get(self, request, **kwargs):
         # P236: the tabbed Settings page holds this content — redirect in
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         return _redirect(request, f"{URL_BASE}/settings?tab=weather")
 
     async def post(self, request, **kwargs):
@@ -799,6 +849,9 @@ class DeniedPanelsView(HomeAssistantView):
 
     async def get(self, request, **kwargs):
         # P236: the tabbed Settings page holds this content — redirect in
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         return _redirect(request, f"{URL_BASE}/settings?tab=denied")
 
 
@@ -835,6 +888,9 @@ class SettingsView(HomeAssistantView):
     _TABS = ("general", "denied", "weather")
 
     async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         manager = _manager(request)
         tab = request.query.get("tab", "general")
         if tab not in self._TABS:
@@ -920,6 +976,9 @@ class GeneralSettingsView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        # P236: general settings — redirects into the tabbed Settings page
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
         return _redirect(request, f"{URL_BASE}/settings?tab=general")
 
 
@@ -993,6 +1052,9 @@ class ManagerSettingsView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         manager = _manager(request)
         room_views = []
         for r in manager.config.rooms:
@@ -1729,6 +1791,9 @@ class RoomsPageView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         manager = _manager(request)
         rooms_ctx = []
         for room in manager.config.rooms:
@@ -2018,6 +2083,9 @@ class DashboardView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         manager = _manager(request)
         panels = [
             {"mac": p.mac, "name": p.name}
@@ -2108,6 +2176,9 @@ class DashboardPhotoView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         manager = _manager(request)
         mac = request.query.get("panel", "")
         page = request.query.get("page", "")
