@@ -235,7 +235,19 @@ function loadDesign() {
   }).catch(e => setStatus('Failed to load: ' + e, true));
 }
 
-function opt(v, sel) { return '<option value="' + v + '"' + (v === sel ? ' selected' : '') + '>' + v + '</option>'; }
+function opt(v, label, sel) {
+  if (sel === undefined) { sel = label; label = v; }
+  return '<option value="' + v + '"' + (v === sel ? ' selected' : '') + '>' + label + '</option>';
+}
+
+function onWidgetChange(i, widget) {
+  design.items[i].widget = widget;
+  // the entity must match the new category — clear it when it doesn't
+  var dom = widgetDomain(widget);
+  var cur = entities.find(e => e.entity_id === design.items[i].entity_id);
+  if (cur && cur.domain !== dom) design.items[i].entity_id = '';
+  renderItems(); renderPreview();
+}
 
 function renderPages() {
   if (!selectedRoom && design.pages.length) selectedRoom = design.pages[0].name;
@@ -265,6 +277,14 @@ function widgetFromEntity(entity_id) {
   return 'light';
 }
 
+/* P273: the widget type drives the entity filter — selecting Light shows
+ * light.* entities, Climate shows climate.*, LED (RGB light) is a light. */
+function widgetDomain(w) { return (w === 'rgb_light') ? 'light' : w; }
+function widgetLabel(w) {
+  return ({ switch: 'Switch', light: 'Light', rgb_light: 'LED (RGB light)',
+            scene: 'Scene', sensor: 'Sensor', climate: 'Climate' })[w] || w;
+}
+
 function selectRoom(name) {
   selectedRoom = name; selectedItemId = null;
   renderPages(); renderItems(); renderPreview();
@@ -273,10 +293,13 @@ function selectRoom(name) {
 function renderItems() {
   var tb = document.querySelector('#items_tbl tbody');
   var widgetOpts = function (sel) {
-    return ['switch', 'light', 'rgb_light', 'scene', 'sensor', 'climate'].map(function (w) { return opt(w, sel); }).join('');
+    return ['switch', 'light', 'rgb_light', 'scene', 'sensor', 'climate']
+      .map(function (w) { return opt(w, widgetLabel(w), sel); }).join('');
   };
-  var entityOpts = function (sel) {
-    return entities.map(function (e) { return opt(e.entity_id, sel); }).join('');
+  var entityOpts = function (widget, sel) {
+    var dom = widgetDomain(widget);
+    return entities.filter(function (e) { return e.domain === dom; })
+      .map(function (e) { return opt(e.entity_id, sel); }).join('');
   };
   var rows = design.items.filter(it => it.page === selectedRoom).map(function (it) {
     var i = design.items.indexOf(it);
