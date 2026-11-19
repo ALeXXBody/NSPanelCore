@@ -7,7 +7,7 @@
 
 #include <string>
 
-#define FW_VERSION "0.1.13"
+#define FW_VERSION "0.1.14"
 
 /* Publish topics (built from wifi_hostname, VERBATIM — no sanitization) */
 inline std::string topic_status_report(const std::string &hostname) {
@@ -26,6 +26,11 @@ inline std::string topic_panel_cmd(const std::string &hostname) {
  * resolved temperature overrides) for one panel. */
 inline std::string topic_panel_screensaver(const std::string &hostname) {
     return "nspanel/" + hostname + "/screensaver";
+}
+/* P306: the panel's resolved screensaver mode (plain text). A dark screen
+ * must not be woken by a weather update. */
+inline std::string topic_panel_screensaver_mode(const std::string &hostname) {
+    return "nspanel/" + hostname + "/screensaver_mode";
 }
 inline std::string topic_relay_cmd(const std::string &hostname, int relay) {
     return "nspanel/" + hostname + "/r" + std::to_string(relay) + "_cmd";

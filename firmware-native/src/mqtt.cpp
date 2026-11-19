@@ -7,6 +7,7 @@
 #include "config.h"
 #include "accept_parse.h"
 #include "dash_cmd.h"
+#include "screensaver_parse.h"
 
 static esp_mqtt_client_handle_t s_mqtt = nullptr;
 static std::string s_hostname;
@@ -31,6 +32,10 @@ static void nsp_mqtt_connected(void *handler_args, esp_event_base_t base,
     esp_mqtt_client_subscribe(s_mqtt, "nspanel/status/time", 0);
     esp_mqtt_client_subscribe(s_mqtt, "nspanel/status/date", 0);
     esp_mqtt_client_subscribe(s_mqtt, "nspanel/status/ampm", 0);
+    // P306: retained weather + per-panel screensaver style/flags and mode
+    esp_mqtt_client_subscribe(s_mqtt, TOPIC_STATUS_WEATHER, 0);
+    esp_mqtt_client_subscribe(s_mqtt, topic_panel_screensaver(s_hostname).c_str(), 0);
+    esp_mqtt_client_subscribe(s_mqtt, topic_panel_screensaver_mode(s_hostname).c_str(), 0);
     // Relay commands (HA switches drive the physical relays)
     esp_mqtt_client_subscribe(s_mqtt, topic_relay_cmd(s_hostname, 1).c_str(), 1);
     esp_mqtt_client_subscribe(s_mqtt, topic_relay_cmd(s_hostname, 2).c_str(), 1);
@@ -44,6 +49,37 @@ static std::string s_frag_topic, s_frag_data;
 static bool s_frag_active = false;
 
 void nsp_mqtt_dispatch(const std::string &topic, const std::string &payload);
+
+/* P306: the retained style and weather feeds can arrive in either order.
+ * Keep both in RAM and re-render on either arrival so the first paint is
+ * complete. All parsing/command construction lives in screensaver_parse.cpp;
+ * this file only sends the sanitised commands. */
+static NspScreensaverConfig s_screensaver_cfg;
+static NspWeatherData s_weather_data;
+static bool s_weather_valid = false;
+static std::string s_screensaver_mode = "with_background";
+
+static void nsp_screensaver_apply(bool style_changed) {
+    extern void nsp_display_send_command(const char *cmd);
+    /* Style changes only when the retained config arrives — a weather poll
+     * must not re-write 18 attributes down the UART. */
+    if (style_changed) {
+        for (const auto &cmd : nsp_screensaver_style_commands(s_screensaver_cfg))
+            nsp_display_send_command(cmd.c_str());
+    }
+    /* A dark screen must not be woken by a weather update. */
+    if (!s_weather_valid || s_screensaver_mode == "no_screensaver") return;
+    extern float nsp_temperature(void);
+    float ntc = nsp_temperature();
+    char buf[24];
+    std::string room;
+    if (ntc != 0.0f) {  // 0.0 is the sensor's "no reading" sentinel
+        snprintf(buf, sizeof(buf), "%.1f\xB0", ntc);
+        room = std::string(buf) + "C";
+    }
+    for (const auto &cmd : nsp_weather_commands(s_weather_data, s_screensaver_cfg, room))
+        nsp_display_send_command(cmd.c_str());
+}
 
 static void nsp_mqtt_data(void *handler_args, esp_event_base_t base,
                           int32_t event_id, void *event_data) {
@@ -91,6 +127,26 @@ void nsp_mqtt_dispatch(const std::string &topic, const std::string &payload) {
     } else if (topic == "nspanel/status/ampm") {
         extern void nsp_display_set_ampm(const std::string &);
         nsp_display_set_ampm(payload);
+    } else if (topic == TOPIC_STATUS_WEATHER) {
+        NspWeatherData data;
+        if (nsp_weather_parse(payload, data)) {
+            s_weather_data = data;
+            s_weather_valid = true;
+            nsp_screensaver_apply(false);
+        } else {
+            nsp_mqtt_publish_log("weather: rejected payload");
+        }
+    } else if (topic == topic_panel_screensaver(s_hostname)) {
+        NspScreensaverConfig cfg;
+        if (nsp_screensaver_parse(payload, cfg)) {
+            s_screensaver_cfg = cfg;
+            nsp_screensaver_apply(true);
+        } else {
+            nsp_mqtt_publish_log("screensaver: rejected payload");
+        }
+    } else if (topic == topic_panel_screensaver_mode(s_hostname)) {
+        if (!payload.empty() && payload.size() <= 32)
+            s_screensaver_mode = payload;
     } else if (topic == topic_relay_cmd(s_hostname, 1)) {
         extern void nsp_relay_handle_cmd(int, const std::string &);
         nsp_relay_handle_cmd(1, payload);

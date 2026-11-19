@@ -290,3 +290,22 @@ def test_time_date_publishing_contract():
     assert '"nspanel/status/ampm"' in src
     assert "timedelta(seconds=60)" in src
     assert "clock_us_style" in src and 'date_format or "%d/%m"' in src
+
+
+def test_native_firmware_screensaver_feeds_and_carriers():
+    """P306: both feeds reach the native panel and the two version carriers
+    agree — a mismatch makes the panel report a version the OTA manifest
+    does not know about."""
+    import re
+
+    proto = _src(ROOT / "firmware-native" / "src" / "protocol.h")
+    mqtt = _src(ROOT / "firmware-native" / "src" / "mqtt.cpp")
+    cmake = _src(ROOT / "firmware-native" / "CMakeLists.txt")
+    sources = _src(ROOT / "firmware-native" / "src" / "CMakeLists.txt")
+    fw = re.search(r'#define FW_VERSION "([^"]+)"', proto).group(1)
+    project_ver = re.search(r'set\(PROJECT_VER "([^"]+)"\)', cmake).group(1)
+    assert fw == project_ver
+    assert "TOPIC_STATUS_WEATHER" in mqtt
+    assert "topic_panel_screensaver(s_hostname)" in mqtt
+    assert "topic_panel_screensaver_mode(s_hostname)" in mqtt
+    assert '"screensaver_parse.cpp"' in sources

@@ -19,6 +19,7 @@
 #include "protocol.h"
 #include "config.h"
 #include "dash_cmd.h"
+#include "screensaver_parse.h"
 
 #define DISPLAY_UART UART_NUM_1
 /* P178 fix: match the proven v1 mapping — Serial2.begin(115200, SERIAL_8N1, 17, 16)
@@ -180,18 +181,12 @@ void nsp_display_show_screensaver(void) {
  * the same guard). */
 static void nsp_display_set_text(const char *object, const char *value) {
     if (!s_display_ready) return;
-    char clean[24] = "";
-    size_t ci = 0;
-    for (const char *p = value; *p && ci + 1 < sizeof(clean); p++) {
-        char c = *p;
-        if ((c >= '0' && c <= '9') || c == ':' || c == ' ' || c == '/' ||
-            (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '-' ||
-            c == '.') {
-            clean[ci++] = c;
-        }
-    }
-    clean[ci] = '\0';
-    std::string cmd = std::string(object) + ".txt=\"" + clean + "\"";
+    /* P306: one canonical sanitiser for every .txt write. The old inline
+     * whitelist is a subset of nsp_display_clean(), which also admits the
+     * degree glyph and '%' (needed by weather) while still stripping
+     * quotes, semicolons, 0xFF and control bytes. */
+    const std::string clean = nsp_display_clean(value ? value : "", 24);
+    const std::string cmd = std::string(object) + ".txt=\"" + clean + "\"";
     nsp_display_send_command(cmd.c_str());
 }
 

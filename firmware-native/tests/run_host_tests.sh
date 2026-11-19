@@ -21,3 +21,5 @@ g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_t8 test_provision_parse.cpp ..
 /tmp/opencode/nsp_t8
 g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_t9 test_dash_cmd.cpp ../src/dash_cmd.cpp
 /tmp/opencode/nsp_t9
+g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_t10 test_screensaver_parse.cpp ../src/screensaver_parse.cpp
+/tmp/opencode/nsp_t10
