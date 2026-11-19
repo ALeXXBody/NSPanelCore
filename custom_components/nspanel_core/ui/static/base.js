@@ -49,17 +49,6 @@ try {
           if (bar) bar.remove();
         } catch (e2) {}
       }
-      /* P310 (the companion app): the connecting bootstrap page ASKS for the
-       * token — the app delivers it async via the external bus, so answer
-       * requestors with whatever we hold and let their reload carry it. */
-      if (d && d.type === "nspanel-token-request") {
-        try {
-          var _t = nspanelLiveToken || nspanelGetToken();
-          if (_t) ev.source.postMessage(
-            { type: "nspanel-hass-token", access_token: _t },
-            window.location.origin);
-        } catch (e3) {}
-      }
     } catch (e) {}
   });
 } catch (e) {}

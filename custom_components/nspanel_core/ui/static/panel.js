@@ -13,8 +13,7 @@
 class NSPanelCorePanel extends HTMLElement {
   set hass(h) {
     try {
-      this._hassRef = h;  // P310: keep the live hass for late token polling
-      const t = this._extractToken(h);
+      const t = h && h.auth && h.auth.data && h.auth.data.access_token;
       if (t && t !== this._liveToken) {
         this._liveToken = t;
         this._pushToken();
@@ -29,122 +28,37 @@ class NSPanelCorePanel extends HTMLElement {
         // navigation carries (sidebar, Integrations links, new tabs) —
         // no 5-minute expiry, no referer tricks.
         this._exchangeSession(t);
-        // P281: the gated pages verify the token from the URL — the iframe
-        // NEVER loads without it.
-        if (this._frame) this._loadWithToken(t);
+        // P281: the gated pages verify the token from the URL — keep the
+        // iframe's credential current (one src refresh per token rotation)
+        if (this._frame) {
+          const want = "/nspanel_core/ui?ha_token=" + encodeURIComponent(t);
+          if (this._frame.src.indexOf("ha_token=") === -1 ||
+              decodeURIComponent(this._frame.src.split("ha_token=")[1] || "") !== t) {
+            this._frame.src = want;
+          }
+        }
       }
     } catch (e) {}
-  }
-
-  /* P310 (the companion app): the app delivers the access token ASYNC via
-   * its external bus ("externalAuthSetToken" fills auth.data later) — the
-   * first `set hass` may run BEFORE any token exists and hass is never
-   * reassigned afterwards. Extract from every known shape and keep polling
-   * the live hass until a token appears. */
-  _extractToken(h) {
-    const a = h && h.auth;
-    if (!a) return "";
-    return (a.data && a.data.access_token) ||
-           (typeof a.accessToken === "string" && a.accessToken) ||
-           (a.tokens && a.tokens.access_token) ||
-           (a.data && a.data.auth && a.data.auth.access_token) || "";
-  }
-
-  _startTokenPoll() {
-    if (this._poll) return;
-    this._pollStart = this._pollStart || Date.now();
-    this._poll = setInterval(() => {
-      try {
-        if (this._liveToken) { clearInterval(this._poll); this._poll = null; return; }
-        // P310: the shim is an IFRAME — its own document has no
-        // <home-assistant>; the HA frontend's document (the PARENT) does.
-        let h = this._hassRef;
-        if (!h) {
-          try { h = window.parent.document.querySelector("home-assistant").hass; }
-          catch (e1) {}
-          if (!h) { try { h = window.parent.hass; } catch (e2) {} }
-        }
-        const tok = this._extractToken(h);
-        if (tok && tok !== this._liveToken) {
-          this._liveToken = tok;
-          this._exchangeSession(tok);
-          if (this._frame) this._loadWithToken(tok);
-        }
-        if (Date.now() - this._pollStart > 120000) {
-          clearInterval(this._poll); this._poll = null;
-        }
-      } catch (e) {}
-    }, 2000);
   }
 
   connectedCallback() {
     if (this._done) return;
     this._done = true;
 
-    /* P310: the connecting bootstrap page asks THIS shim for the token —
-     * base.js (the inner page) cannot answer because it has not loaded yet.
-     * Answer with whatever the live hass holds and load the frame. */
-    try {
-      window.addEventListener("message", (ev) => {
-        try {
-          if (!ev || ev.origin !== window.location.origin) return;
-          const d = ev.data || {};
-          if (d.type === "nspanel-token-request") {
-            let tok = this._liveToken;
-            if (!tok) {
-              try {
-                const ha = window.parent.document.querySelector("home-assistant");
-                tok = this._extractToken(ha && ha.hass);
-              } catch (e1) {}
-            }
-            if (tok) {
-              this._liveToken = tok;
-              if (this._frame) this._loadWithToken(tok);
-              if (ev.source) ev.source.postMessage(
-                { type: "nspanel-hass-token", access_token: tok },
-                window.location.origin);
-            }
-          }
-        } catch (e2) {}
-      });
-    } catch (e0) {}
-
     this.style.cssText = "display:block;width:100%;height:100%;min-height:100vh;";
 
     const iframe = document.createElement("iframe");
-    this._frame = iframe;
+    iframe.src = this._liveToken
+      ? "/nspanel_core/ui?ha_token=" + encodeURIComponent(this._liveToken)
+      : "/nspanel_core/ui";
     iframe.title = "NSPanel Core";
     iframe.style.cssText = "border:0;width:100%;height:100%;min-height:100vh;display:block;";
     iframe.setAttribute("allowfullscreen", "");
+    this._frame = iframe;
     iframe.addEventListener("load", () => {
       try { this._pushToken(); } catch (e) {}
     });
     this.appendChild(iframe);
-    /* P310 (the user's report — "THE APP DASHBOARD says Unauthorized"): NEVER
-     * load the gated page without a credential. In the HA companion app the
-     * webview has no session cookie on first use, and a tokenless load shows
-     * a bare "Unauthorized". Wait for the live token and load with it; if it
-     * never lands (no hass), fall back to the cookie path after a grace
-     * period so cookie-carrying users still get the page. */
-    iframe.src = "about:blank";
-    this._startTokenPoll();
-    if (this._liveToken) {
-      this._loadWithToken(this._liveToken);
-    } else {
-      this._tokenWait = setTimeout(() => {
-        if (!this._liveToken) iframe.src = "/nspanel_core/ui?_cb=" + Date.now();
-      }, 5000);
-    }
-  }
-
-  _loadWithToken(t) {
-    try {
-      if (this._tokenWait) { clearTimeout(this._tokenWait); this._tokenWait = null; }
-      // P310: the app's webview caches page loads — every load is fresh
-      const want = "/nspanel_core/ui?ha_token=" + encodeURIComponent(t) +
-        "&_cb=" + Date.now();
-      if (this._frame && this._frame.src !== want) this._frame.src = want;
-    } catch (e) {}
   }
 
   _exchangeSession(token) {
