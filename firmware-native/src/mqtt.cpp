@@ -283,6 +283,12 @@ void nsp_mqtt_send_register(esp_mqtt_client_handle_t client) {
 void nsp_mqtt_publish_log(const char *msg) {
     extern void nsp_web_log(const std::string &);
     nsp_web_log(msg);  // P184: every OTA/manager event is visible on the panel web UI
+    /* P310: mirror EVERY app log line to the serial console. The app used to
+     * be silent on UART0 — its story went only to MQTT — so a boot-log capture
+     * showed nothing between "Calling app_main()" and a restart. Now the
+     * console carries the app's own line at the exact moment anything
+     * happens (or dies). */
+    printf("[app] %s\n", msg);
     if (s_mqtt == nullptr) return;
     esp_mqtt_client_publish(s_mqtt, topic_log(s_hostname).c_str(), msg, 0, 0, false);
 }

@@ -75,8 +75,34 @@ float nsp_temperature() {
 
 
 extern "C" void app_main(void) {
+    /* P310: the console must tell the whole boot story — who started us, what
+     * we completed, and what the PREVIOUS reset was (POWERON = power rail,
+     * SW = our own esp_restart, BROWNOUT/RTCWDT = a real fault). The app used
+     * to be silent here, so a boot-log capture could not say who killed it. */
+    {
+        int cause = (int)esp_reset_reason();
+        const char *name = "OTHER";
+        switch (cause) {
+            case 1: name = "POWERON"; break;
+            case 2: name = "SW"; break;
+            case 3: name = "PANIC"; break;
+            case 4: name = "INT_WDT"; break;
+            case 5: name = "TASK_WDT"; break;
+            case 6: name = "WDT"; break;
+            case 7: name = "DEEPSLEEP"; break;
+            case 8: name = "BROWNOUT"; break;
+            case 9: name = "SDIO"; break;
+            default: name = "OTHER"; break;
+        }
+        printf("[app] boot: fw " FW_VERSION " — previous reset: %s (%d)\n", name, cause);
+    }
     ESP_ERROR_CHECK(nvs_flash_init());  // factory NVS holds config
+    printf("[app] nvs ok; loading config\n");
     nsp_config_load();
+    printf("[app] config loaded: hostname=%s mqtt=%s manager=%s\n",
+           g_cfg.wifi_hostname.c_str(),
+           g_cfg.mqtt_server.empty() ? "<unset>" : g_cfg.mqtt_server.c_str(),
+           g_cfg.manager_address.empty() ? "<unset>" : g_cfg.manager_address.c_str());
 
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
