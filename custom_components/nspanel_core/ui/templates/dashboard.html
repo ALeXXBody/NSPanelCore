@@ -204,7 +204,6 @@
   <div class="studio-panel-frame" id="pv_frame" data-dev="eu">
     <div class="studio-preview-head">
       <span class="text-xs" style="color:#5a6068">NSPanel <span style="color:#39c8e8">Core</span> — live preview</span>
-      <span class="text-xs" style="color:#5a6068">Both screens are shown at the same time.</span>
     </div>
     <div class="studio-preview-grid">
       <div class="studio-preview-cell">
@@ -247,12 +246,22 @@
   <!-- THE EDITORS: same wide card, sitting under the preview -->
   <div class="studio-panel-frame" id="editor_card">
     <div class="flex gap-1">
-      <div class="studio-tab active" data-tab="design" onclick="setTab('design')">Build the dashboard</div>
+      <div class="studio-tab active" data-tab="screensaver" onclick="setTab('screensaver')">Build the screensaver</div>
+      <div class="studio-tab" data-tab="design" onclick="setTab('design')">Build the dashboard</div>
       <div class="studio-tab" data-tab="panel" onclick="setTab('panel')">Panel hardware</div>
-      <div class="studio-tab" data-tab="screensaver" onclick="setTab('screensaver')">Build the screensaver</div>
     </div>
 
-    <div class="studio-tabpane active" id="pane_design">
+    <div class="studio-tabpane active" id="pane_screensaver">
+      <section class="studio-step plain">
+        <div class="studio-step-head"><span class="studio-step-num">5</span><span class="studio-step-title">Build the screensaver</span></div>
+        <p class="studio-step-desc">Style the clock and date, choose the weather details, then save. The preview above shows every change before it reaches the panel.</p>
+        <div id="screensaver_settings_box">
+          <p class="text-sm opacity-60">Choose a panel above to load its screensaver settings.</p>
+        </div>
+      </section>
+    </div>
+
+    <div class="studio-tabpane" id="pane_design">
       <div class="studio-pagebar">
         <label for="scr_sel">Picture shown on the screensaver:</label>
         <select id="scr_sel" onchange="design.screensaver_page=this.value;renderPreview()"
@@ -315,15 +324,6 @@
       </section>
     </div>
 
-    <div class="studio-tabpane" id="pane_screensaver">
-      <section class="studio-step plain">
-        <div class="studio-step-head"><span class="studio-step-num">5</span><span class="studio-step-title">Build the screensaver</span></div>
-        <p class="studio-step-desc">Style the clock and date, choose the weather details, then save. The preview above shows every change before it reaches the panel.</p>
-        <div id="screensaver_settings_box">
-          <p class="text-sm opacity-60">Choose a panel above to load its screensaver settings.</p>
-        </div>
-      </section>
-    </div>
   </div>
 </div>
 

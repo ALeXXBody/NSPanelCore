@@ -79,8 +79,18 @@ def test_the_partial_renders_all_three_sections_as_siblings():
     general = _between(FIELDS, 'data-section="general"', 'data-section="buttons"')
     buttons = _between(FIELDS, 'data-section="buttons"', 'data-section="screen"')
     screen = FIELDS[FIELDS.index('data-section="screen"'):]
-    for field in ("friendly_name", "panel_type", "room_id", "default_page"):
+    for field in ("friendly_name", "panel_type", "room_id"):
         assert field in general, f"{field} missing from the general section"
+    # these controls are removed from the General UI (kept only where data
+    # integrity requires hidden preservation on save, never as visible controls)
+    for removed in ("lock_to_default_room", "show_home_scenes",
+                    "show_home_ceiling", "show_home_table", "show_home_kelvin",
+                    "rooms"):
+        assert f'type="checkbox" name="{removed}"' not in general
+        assert f'type="radio" name="{removed}"' not in general
+    assert '<select name="default_page"' not in general
+    assert '<label for="default_page"' not in general
+    assert "Reverse relays" not in general
     for field in ("button1_mode", "button2_mode", "button1_detached_mode_room",
                   "button2_detached_mode_room", "button1_mqtt_mode_controls",
                   "button2_mqtt_mode_controls"):
