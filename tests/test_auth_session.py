@@ -59,8 +59,10 @@ def _run(coro):
 
 def test_auth_session_post_issues_httponly_cookie_and_persists():
     mgr = _mgr()
+    mgr.hass.auth.async_validate_token = AsyncMock(return_value=True)
     with patch("nspanel_core.dashboard._manager", return_value=mgr):
-        resp = _run(AuthSessionView().post(_req()))
+        resp = _run(AuthSessionView().post(
+            _req(headers={"Authorization": "Bearer fresh"})))
 
     assert resp.status == 200
     morsel = resp.cookies[SESSION_COOKIE]
@@ -77,9 +79,11 @@ def test_auth_session_post_issues_httponly_cookie_and_persists():
 
 def test_auth_session_prunes_expired_sessions():
     mgr = _mgr()
+    mgr.hass.auth.async_validate_token = AsyncMock(return_value=True)
     mgr.config.settings.nspanel_sessions = {"stale": time.time() - 10}
     with patch("nspanel_core.dashboard._manager", return_value=mgr):
-        _run(AuthSessionView().post(_req()))
+        _run(AuthSessionView().post(
+            _req(headers={"Authorization": "Bearer fresh"})))
     sessions = mgr.config.settings.nspanel_sessions
     assert "stale" not in sessions
     assert len(sessions) == 1

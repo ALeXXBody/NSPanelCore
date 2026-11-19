@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import logging
 import pathlib
@@ -197,6 +198,28 @@ SESSION_COOKIE = "nspanel_session"
 SESSION_TTL = 24 * 3600
 
 
+def _gated(handler):
+    """P295: auth for every BROWSER-facing view, without HA's ban middleware.
+
+    HA's request_handler_factory raises HTTPUnauthorized for requires_auth=True
+    views whenever the token is missing or stale. ban_middleware catches that
+    exception and process_wrong_login() raises the user-visible
+    "Login attempt or request with invalid authentication" notification — even
+    when a client retry with a fresh token succeeds a moment later.
+
+    Views the browser calls are therefore requires_auth=False and carry this
+    decorator instead: the SAME identity check (_nspanel_auth_ok accepts the HA
+    token, the 24h session cookie and the URL fallback), but a plain 401
+    Response. No exception reaches HA's ban middleware, so no notification.
+    """
+    @functools.wraps(handler)
+    async def wrapper(self, request, *args, **kwargs):
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+        return await handler(self, request, *args, **kwargs)
+    return wrapper
+
+
 class AuthSessionView(HomeAssistantView):
     """P286: the session exchange — the HA access token (5-minute
     lifetime) is validated ONCE and exchanged for a long-lived manager
@@ -206,8 +229,9 @@ class AuthSessionView(HomeAssistantView):
 
     url = f"{URL_BASE}/auth_session"
     name = "nspanel_core:auth_session"
-    requires_auth = True  # the native Bearer validation of the fresh token
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def post(self, request, **kwargs):
         import secrets as _secrets
         import time as _time
@@ -371,8 +395,9 @@ class ProvisionPushView(HomeAssistantView):
 
     url = f"{URL_BASE}/api/panel/{{panel_id}}/provision"
     name = "nspanel_core:api:panel_provision"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def post(self, request, **kwargs):
         manager = _manager(request)
         try:
@@ -449,8 +474,9 @@ class MainPageView(HomeAssistantView):
 class HtmxNspanelsSectionView(HomeAssistantView):
     url = f"{URL_BASE}/htmx/nspanels"
     name = "nspanel_core:htmx:nspanels"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def get(self, request, **kwargs):
         manager = _manager(request)
         html = _render(
@@ -466,7 +492,7 @@ class PanelActionView(HomeAssistantView):
 
     url = "/nspanel_core/api/panel/{panel_id}/{action}"
     name = "nspanel_core:api:panel_action"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
     async def post(self, request, **kwargs):
         return await self._act(request)
@@ -474,6 +500,7 @@ class PanelActionView(HomeAssistantView):
     async def delete(self, request, **kwargs):
         return await self._act(request)
 
+    @_gated
     async def _act(self, request):
         manager = _manager(request)
         try:
@@ -700,8 +727,9 @@ class DashboardPanelSettingsView(HomeAssistantView):
 class SavePanelSettingsView(HomeAssistantView):
     url = f"{URL_BASE}/api/panel_save/{{panel_id}}"
     name = "nspanel_core:api:panel_save"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def post(self, request, **kwargs):
         manager = _manager(request)
         try:
@@ -951,8 +979,9 @@ class AllowIgnoredMacView(HomeAssistantView):
 
     url = f"{URL_BASE}/api/ignored_mac/{{mac}}"
     name = "nspanel_core:api:ignored_mac"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def delete(self, request, **kwargs):
         manager = _manager(request)
         mac = str(request.match_info.get("mac", ""))
@@ -1078,7 +1107,7 @@ class SaveSettingsView(HomeAssistantView):
 
     url = f"{URL_BASE}/save_settings"
     name = "nspanel_core:save_settings"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
     _PANEL_DEFAULTS = {
         "min_button_push_time": (0, 10000),
@@ -1095,6 +1124,7 @@ class SaveSettingsView(HomeAssistantView):
         "no_screensaver",
     )
 
+    @_gated
     async def post(self, request, **kwargs):
         manager = _manager(request)
         form = await request.post()
@@ -1310,8 +1340,9 @@ def _md5(path: str) -> str:
 class DownloadTftView(HomeAssistantView):
     url = f"{URL_BASE}/download_tft/{{panel_id}}"
     name = "nspanel_core:download_tft"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def get(self, request, **kwargs):
         manager = _manager(request)
         try:
@@ -1331,8 +1362,9 @@ class DownloadTftView(HomeAssistantView):
 class ChecksumTftView(HomeAssistantView):
     url = f"{URL_BASE}/checksum_tft_file/{{panel_id}}"
     name = "nspanel_core:checksum_tft"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def get(self, request, **kwargs):
         manager = _manager(request)
         try:
@@ -1359,7 +1391,7 @@ class OtaUploadView(HomeAssistantView):
     triggers use the new file immediately.
     """
 
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
     _max_bytes = 32 * 1024 * 1024
 
     async def _save_upload(self, request, field: str, dest_path: str) -> web.Response | None:
@@ -1404,6 +1436,7 @@ class SaveFirmwareView(OtaUploadView):
     url = f"{URL_BASE}/save_new_firmware"
     name = "nspanel_core:save_firmware"
 
+    @_gated
     async def post(self, request, **kwargs):
         manager = _manager(request)
         form = await request.post()
@@ -1427,6 +1460,7 @@ class SaveDataFileView(OtaUploadView):
     url = f"{URL_BASE}/save_new_data_file"
     name = "nspanel_core:save_data_file"
 
+    @_gated
     async def post(self, request, **kwargs):
         manager = _manager(request)
         form = await request.post()
@@ -1449,6 +1483,7 @@ class SaveTftFileView(OtaUploadView):
     url = f"{URL_BASE}/save_new_tft_file"
     name = "nspanel_core:save_tft_file"
 
+    @_gated
     async def post(self, request, **kwargs):
         manager = _manager(request)
         form = await request.post()
@@ -1480,8 +1515,9 @@ class FirmwareStatusView(HomeAssistantView):
 
     url = f"{URL_BASE}/firmware_status"
     name = "nspanel_core:firmware_status"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def get(self, request, **kwargs):
         from . import firmware_store as _fs
 
@@ -1517,8 +1553,9 @@ class FirmwareCheckView(HomeAssistantView):
 
     url = f"{URL_BASE}/firmware_check"
     name = "nspanel_core:firmware_check"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def post(self, request, **kwargs):
         manager = _manager(request)
         status = await manager.check_firmware_updates()
@@ -1537,8 +1574,9 @@ class FirmwareInstallView(HomeAssistantView):
 
     url = f"{URL_BASE}/firmware_install"
     name = "nspanel_core:firmware_install"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def post(self, request, **kwargs):
         manager = _manager(request)
         ok, message = await manager.activate_firmware_version()
@@ -1554,8 +1592,9 @@ class ReorderRoomsView(HomeAssistantView):
 
     url = f"{URL_BASE}/htmx_partial_reorder_rooms"
     name = "nspanel_core:reorder_rooms"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def post(self, request, **kwargs):
         manager = _manager(request)
         form = await request.post()
@@ -1584,8 +1623,9 @@ class GetIpByHostnameView(HomeAssistantView):
 
     url = f"{URL_BASE}/get_ip_by_hostname"
     name = "nspanel_core:get_ip_by_hostname"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def post(self, request, **kwargs):
         import socket as _socket
 
@@ -1743,8 +1783,9 @@ class EntitiesListView(HomeAssistantView):
 
     url = "/api/get_all_available_entities"
     name = "nspanel_core:api:entities"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def get(self, request, **kwargs):
         domains = request.query.get("domain", "")
         wanted = {d.strip() for d in domains.split(",") if d.strip()} if domains else None
@@ -1773,11 +1814,12 @@ class EntitiesListView(HomeAssistantView):
 class EntityPickerModalView(HomeAssistantView):
     """Serve the existing entity-picker modal partials (XHR, authed)."""
 
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
     url = ""
     name = ""
     template = ""
 
+    @_gated
     async def get(self, request, **kwargs):
         manager = _manager(request)
         entities = [
@@ -1967,8 +2009,9 @@ def _redirect_back(request, fallback: str) -> web.Response:
 class SaveNewRoomView(HomeAssistantView):
     url = f"{URL_BASE}/save_new_room"
     name = "nspanel_core:save_new_room"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def post(self, request, **kwargs):
         manager = _manager(request)
         form = await request.post()
@@ -1984,10 +2027,11 @@ class SaveNewRoomView(HomeAssistantView):
 class UpdateRoomView(HomeAssistantView):
     url = f"{URL_BASE}/update_room_form"
     name = "nspanel_core:update_room"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
     _ENTITY_RE = None
 
+    @_gated
     async def post(self, request, **kwargs):
         import re
 
@@ -2025,8 +2069,9 @@ class UpdateRoomView(HomeAssistantView):
 class DeleteRoomView(HomeAssistantView):
     url = f"{URL_BASE}/api/rooms/{{room_id}}/delete"
     name = "nspanel_core:api:room_delete2"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def post(self, request, **kwargs):
         manager = _manager(request)
         try:
@@ -2044,8 +2089,9 @@ class DeleteRoomView(HomeAssistantView):
 class RestartView(HomeAssistantView):
     url = f"{URL_BASE}/api/restart"
     name = "nspanel_core:api:restart"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def post(self, request, **kwargs):
         manager = _manager(request)
         await manager.async_stop()
@@ -2056,8 +2102,9 @@ class RestartView(HomeAssistantView):
 class ThemeView(HomeAssistantView):
     url = f"{URL_BASE}/api/theme"
     name = "nspanel_core:api:theme"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def post(self, request, **kwargs):
         manager = _manager(request)
         form = await request.post()
@@ -2079,8 +2126,9 @@ class ThemeView(HomeAssistantView):
 class MessagesView(HomeAssistantView):
     url = f"{URL_BASE}/api/messages"
     name = "nspanel_core:api:messages"
-    requires_auth = True
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
 
+    @_gated
     async def get(self, request, **kwargs):
         manager = _manager(request)
         messages = manager.get_messages()
