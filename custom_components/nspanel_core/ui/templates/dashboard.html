@@ -69,6 +69,9 @@
     transition: all .15s; }
   .studio-slot:hover { border-color: rgba(57,200,232,.9);
     background: rgba(57,200,232,.08); }
+  /* P297: the slot the user clicked while choosing an entity */
+  .studio-slot.targeted { border-color: #39c8e8; border-style: solid;
+    background: rgba(57,200,232,.18); box-shadow: 0 0 14px rgba(57,200,232,.35); }
   .studio-clock {
     position:absolute; left:40px; top:80px; width:400px; text-align:center;
     font-size:64px; font-weight:300; color:#c8cbce; letter-spacing:2px;
@@ -175,7 +178,8 @@
         <thead><tr><th>Entity</th><th>Widget</th><th>Label</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
-      <button class="studio-btn ghost" style="padding:5px 14px" onclick="addItem()">+ Add item</button>
+      <button class="studio-btn ghost" style="padding:5px 14px" onclick="addItem()"
+              title="Every item is a Home Assistant entity — choose one from the library below">+ Add item</button>
 
       <div style="margin-top:1rem;border-top:1px solid #2a2f3a;padding-top:.75rem">
         <h3 class="text-sm font-semibold" style="color:#e8eaec;margin-bottom:.25rem">Home Assistant entities</h3>
@@ -207,6 +211,8 @@ var entities = [];
 var entityQuery = "";      // P292: the studio's text filter over the entity library
 var selectedRoom = null;   // the page name whose preview + items are shown
 var selectedItemId = null; // the item being placed/moved
+var targetSlot = null;     // P297: slot chosen on the preview, waiting for an entity
+var settingsLoading = false; // P297: one settings fetch at a time
 var panelId = null;
 var view = "dash";
 var SLOTS = [[10,60],[165,60],[320,60],[10,190],[165,190],[320,190]];
@@ -264,9 +270,9 @@ function loadDesign() {
   var sel = document.getElementById('panel_sel');
   panelId = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].dataset.id : null;
   if (document.getElementById('pane_panel').classList.contains('active')) loadPanelSettings();
-  document.getElementById('panel_settings_box').innerHTML =
-    '<p class="text-sm opacity-60">Choose a panel to load its settings.</p>';
   if (!mac) {
+    document.getElementById('panel_settings_box').innerHTML =
+      '<p class="text-sm opacity-60">Choose a panel to load its settings.</p>';
     // P291b: never leave a stale design on screen with an empty selector —
     // the old pages kept their file inputs and uploaded an empty panel id.
     design = { mac: "", pages: [], items: [], screensaver_page: "" };
@@ -283,6 +289,10 @@ function loadDesign() {
     .then(studioJson)
     .then(function (dj) {
       design = dj.design; design.mac = mac;
+      // P297: a saved design may hold legacy entity-less items from the old
+      // blank-tile path. They are not entities — drop them on load so the
+      // studio can never display a static icon pretending to be an item.
+      design.items = (design.items || []).filter(function (it) { return !!it.entity_id; });
       renderPages(); renderItems(); renderPreview();
     })
     .catch(function (e) { setStatus('Failed to load design: ' + e, true); });
@@ -298,12 +308,36 @@ function opt(v, label, sel) {
   return '<option value="' + esc(v) + '"' + (v === sel ? ' selected' : '') + '>' + esc(label) + '</option>';
 }
 
+/* P297: an item IS a Home Assistant entity. Changing its widget category must
+ * rebind it to a REAL entity of that domain — never clear entity_id, which
+ * used to turn the tile into the "empty, useless, static icon". If the new
+ * domain has no entities, keep the current widget and say so. */
 function onWidgetChange(i, widget) {
-  design.items[i].widget = widget;
-  // the entity must match the new category — clear it when it doesn't
+  var it = design.items[i];
   var dom = widgetDomain(widget);
-  var cur = entities.find(e => e.entity_id === design.items[i].entity_id);
-  if (cur && cur.domain !== dom) design.items[i].entity_id = '';
+  var allowed = entities.filter(function (e) { return e.domain === dom; });
+  if (!allowed.length) {
+    setStatus('No Home Assistant ' + dom + ' entities available', true);
+    renderItems(); return;
+  }
+  it.widget = widget;
+  var cur = entities.find(function (e) { return e.entity_id === it.entity_id; });
+  if (!cur || cur.domain !== dom) {
+    it.entity_id = allowed[0].entity_id;
+    it.label = entityLabel(allowed[0]) || allowed[0].entity_id;
+  }
+  renderItems(); renderPreview();
+}
+
+/* P297: the per-item entity picker. An empty choice is never stored — the
+ * item keeps its current, real entity. */
+function setItemEntity(i, id) {
+  if (!id) { setStatus('Choose a real Home Assistant entity', true); renderItems(); return; }
+  var ent = entities.find(function (e) { return e.entity_id === id; }) || {};
+  var it = design.items[i];
+  it.entity_id = id;
+  it.widget = widgetFromEntity(id);
+  if (!it.label) it.label = entityLabel(ent) || id;
   renderItems(); renderPreview();
 }
 
@@ -385,13 +419,19 @@ function renderEntityLibrary() {
 
 function addEntityItem(entity_id) {
   if (!selectedRoom) { setStatus('Select a page first (click its row)', true); return; }
+  if (!entity_id) { setStatus('Choose a real Home Assistant entity', true); return; }
   var used = design.items.filter(function (it) { return it.page === selectedRoom; })
     .map(function (it) { return it.slot; });
-  var slot = -1;
-  for (var s = 0; s < SLOTS.length; s++) {
-    if (used.indexOf(s) === -1) { slot = s; break; }
+  // P297: if the user first clicked a spot on the preview, honour that spot.
+  var slot = (typeof targetSlot === 'number' && used.indexOf(targetSlot) === -1)
+    ? targetSlot : -1;
+  if (slot === -1) {
+    for (var s = 0; s < SLOTS.length; s++) {
+      if (used.indexOf(s) === -1) { slot = s; break; }
+    }
   }
   if (slot === -1) { setStatus('All ' + SLOTS.length + ' positions are taken in this page', true); return; }
+  targetSlot = null;
   var ent = entities.find(function (e) { return e.entity_id === entity_id; }) || {};
   design.items.push({
     id: 'item' + Date.now(), page: selectedRoom, slot: slot,
@@ -399,7 +439,7 @@ function addEntityItem(entity_id) {
     label: entityLabel(ent) || entity_id
   });
   renderItems(); renderPreview();
-  setStatus('Added ' + entityLabel(ent) + ' to ' + selectedRoom, false);
+  setStatus('Added ' + (entityLabel(ent) || entity_id) + ' to ' + selectedRoom, false);
 }
 
 function selectRoom(name) {
@@ -430,7 +470,7 @@ function renderItems() {
     var i = design.items.indexOf(it);
     var sel = it.id === selectedItemId;
     return '<tr' + (sel ? ' style="outline:1px solid rgba(57,200,232,.4)"' : '') + '>' +
-      '<td><select class="select is-small" style="background:#141821;color:#e8eaec;max-width:13rem" onchange="design.items[' + i + '].entity_id=this.value;design.items[' + i + '].widget=widgetFromEntity(this.value);renderItems();renderPreview()">' + entityOpts(it.widget, it.entity_id) + '</select></td>' +
+      '<td><select class="select is-small" style="background:#141821;color:#e8eaec;max-width:13rem" onchange="setItemEntity(' + i + ', this.value)">' + entityOpts(it.widget, it.entity_id) + '</select></td>' +
       '<td><select class="select is-small" style="background:#141821;color:#e8eaec" onchange="onWidgetChange(' + i + ', this.value)">' + widgetOpts(it.widget) + '</select></td>' +
       '<td><input class="input is-small" maxlength="24" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + esc(it.label) + '" onchange="design.items[' + i + '].label=this.value;renderPreview()"></td>' +
       '<td><button class="button is-small is-danger" onclick="removeItem(\'' + it.id + '\')">✕</button></td>' +
@@ -445,18 +485,24 @@ function removeItem(id) {
   renderItems(); renderPreview();
 }
 
-/* the preview IS the position: click an empty spot to place, a tile to select */
+/* P297: the preview IS the position. Clicking a tile selects it; clicking an
+ * empty spot TARGETS it for the next entity chosen from the library. No blank
+ * item is ever created — an item is a HA entity, full stop. */
 function slotClick(slot) {
   var taken = design.items.find(it => it.page === selectedRoom && it.slot === slot);
   if (taken) {
     selectedItemId = taken.id;
-    renderItems(); return;
+    targetSlot = null;
+    renderItems(); renderPreview(); return;
   }
-  var it = { id: 'item' + Date.now(), page: selectedRoom, widget: 'light',
-             entity_id: '', label: '', slot: slot };
-  design.items.push(it);
-  selectedItemId = it.id;
-  renderItems(); renderPreview();
+  if (!selectedRoom) { setStatus('Select a page first (click its row)', true); return; }
+  targetSlot = slot;
+  setStatus('Choose a Home Assistant entity below to place it in this position.', false);
+  renderPreview();
+  var filter = document.getElementById('entity_filter');
+  if (filter && filter.focus) filter.focus();
+  var lib = document.getElementById('entity_library');
+  if (lib && lib.scrollIntoView) lib.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function deletePage(i) {
@@ -474,13 +520,15 @@ function addPage() {
   design.pages.push({ name: 'dash_room' + n, title: 'Room ' + n, background: 'bg_plain', background_image: '' });
   renderPages(); renderPreview();
 }
+/* P297: "+ Add item" no longer fabricates an entity-less tile. It sends the
+ * user to the entity library — the only place an item can be born. */
 function addItem() {
   if (!selectedRoom) { setStatus('Select a page first (click its row)', true); return; }
-  var used = design.items.filter(it => it.page === selectedRoom).map(it => it.slot);
-  for (var s = 0; s < 6; s++) {
-    if (used.indexOf(s) === -1) { slotClick(s); return; }
-  }
-  setStatus('All 6 positions are taken in this page', true);
+  targetSlot = null; // the next library pick uses the first free slot
+  setStatus('Every item is a Home Assistant entity — pick one from the library below.', false);
+  var filter = document.getElementById('entity_filter');
+  if (filter && filter.focus) filter.focus();
+  if (filter && filter.scrollIntoView) filter.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function uploadBg(i, input) {
@@ -550,8 +598,16 @@ function setPanelSubTab(sec) {
   document.querySelectorAll('#panel_subtabs .studio-subtab').forEach(function (e) {
     e.classList.toggle('active', e.dataset.sec === sec);
   });
-  var form = document.querySelector('#panel_settings_box form');
-  if (!form) return;
+  var box = document.getElementById('panel_settings_box');
+  var form = box ? box.querySelector('form') : null;
+  if (!form) {
+    // P297: the sub-tab bar is visible before the settings are injected.
+    // Clicking a tab must always bring up its fields — never a dead highlight.
+    if (panelId) loadPanelSettings(); // the injected form re-applies panelSubTab
+    else if (box) box.innerHTML =
+      '<p class="text-sm opacity-60">Choose a panel to load its settings.</p>';
+    return;
+  }
   ['screen', 'buttons', 'general'].forEach(function (s) {
     var el = form.querySelector('[data-section="' + s + '"]');
     if (el) el.style.display = (s === sec) ? '' : 'none';
@@ -566,10 +622,13 @@ function loadPanelSettings() {
     box.innerHTML = '<p class="text-sm opacity-60">Choose a panel to load its settings.</p>';
     return;
   }
+  if (settingsLoading) return; // P297: no duplicate fetches from tab + zone jumps
+  settingsLoading = true;
   box.innerHTML = '<p class="text-sm opacity-60">Loading…</p>';
   nspanelFetch('/nspanel_core/dashboard/panel_settings?panel_id=' + panelId)
     .then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)))
     .then(t => {
+      settingsLoading = false;
       box.innerHTML = t;
       box.querySelectorAll('input,select').forEach(el => {
         el.style.background = '#141821'; el.style.color = '#e8eaec';
@@ -590,7 +649,10 @@ function loadPanelSettings() {
       });
       renderPreview();  // the device frame follows the panel type
     })
-    .catch(e => { box.innerHTML = '<p class="text-sm" style="color:#e07070">Failed to load settings: ' + e.message + '</p>'; });
+    .catch(e => {
+      settingsLoading = false;
+      box.innerHTML = '<p class="text-sm" style="color:#e07070">Failed to load settings: ' + e.message + '</p>';
+    });
 }
 function savePanelSettings() {
   var form = document.getElementById('panel_settings_form');
@@ -672,8 +734,9 @@ function renderPreview() {
         (val ? '<div class="val">' + val + '</div>' : '') +
         '</div>';
     } else {
-      html += '<div class="studio-slot" style="left:' + s[0] + 'px;top:' + s[1] + 'px"' +
-        ' onclick="slotClick(' + slot + ')" title="Place an item here"></div>';
+      html += '<div class="studio-slot' + (slot === targetSlot ? ' targeted' : '') + '"' +
+        ' style="left:' + s[0] + 'px;top:' + s[1] + 'px"' +
+        ' onclick="slotClick(' + slot + ')" title="Choose a Home Assistant entity for this spot"></div>';
     }
   });
   tilesEl.innerHTML = html;
@@ -721,6 +784,16 @@ setInterval(function () {
 }, 1000);
 setView('dash');
 initZoneJumps();
+/* P297: with no panel picked, the Panel sub-tabs were visible but had no form
+ * behind them, so clicking one did nothing the user could see. Select the
+ * first real panel on load — the studio is always usable immediately. */
+(function autoSelectPanel() {
+  var sel = document.getElementById('panel_sel');
+  if (sel && !sel.value && sel.options.length > 1) {
+    sel.value = sel.options[1].value; // option 0 is the "choose a panel" prompt
+    loadDesign();
+  }
+})();
 loadEntities();  // P292: import HA entities on load, independent of any design
 </script>
 {% endblock %}

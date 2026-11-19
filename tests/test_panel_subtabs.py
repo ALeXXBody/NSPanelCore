@@ -54,7 +54,9 @@ def test_fields_stay_inside_the_form_on_save():
     # all three groups are toggled in place, never detached
     for sec in ("screen", "buttons", "general"):
         assert f"'{sec}'" in fn
-    assert "querySelector('#panel_settings_box form')" in fn
+    # P297: the form is looked up inside the settings box so a missing form
+    # can trigger an on-demand load; the sections themselves stay in place.
+    assert "box.querySelector('form')" in fn
     # P290: P289 built "general" by moving every other child of the screen's
     # parent — that swallowed the wrapper containing the buttons section, so
     # the physical-buttons sub-tab could never be displayed. No more surgery.
