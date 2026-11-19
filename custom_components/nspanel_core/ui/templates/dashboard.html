@@ -169,16 +169,21 @@
       <p class="is-size-7" style="color:#8b9099;margin-bottom:.75rem">
         The panel's own settings — MOVED here from the settings page.
       </p>
-      <div data-group="screen" style="margin-bottom:1rem">
-        <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">SCREEN &amp; SCREENSAVER</h4>
-      </div>
-      <div data-group="buttons" style="margin-bottom:1rem">
-        <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">PHYSICAL BUTTONS</h4>
-      </div>
-      <div data-group="general">
-        <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">GENERAL</h4>
-      </div>
-      <form id="panel_settings_form" style="display:contents"></form>
+      <form id="panel_settings_form" style="display:contents">
+        <!-- every input stays inside THIS form — the groups are visual only -->
+        <div data-group="screen" style="margin-bottom:1rem">
+          <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">SCREEN &amp; SCREENSAVER</h4>
+          <div data-slot="screen"></div>
+        </div>
+        <div data-group="buttons" style="margin-bottom:1rem">
+          <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">PHYSICAL BUTTONS</h4>
+          <div data-slot="buttons"></div>
+        </div>
+        <div data-group="general">
+          <h4 class="text-xs font-semibold" style="color:#39c8e8;margin-bottom:.4rem">GENERAL</h4>
+          <div id="panel_settings_box"></div>
+        </div>
+      </form>
       <button class="studio-btn" style="margin-top:.75rem" onclick="savePanelSettings()">Save panel settings</button>
     </div>
   </div>
@@ -218,8 +223,8 @@ function loadDesign() {
   panelId = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].dataset.id : null;
   document.getElementById('panel_settings_box').innerHTML =
     '<p class="text-sm opacity-60">Choose a panel to load its settings.</p>';
-  if (!mac) { document.getElementById('preview').style.opacity = .35; return; }
-  document.getElementById('preview').style.opacity = 1;
+  if (!mac) { document.getElementById('pv_frame').style.opacity = .35; return; }
+  document.getElementById('pv_frame').style.opacity = 1;
   Promise.all([
     fetch('/nspanel_core/dashboard_design?panel=' + mac, { credentials: 'same-origin' }).then(r => r.json()),
     fetch('/nspanel_core/dashboard_entities', { credentials: 'same-origin' }).then(r => r.json())
@@ -365,6 +370,7 @@ function sendPanel() {
 /* ---- the panel settings (the elements moved from the settings page) ---- */
 function loadPanelSettings() {
   var box = document.getElementById('panel_settings_box');
+  if (!box) return;
   box.innerHTML = '<p class="text-sm opacity-60">Loading…</p>';
   nspanelFetch('/nspanel_core/dashboard/panel_settings?panel_id=' + panelId)
     .then(r => r.text()).then(t => {
@@ -380,10 +386,11 @@ function loadPanelSettings() {
       if (!form) return;
       // relocate the moved sections into their dedicated groups (P266:
       // the button + screen settings live here, REMOVED from the settings page)
+      // the sections move WITHIN the form — the inputs never leave it
       ['buttons', 'screen'].forEach(function (sec) {
         var wrap = box.querySelector('[data-section="' + sec + '"]');
-        var group = document.querySelector('[data-group="' + sec + '"]');
-        if (wrap && group) group.appendChild(wrap);
+        var slot = document.querySelector('[data-slot="' + sec + '"]');
+        if (wrap && slot) slot.appendChild(wrap);
         wrap?.removeAttribute('style');
       });
       form.id = 'panel_settings_form';
