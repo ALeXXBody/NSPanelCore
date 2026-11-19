@@ -162,7 +162,7 @@ def test_entity_filter_matches_friendly_name_id_and_domain_case_insensitively():
 var entities = [
   {entity_id: 'light.kitchen', name: 'Kitchen Light', domain: 'light'},
   {entity_id: 'switch.fan', name: 'Ceiling Fan', domain: 'switch'},
-  {entity_id: 'sensor.temp', name: 'Living Room Temp', domain: 'sensor'}
+  {entity_id: 'sensor.temp', name: 'Living Page Temp', domain: 'sensor'}
 ];
 console.log(JSON.stringify(entities.map(function (e) {
   return {
@@ -179,7 +179,7 @@ console.log(JSON.stringify(entities.map(function (e) {
                       "domain": False, "blank": True}
     assert out[1] == {"label": "Ceiling Fan", "kitchen": False, "fan": True,
                       "domain": False, "blank": True}
-    assert out[2]["label"] == "Living Room Temp"
+    assert out[2]["label"] == "Living Page Temp"
     assert out[2]["kitchen"] is False and out[2]["domain"] is True
 
 
@@ -209,7 +209,7 @@ var design = {pages: [], items: [
   {id: 'i1', page: 'p1', widget: 'light', entity_id: 'light.kitchen',
    label: 'Kitchen', slot: 0}
 ]};
-var selectedRoom = 'p1', selectedItemId = null;
+var selectedPage = 'p1', selectedItemId = null;
 renderItems();
 console.log(JSON.stringify({html: rendered.items}));
 """ % (_FNS["esc"], _FNS["opt"], _FNS["widgetDomain"], _FNS["widgetLabel"],
@@ -228,7 +228,7 @@ def test_add_entity_item_places_in_first_free_slot_with_a_friendly_label():
 %s
 var entities = [{entity_id: 'light.x', name: 'X Light', domain: 'light'}];
 var design = {mac: 'm', pages: [{name: 'p1'}], items: [{page: 'p1', slot: 0}]};
-var selectedRoom = 'p1';
+var selectedPage = 'p1';
 var SLOTS = [[0,0],[1,1],[2,2],[3,3],[4,4],[5,5]];
 var called = [];
 function setStatus(t, e) { called.push(t); }
@@ -276,7 +276,7 @@ var design = {mac: 'm', pages: [], items: [
   {id: 'i1', page: 'p1', widget: 'light', entity_id: 'light.hall',
    label: 'Hall', slot: 0}
 ]};
-var selectedRoom = 'p1';
+var selectedPage = 'p1';
 var selectedItemId = null;
 renderItems();
 var allHtml = rendered.items;

@@ -58,7 +58,7 @@ def test_render_preview_points_the_live_image_at_the_pages_photo():
     script = _js("renderPreview", "esc") + """
 var design = {mac: 'AA', pages: [{name: 'dash_kitchen', title: 'Kitchen',
   background_image: 'gal_aa_111.jpg'}], items: [], screensaver_page: ''};
-var entities = [], selectedRoom = 'dash_kitchen', selectedItemId = null;
+var entities = [], selectedPage = 'dash_kitchen', selectedItemId = null;
 var targetSlot = null, view = 'dash', SLOTS = [];
 var els = {};
 function _el(id) {
@@ -91,11 +91,11 @@ console.log(JSON.stringify({src: bg.src, display: bg.style.display,
 
 def test_page_names_come_from_the_editable_title():
     script = _js("pageSlug", "uniquePageName", "addPage", "renamePage") + """
-var design = {mac: 'AA', pages: [{name: 'dash_room1', title: 'Room 1',
+var design = {mac: 'AA', pages: [{name: 'dash_room1', title: 'Page 1',
   background_image: ''}], items: [{id: 'i1', page: 'dash_room1',
   widget: 'light', entity_id: 'light.x', label: 'X', slot: 0}],
   screensaver_page: 'dash_room1'};
-var selectedRoom = 'dash_room1';
+var selectedPage = 'dash_room1';
 var calls = [];
 function renderPages() { calls.push('pages'); }
 function renderItems() { calls.push('items'); }
@@ -112,19 +112,19 @@ renamePage(0, 'Kitchen');
 out.renamed = JSON.parse(JSON.stringify(design.pages[0]));
 out.itemPage = design.items[0].page;
 out.screensaver = design.screensaver_page;
-out.selectedRoom = selectedRoom;
+out.selectedPage = selectedPage;
 out.unique = uniquePageName(pageSlug('Kitchen'), 1);  // page 0 already has it
 out.calls = calls;
 console.log(JSON.stringify(out));
 """
     out = _node_run(script)
     assert out["slug"] == "livingroo"   # firmware-safe: dash_ + max 9 chars
-    assert out["added"]["name"] == "dash_newroom"
+    assert out["added"]["name"] == "dash_newpage"
     assert out["renamed"] == {"name": "dash_kitchen", "title": "Kitchen",
                               "background_image": ""}
     assert out["itemPage"] == "dash_kitchen"      # items rebound atomically
     assert out["screensaver"] == "dash_kitchen"
-    assert out["selectedRoom"] == "dash_kitchen"
+    assert out["selectedPage"] == "dash_kitchen"
     assert out["unique"] == "dash_kitchen_2"
     assert "save" in out["calls"]
 
@@ -136,7 +136,7 @@ def test_gallery_renders_thumbnails_and_applies_a_photo():
 var galleryPhotos = [{name: 'gal_aa_111.jpg'}, {name: 'gal_aa_222.png'}];
 var design = {mac: 'AA', pages: [{name: 'dash_kitchen', title: 'Kitchen',
   background_image: 'gal_aa_111.jpg'}]};
-var selectedRoom = 'dash_kitchen';
+var selectedPage = 'dash_kitchen';
 var calls = [];
 function currentMac() { return 'AA'; }
 function renderPages() { calls.push('pages'); }

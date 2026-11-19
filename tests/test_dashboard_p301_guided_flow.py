@@ -5,7 +5,7 @@ and that's it ... Nobody can understand anything from what you did there!" and
 "just make: 'Items (what sits on the photo) Entity' cells to show/search HA
 entities."
 
-The studio now has an explicit "Editing room" selector and four numbered
+The studio now has an explicit "Editing page" selector and four numbered
 steps, and the entity search lives in the item cells themselves — there is no
 separate entity library block. These tests execute the REAL inline functions
 extracted from dashboard.html (no reimplementation).
@@ -54,10 +54,10 @@ def _between(text: str, start: str, end: str) -> str:
 
 def test_studio_is_a_numbered_guided_flow():
     assert HTML.count('class="studio-step-num"') == 4
-    for title in ("Rooms", "Photos", "Items (what sits on the photo)",
+    for title in ("Pages", "Photos", "Items (what sits on the photo)",
                   "Panel hardware"):
         assert f'class="studio-step-title">{title}</span>' in HTML
-    assert "Choose a panel, set up its rooms, then send the design" in HTML
+    assert "Choose a panel, set up its pages, then send the design" in HTML
     assert ">Build the dashboard</div>" in HTML
     assert ">Panel hardware</div>" in HTML
     # step 4 explains the sub-tabs instead of dropping three dead headings
@@ -76,48 +76,48 @@ def test_no_entity_library_block_or_migration_copy_remains():
     assert "addItem();return false;" in HTML  # Enter in the search adds a match
 
 
-# ------------------------------------------------------- the room selector
+# ------------------------------------------------------- the page selector
 
-def test_room_selector_is_rendered_with_the_pages():
-    assert 'id="room_sel"' in HTML
-    assert 'onchange="selectRoom(this.value)"' in HTML
-    assert "renderRoomPicker();" in _FNS["renderPages"]
-    assert "renderPages();" in _FNS["selectRoom"]  # selection mirrors the picker
+def test_page_selector_is_rendered_with_the_pages():
+    assert 'id="page_sel"' in HTML
+    assert 'onchange="selectPage(this.value)"' in HTML
+    assert "renderPagePicker();" in _FNS["renderPages"]
+    assert "renderPages();" in _FNS["selectPage"]  # selection mirrors the picker
 
 
-def test_room_selector_lists_titles_and_tracks_the_selected_room():
+def test_page_selector_lists_titles_and_tracks_the_selected_page():
     script = """
 %s
 %s
 var rendered = {};
 var document = { getElementById: function () {
   return {
-    set innerHTML(v) { rendered.room = v; },
-    get innerHTML() { return rendered.room || ''; },
+    set innerHTML(v) { rendered.page = v; },
+    get innerHTML() { return rendered.page || ''; },
     value: '',
     get options() { return []; }
   };
 } };
-var design = {pages: []}, selectedRoom = null;
+var design = {pages: []}, selectedPage = null;
 var out = {};
-renderRoomPicker();
-out.empty = rendered.room;
+renderPagePicker();
+out.empty = rendered.page;
 design.pages = [{name: 'dash_kitchen', title: 'Kitchen'},
                 {name: 'dash_hall', title: 'Hall'}];
-renderRoomPicker();
-out.two = {html: rendered.room, value: rendered.room && document.getElementById().value,
-  selectedRoom: selectedRoom};
-selectedRoom = 'dash_hall';
-renderRoomPicker();
-out.kept = {html: rendered.room, selectedRoom: selectedRoom};
+renderPagePicker();
+out.two = {html: rendered.page, value: rendered.page && document.getElementById().value,
+  selectedPage: selectedPage};
+selectedPage = 'dash_hall';
+renderPagePicker();
+out.kept = {html: rendered.page, selectedPage: selectedPage};
 console.log(JSON.stringify(out));
-""" % (_FNS["esc"], _FNS["renderRoomPicker"])
+""" % (_FNS["esc"], _FNS["renderPagePicker"])
     out = _node_run(script)
-    assert "No rooms yet" in out["empty"]
+    assert "No pages yet" in out["empty"]
     assert 'value="dash_kitchen">Kitchen</option>' in out["two"]["html"]
     assert 'value="dash_hall">Hall</option>' in out["two"]["html"]
-    assert out["two"]["selectedRoom"] == "dash_kitchen"
-    assert out["kept"]["selectedRoom"] == "dash_hall"
+    assert out["two"]["selectedPage"] == "dash_kitchen"
+    assert out["kept"]["selectedPage"] == "dash_hall"
 
 
 def test_empty_slot_click_targets_the_cell_search():

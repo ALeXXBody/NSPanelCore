@@ -82,7 +82,7 @@ def test_dots_markup_and_css_live_under_the_tile_stack():
     assert HTML.index('id="pv_tiles"') < HTML.index('id="pv_dots"')
     assert ".pv-dots {" in HTML and ".pv-dot.active {" in HTML
     assert "design.pages.length > 1" in RENDER
-    assert "onclick=\"selectRoom(design.pages[' + i + '].name)\"" in RENDER
+    assert "onclick=\"selectPage(design.pages[' + i + '].name)\"" in RENDER
 
 
 # -------------------------------------------------------------- the behavior
@@ -116,7 +116,7 @@ var design = {mac: 'AA', screensaver_page: 'dash_scr', pages: [
   {name: 'dash_hall', title: 'Hall', background_image: ''},
   {name: 'dash_scr', title: 'Screensaver', background_image: 'gal_s.jpg'}
 ], items: []};
-var entities = [], selectedRoom = 'dash_hall', selectedItemId = null;
+var entities = [], selectedPage = 'dash_hall', selectedItemId = null;
 var targetSlot = null, SLOTS = [[10,60]];
 renderPreview();
 var out = {
@@ -128,7 +128,7 @@ var out = {
   devices: [_el('pv_device').dataset.dev, _el('pvs_device').dataset.dev]
 };
 design.pages = [{name: 'dash_kitchen', title: 'Kitchen', background_image: ''}];
-selectedRoom = 'dash_kitchen';
+selectedPage = 'dash_kitchen';
 renderPreview();
 out.singleDots = _el('pv_dots').innerHTML;
 console.log(JSON.stringify(out));
@@ -142,7 +142,7 @@ console.log(JSON.stringify(out));
     assert out["dashClass"] == "bg dash"
     assert out["dots"].count('class="pv-dot') == 3
     assert out["dots"].count("pv-dot active") == 1
-    assert 'onclick="selectRoom(design.pages[1].name)"' in out["dots"]
+    assert 'onclick="selectPage(design.pages[1].name)"' in out["dots"]
     assert out["singleDots"] == ""            # one page -> no dots
     assert all("Left button" in z for z in out["zones"])
     assert out["devices"] == ["eu", "eu"]

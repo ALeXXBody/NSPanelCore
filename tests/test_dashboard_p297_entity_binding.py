@@ -72,7 +72,7 @@ var entities = [
   {entity_id: 'switch.fan', name: 'Fan', domain: 'switch'}
 ];
 var entityQuery = '';
-var selectedRoom = 'p1', selectedItemId = null, targetSlot = null;
+var selectedPage = 'p1', selectedItemId = null, targetSlot = null;
 var SLOTS = [[0,0],[1,1],[2,2],[3,3],[4,4],[5,5]];
 var statusText = '';
 function setStatus(t) { statusText = t; }
@@ -145,7 +145,7 @@ console.log(JSON.stringify({afterSwitch: afterSwitch,
 def test_saved_designs_drop_legacy_entityless_items():
     """An old saved design may hold blank tiles — they must not survive load."""
     script = _js("loadDesign", "studioJson") + """
-var panelId = null, design = {}, selectedRoom = null, selectedItemId = null;
+var panelId = null, design = {}, selectedPage = null, selectedItemId = null;
 var rendered = {calls: []};
 function currentMac() { return 'AA:BB'; }
 function loadPanelSettings() {}

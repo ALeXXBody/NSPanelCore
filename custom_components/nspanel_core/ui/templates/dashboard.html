@@ -133,14 +133,14 @@
   .studio-flowline span:not(:last-child)::after { content:'→'; margin-left:.5rem; color:#2a2f3a; }
   .studio-preview-hint { font-size:11px; color:#8b9099; text-align:center;
     padding:.6rem .5rem 0; line-height:1.5; }
-  .studio-roombar { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem;
+  .studio-pagebar { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem;
     background:rgba(57,200,232,.06); border:1px solid rgba(57,200,232,.25);
     border-radius:10px; padding:.55rem .7rem; margin-bottom:1rem; }
-  .studio-roombar label { font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+  .studio-pagebar label { font-size:11px; text-transform:uppercase; letter-spacing:.08em;
     color:#39c8e8; font-weight:700; }
-  .studio-roombar select { background:#141821; color:#e8eaec; border:1px solid #2a2f3a;
+  .studio-pagebar select { background:#141821; color:#e8eaec; border:1px solid #2a2f3a;
     border-radius:8px; padding:5px 10px; min-width:150px; }
-  .studio-roombar .hint { font-size:11px; color:#8b9099; }
+  .studio-pagebar .hint { font-size:11px; color:#8b9099; }
   .studio-step { border:1px solid #2a2f3a; border-radius:12px; padding:14px 16px;
     margin-bottom:12px; background:rgba(255,255,255,.012); }
   .studio-step.plain { border:none; background:none; padding:0; }
@@ -162,8 +162,8 @@
 <div class="flex items-center justify-between flex-wrap gap-3">
   <div>
     <h2 class="font-medium text-2xl" style="color:#e8eaec">Dashboard</h2>
-    <p class="text-sm text-base-content/60">Choose a panel, set up its rooms, then send the design to the screen.</p>
-    <div class="studio-flowline"><span><b>1</b> Choose a panel</span><span><b>2</b> Build rooms</span><span><b>3</b> Send to panel</span></div>
+    <p class="text-sm text-base-content/60">Choose a panel, set up its pages, then send the design to the screen.</p>
+    <div class="studio-flowline"><span><b>1</b> Choose a panel</span><span><b>2</b> Build pages</span><span><b>3</b> Send to panel</span></div>
   </div>
   <div class="flex items-center gap-3">
     <div class="select" style="background:#141821;border:1px solid #2a2f3a;border-radius:10px">
@@ -227,7 +227,7 @@
         </div>
       </div>
     </div>
-    <p class="studio-preview-hint">This is what the panel shows. Click an empty tile to pick where a Home Assistant entity goes; the dots below the tiles are your rooms.</p>
+    <p class="studio-preview-hint">This is what the panel shows. Click an empty tile to pick where a Home Assistant entity goes; the dots below the tiles are your pages.</p>
   </div>
 
   <!-- THE EDITORS: same wide card, sitting under the preview -->
@@ -238,21 +238,21 @@
     </div>
 
     <div class="studio-tabpane active" id="pane_design">
-      <div class="studio-roombar">
-        <label for="room_sel">Editing room</label>
-        <select id="room_sel" onchange="selectRoom(this.value)"></select>
-        <span class="hint">Steps 2 and 3 apply to this room.</span>
+      <div class="studio-pagebar">
+        <label for="page_sel">Editing page</label>
+        <select id="page_sel" onchange="selectPage(this.value)"></select>
+        <span class="hint">Steps 2 and 3 apply to this page.</span>
       </div>
 
       <section class="studio-step">
-        <div class="studio-step-head"><span class="studio-step-num">1</span><span class="studio-step-title">Rooms</span></div>
-        <p class="studio-step-desc">Each room is one screen on the panel. Type a name and press Enter — that name becomes the room on the panel.</p>
+        <div class="studio-step-head"><span class="studio-step-num">1</span><span class="studio-step-title">Pages</span></div>
+        <p class="studio-step-desc">Each page is one screen on the panel. Type a name and press Enter — that name becomes the page on the panel.</p>
         <div class="studio-step-body">
           <table class="table is-fullwidth" id="pages_tbl" style="background:transparent;color:#c8cbce">
-            <thead><tr><th>Room name</th><th>Picture</th><th></th></tr></thead>
+            <thead><tr><th>Page name</th><th>Picture</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
-          <button class="studio-btn ghost" style="padding:5px 14px" onclick="addPage()">+ Add room</button>
+          <button class="studio-btn ghost" style="padding:5px 14px" onclick="addPage()">+ Add page</button>
           <p class="is-size-7" style="color:#8b9099;margin:.6rem 0 0">
             Picture shown on the screensaver:
             <select id="scr_sel" onchange="design.screensaver_page=this.value;renderPreview()"
@@ -263,7 +263,7 @@
 
       <section class="studio-step">
         <div class="studio-step-head"><span class="studio-step-num">2</span><span class="studio-step-title">Photos</span></div>
-        <p class="studio-step-desc">Upload your pictures once. Click a picture to put it on the room selected above.</p>
+        <p class="studio-step-desc">Upload your pictures once. Click a picture to put it on the page selected above.</p>
         <div class="studio-step-body">
           <input id="gallery_upload" type="file" accept="image/*" multiple
                  style="width:100%;color:#8b9099" onchange="uploadGalleryPhotos(this)">
@@ -273,7 +273,7 @@
 
       <section class="studio-step">
         <div class="studio-step-head"><span class="studio-step-num">3</span><span class="studio-step-title">Items (what sits on the photo)</span></div>
-        <p class="studio-step-desc">Every item is a Home Assistant entity. Search here to find one, add it to this room, and click its tile on the preview to choose where it goes.</p>
+        <p class="studio-step-desc">Every item is a Home Assistant entity. Search here to find one, add it to this page, and click its tile on the preview to choose where it goes.</p>
         <div class="studio-step-body">
           <input id="entity_filter" class="input is-small" type="search"
                  placeholder="Search Home Assistant entities…"
@@ -285,7 +285,7 @@
             <tbody></tbody>
           </table>
           <button class="studio-btn ghost" style="padding:5px 14px" onclick="addItem()"
-                  title="Add a Home Assistant entity to this room">+ Add item</button>
+                  title="Add a Home Assistant entity to this page">+ Add item</button>
         </div>
       </section>
     </div>
@@ -310,7 +310,7 @@
 var design = { mac: "", pages: [], items: [], screensaver_page: "" };
 var entities = [];
 var entityQuery = "";      // P301: filters the Entity cells and "+ Add item"
-var selectedRoom = null;   // the page name whose preview + items are shown
+var selectedPage = null;   // the page name whose preview + items are shown
 var selectedItemId = null; // the item being placed/moved
 var targetSlot = null;     // P297: slot chosen on the preview, waiting for an entity
 var galleryPhotos = [];    // P298: the panel's reusable photo library
@@ -370,7 +370,7 @@ function loadDesign() {
     // P291b: never leave a stale design on screen with an empty selector —
     // the old pages kept their file inputs and uploaded an empty panel id.
     design = { mac: "", pages: [], items: [], screensaver_page: "" };
-    selectedRoom = null; selectedItemId = null;
+    selectedPage = null; selectedItemId = null;
     renderPages(); renderItems(); renderPreview();
     document.getElementById('pv_frame').style.opacity = .35;
     return;
@@ -434,30 +434,30 @@ function setItemEntity(i, id) {
   renderItems(); renderPreview();
 }
 
-/* P301: the room selector makes the current room explicit — the old studio
+/* P301: the page selector makes the current page explicit — the old studio
  * only highlighted a row in a table, so steps 2 and 3 had no visible target. */
-function renderRoomPicker() {
-  var el = document.getElementById('room_sel');
+function renderPagePicker() {
+  var el = document.getElementById('page_sel');
   if (!el) return;
   if (!design.pages.length) {
-    el.innerHTML = '<option value="">No rooms yet — add one in step 1</option>';
+    el.innerHTML = '<option value="">No pages yet — add one in step 1</option>';
     return;
   }
   el.innerHTML = design.pages.map(function (p) {
     return '<option value="' + esc(p.name) + '">' + esc(p.title) + '</option>';
   }).join('');
-  if (selectedRoom) el.value = selectedRoom;
-  else if (design.pages.length) { selectedRoom = design.pages[0].name; el.value = selectedRoom; }
+  if (selectedPage) el.value = selectedPage;
+  else if (design.pages.length) { selectedPage = design.pages[0].name; el.value = selectedPage; }
 }
 
 function renderPages() {
-  if (!selectedRoom && design.pages.length) selectedRoom = design.pages[0].name;
-  if (selectedRoom && !design.pages.find(p => p.name === selectedRoom)) selectedRoom = design.pages[0] ? design.pages[0].name : null;
+  if (!selectedPage && design.pages.length) selectedPage = design.pages[0].name;
+  if (selectedPage && !design.pages.find(p => p.name === selectedPage)) selectedPage = design.pages[0] ? design.pages[0].name : null;
   var tb = document.querySelector('#pages_tbl tbody');
   tb.innerHTML = design.pages.map(function (p, i) {
-    var sel = p.name === selectedRoom;
-    return '<tr' + (sel ? ' style="outline:1px solid rgba(57,200,232,.4)"' : '') + ' onclick="selectRoom(\'' + p.name + '\')" style="cursor:pointer">' +
-      '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + p.title + '" placeholder="Room name" onclick="event.stopPropagation()" onchange="renamePage(' + i + ', this.value)"></td>' +
+    var sel = p.name === selectedPage;
+    return '<tr' + (sel ? ' style="outline:1px solid rgba(57,200,232,.4)"' : '') + ' onclick="selectPage(\'' + p.name + '\')" style="cursor:pointer">' +
+      '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + p.title + '" placeholder="Page name" onclick="event.stopPropagation()" onchange="renamePage(' + i + ', this.value)"></td>' +
       '<td onclick="event.stopPropagation()"><input type="file" accept="image/*" style="width:10rem;color:#8b9099" onchange="uploadBg(' + i + ', this)">' +
       (p.background_image ? '<span class="tag is-small" style="background:rgba(57,200,232,.15);color:#39c8e8">photo ✓</span>' : '<span class="tag is-small" style="background:rgba(255,255,255,.06);color:#5a6068">no photo — black screen</span>') +
       ' <button class="button is-small is-ghost" style="color:#39c8e8" onclick="document.getElementById(\'photo_gallery\').scrollIntoView({behavior:\'smooth\',block:\'nearest\'})">gallery</button></td>' +
@@ -468,7 +468,7 @@ function renderPages() {
   ss.innerHTML = design.pages.map(function (p) {
     return '<option value="' + esc(p.name) + '"' + (design.screensaver_page === p.name ? ' selected' : '') + '>' + esc(p.title) + '</option>';
   }).join('');
-  renderRoomPicker();
+  renderPagePicker();
 }
 
 function widgetFromEntity(entity_id) {
@@ -505,9 +505,9 @@ function entityMatches(e, q) {
 }
 
 function addEntityItem(entity_id) {
-  if (!selectedRoom) { setStatus('Choose a room in the selector above first', true); return; }
+  if (!selectedPage) { setStatus('Choose a page in the selector above first', true); return; }
   if (!entity_id) { setStatus('Choose a real Home Assistant entity', true); return; }
-  var used = design.items.filter(function (it) { return it.page === selectedRoom; })
+  var used = design.items.filter(function (it) { return it.page === selectedPage; })
     .map(function (it) { return it.slot; });
   // P297: if the user first clicked a spot on the preview, honour that spot.
   var slot = (typeof targetSlot === 'number' && used.indexOf(targetSlot) === -1)
@@ -521,16 +521,16 @@ function addEntityItem(entity_id) {
   targetSlot = null;
   var ent = entities.find(function (e) { return e.entity_id === entity_id; }) || {};
   design.items.push({
-    id: 'item' + Date.now(), page: selectedRoom, slot: slot,
+    id: 'item' + Date.now(), page: selectedPage, slot: slot,
     widget: widgetFromEntity(entity_id), entity_id: entity_id,
     label: entityLabel(ent) || entity_id
   });
   renderItems(); renderPreview();
-  setStatus('Added ' + (entityLabel(ent) || entity_id) + ' to ' + selectedRoom, false);
+  setStatus('Added ' + (entityLabel(ent) || entity_id) + ' to ' + selectedPage, false);
 }
 
-function selectRoom(name) {
-  selectedRoom = name; selectedItemId = null;
+function selectPage(name) {
+  selectedPage = name; selectedItemId = null;
   renderPages(); renderItems(); renderPreview(); renderGallery();
 }
 
@@ -553,7 +553,7 @@ function renderItems() {
     if (!shown.length) return opt('', entities.length ? 'No entities match your search' : 'No Home Assistant entities', sel);
     return shown.map(function (e) { return opt(e.entity_id, entityLabel(e) + '  ·  ' + e.entity_id, sel); }).join('');
   };
-  var rows = design.items.filter(it => it.page === selectedRoom).map(function (it) {
+  var rows = design.items.filter(it => it.page === selectedPage).map(function (it) {
     var i = design.items.indexOf(it);
     var sel = it.id === selectedItemId;
     return '<tr' + (sel ? ' style="outline:1px solid rgba(57,200,232,.4)"' : '') + '>' +
@@ -563,7 +563,7 @@ function renderItems() {
       '<td><button class="button is-small is-danger" onclick="removeItem(\'' + it.id + '\')">✕</button></td>' +
       '</tr>';
   }).join('');
-  tb.innerHTML = rows || '<tr><td colspan="4" class="text-sm opacity-60">No items in this room — search above, then press + Add item.</td></tr>';
+  tb.innerHTML = rows || '<tr><td colspan="4" class="text-sm opacity-60">No items on this page — search above, then press + Add item.</td></tr>';
 }
 
 function removeItem(id) {
@@ -576,13 +576,13 @@ function removeItem(id) {
  * empty spot TARGETS it for the next entity added from the search box. No blank
  * item is ever created — an item is a HA entity, full stop. */
 function slotClick(slot) {
-  var taken = design.items.find(it => it.page === selectedRoom && it.slot === slot);
+  var taken = design.items.find(it => it.page === selectedPage && it.slot === slot);
   if (taken) {
     selectedItemId = taken.id;
     targetSlot = null;
     renderItems(); renderPreview(); return;
   }
-  if (!selectedRoom) { setStatus('Choose a room in the selector above first', true); return; }
+  if (!selectedPage) { setStatus('Choose a page in the selector above first', true); return; }
   targetSlot = slot;
   setStatus('Position selected — search for a Home Assistant entity above, then press + Add item.', false);
   renderPreview();
@@ -594,16 +594,16 @@ function deletePage(i) {
   var name = design.pages[i].name;
   // P279 HIGH fix: the orphaned items bricked every subsequent save
   design.items = design.items.filter(function (it) { return it.page !== name; });
-  if (selectedRoom === name) selectedRoom = null;
+  if (selectedPage === name) selectedPage = null;
   design.pages.splice(i, 1);
   renderPages(); renderItems(); renderPreview();
 }
 
 /* P298: the internal page name is a short firmware-safe id (dash_ + up to 9
- * chars). It used to be a meaningless dash_roomN counter — now it is derived
- * from the room name the user types, so "Kitchen" becomes dash_kitchen. */
+ * chars), derived from the page name the user types so "Kitchen" becomes
+ * dash_kitchen. */
 function pageSlug(title) {
-  return String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 9) || 'room';
+  return String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 9) || 'page';
 }
 function uniquePageName(base, exceptIndex) {
   var used = design.pages.map(function (p, i) {
@@ -619,7 +619,7 @@ function uniquePageName(base, exceptIndex) {
   return root.slice(0, 11) + '_' + Date.now().toString(36).slice(-2);
 }
 function addPage() {
-  var title = 'New room';
+  var title = 'New page';
   var page = { name: uniquePageName(pageSlug(title)), title: title,
                background: 'bg_plain', background_image: '' };
   design.pages.push(page);
@@ -627,7 +627,7 @@ function addPage() {
   var inputs = document.querySelectorAll('#pages_tbl tbody input.input');
   var last = inputs[inputs.length - 1];
   if (last && last.focus) last.focus();
-  setStatus('Type a room name in the Title box — the page name is created from it.', false);
+  setStatus('Type a page name — the internal name is created from it.', false);
 }
 /* Renaming rebinds the items and the screensaver choice atomically, so the
  * studio can never leave tiles pointing at a page name that no longer exists. */
@@ -642,19 +642,19 @@ function renamePage(i, title) {
   p.name = newName;
   design.items.forEach(function (it) { if (it.page === oldName) it.page = newName; });
   if (design.screensaver_page === oldName) design.screensaver_page = newName;
-  if (selectedRoom === oldName) selectedRoom = newName;
+  if (selectedPage === oldName) selectedPage = newName;
   renderPages(); renderItems(); renderPreview(); renderGallery();
   setStatus('Renamed to "' + clean + '" — saved.', false);
   saveDesign();
 }
 /* P301: "+ Add item" binds a REAL entity straight from the search box —
  * there is no separate library. It prefers the first matching entity that is
- * not already on this room, so typing a name/id then pressing + is enough.
+ * not already on this page, so typing a name/id then pressing + is enough.
  * addEntityItem() still honours a slot picked on the preview. */
 function addItem() {
-  if (!selectedRoom) { setStatus('Choose a room in the selector above first', true); return; }
+  if (!selectedPage) { setStatus('Choose a page in the selector above first', true); return; }
   var q = String(entityQuery || '').toLowerCase().trim();
-  var used = design.items.filter(function (it) { return it.page === selectedRoom; })
+  var used = design.items.filter(function (it) { return it.page === selectedPage; })
     .map(function (it) { return it.entity_id; });
   var matches = entities.filter(function (e) {
     return entityMatches(e, q) && used.indexOf(e.entity_id) === -1;
@@ -716,8 +716,8 @@ function loadGallery() {
 function renderGallery() {
   var el = document.getElementById('photo_gallery');
   if (!el) return;
-  var room = design.pages.find(function (p) { return p.name === selectedRoom; });
-  var current = room ? room.background_image : '';
+  var page = design.pages.find(function (p) { return p.name === selectedPage; });
+  var current = page ? page.background_image : '';
   if (!galleryPhotos.length) {
     el.innerHTML = '<p class="is-size-7" style="color:#5a6068;margin:0">No photos yet — upload one above.</p>';
     return;
@@ -729,7 +729,7 @@ function renderGallery() {
     var used = p.name === current;
     return '<div class="studio-gallery-item' + (used ? ' selected' : '') + '"' +
       ' onclick="applyGalleryPhoto(\'' + p.name + '\')"' +
-      ' title="Use this photo on ' + esc(room ? room.title : 'the selected page') + '">' +
+      ' title="Use this photo on ' + esc(page ? page.title : 'the selected page') + '">' +
       '<img src="' + url + '" alt="' + esc(p.name) + '">' +
       '<span>' + esc(p.name) + '</span>' +
       (used ? '<b>✓ on this page</b>' : '') + '</div>';
@@ -766,12 +766,12 @@ function uploadGalleryPhotos(input) {
   });
 }
 function applyGalleryPhoto(name) {
-  if (!selectedRoom) { setStatus('Choose a room in the selector above first', true); return; }
-  var room = design.pages.find(function (p) { return p.name === selectedRoom; });
-  if (!room) { setStatus('Choose a room in the selector above first', true); return; }
-  room.background_image = name;
+  if (!selectedPage) { setStatus('Choose a page in the selector above first', true); return; }
+  var page = design.pages.find(function (p) { return p.name === selectedPage; });
+  if (!page) { setStatus('Choose a page in the selector above first', true); return; }
+  page.background_image = name;
   renderPages(); renderPreview(); renderGallery();
-  setStatus('Using this photo on ' + room.title + ' — saved.', false);
+  setStatus('Using this photo on ' + page.title + ' — saved.', false);
   saveDesign();
 }
 
@@ -912,17 +912,17 @@ function renderPreview() {
     if (el) el.innerHTML = '<div class="pv-btnlbl">' + rightTxt + '</div>';
   });
 
-  // screensaver: clock/date always; a photo only when a screensaver room with
+  // screensaver: clock/date always; a photo only when a screensaver page with
   // a photo was chosen (the panel keeps its authored screensaver otherwise)
-  var scrRoom = design.screensaver_page
+  var scrPage = design.screensaver_page
     ? design.pages.find(p => p.name === design.screensaver_page) : null;
   var sbg = document.getElementById('pvs_bg');
   if (sbg) {
-    if (scrRoom && scrRoom.background_image) {
+    if (scrPage && scrPage.background_image) {
       sbg.style.display = 'block';
       sbg.className = 'bg';
       sbg.src = '/nspanel_core/dashboard_photo?panel=' + encodeURIComponent(currentMac()) +
-        '&page=' + encodeURIComponent(scrRoom.name) + '&variant=scr&r=' + Date.now();
+        '&page=' + encodeURIComponent(scrPage.name) + '&variant=scr&r=' + Date.now();
       sbg.onerror = function () { sbg.style.display = 'none'; };
     } else {
       sbg.style.display = 'none';
@@ -931,12 +931,12 @@ function renderPreview() {
   }
   tickClock();
 
-  // dashboard: background + entity tiles for the selected room
-  var room = design.pages.find(p => p.name === selectedRoom) || design.pages[0] || null;
+  // dashboard: background + entity tiles for the selected page
+  var page = design.pages.find(p => p.name === selectedPage) || design.pages[0] || null;
   var bg = document.getElementById('pv_bg');
   var tilesEl = document.getElementById('pv_tiles');
   var dotsEl = document.getElementById('pv_dots');
-  if (!room) {
+  if (!page) {
     if (bg) bg.style.display = 'none';
     if (tilesEl) tilesEl.innerHTML = '';
     if (dotsEl) dotsEl.innerHTML = '';
@@ -944,13 +944,13 @@ function renderPreview() {
     return;
   }
   if (bg) {
-    bg.style.display = room.background_image ? 'block' : 'none';
+    bg.style.display = page.background_image ? 'block' : 'none';
     bg.className = 'bg dash';
     bg.src = '/nspanel_core/dashboard_photo?panel=' + encodeURIComponent(currentMac()) +
-      '&page=' + encodeURIComponent(room.name) + '&variant=dash&r=' + Date.now();
+      '&page=' + encodeURIComponent(page.name) + '&variant=dash&r=' + Date.now();
     bg.onerror = function () { bg.style.display = 'none'; };
   }
-  var pageItems = design.items.filter(it => it.page === room.name);
+  var pageItems = design.items.filter(it => it.page === page.name);
   var html = '';
   SLOTS.forEach(function (s, slot) {
     var taken = pageItems.find(it => it.slot === slot);
@@ -985,9 +985,9 @@ function renderPreview() {
   if (dotsEl) {
     if (design.pages.length > 1) {
       dotsEl.innerHTML = design.pages.map(function (p, i) {
-        var active = p.name === room.name ? ' active' : '';
+        var active = p.name === page.name ? ' active' : '';
         return '<span class="pv-dot' + active + '" title="' + esc(p.title) + '"' +
-          ' onclick="selectRoom(design.pages[' + i + '].name)"></span>';
+          ' onclick="selectPage(design.pages[' + i + '].name)"></span>';
       }).join('');
     } else {
       dotsEl.innerHTML = '';
