@@ -9,8 +9,23 @@
     border-radius: 22px;
     padding: 18px 14px 26px;
     box-shadow: 0 18px 50px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05);
-    width: min(540px, 100%);
+    width: 100%; max-width: 1100px;  /* P302: both previews + the full-width editor */
   }
+  /* P302: the screensaver and dashboard previews live side by side in one card */
+  .studio-preview-head { display:flex; flex-wrap:wrap; gap:.5rem 1rem;
+    justify-content:space-between; align-items:center; padding:0 2px .8rem; }
+  .studio-preview-grid { display:flex; flex-wrap:wrap; justify-content:center;
+    gap:1.5rem; }
+  .studio-preview-cell { display:flex; flex-direction:column; align-items:center; gap:.5rem; }
+  .studio-preview-label { font-size:11px; text-transform:uppercase; letter-spacing:.12em;
+    font-weight:700; color:#39c8e8; }
+  /* P302: one dot per dashboard page, under the tile stack on the panel screen */
+  .pv-dots { position:absolute; left:0; right:0; bottom:4px; height:10px;
+    display:flex; justify-content:center; align-items:center; gap:8px; }
+  .pv-dot { width:8px; height:8px; border-radius:50%; background:#2a2f3a;
+    border:1px solid rgba(57,200,232,.4); cursor:pointer; transition:all .15s; }
+  .pv-dot:hover { border-color:#39c8e8; }
+  .pv-dot.active { background:#39c8e8; box-shadow:0 0 8px rgba(57,200,232,.75); }
   /* the device representation (the settings page's panel graphic, live) */
   .pv-device { position: relative; background: #101318; border-radius: 14px;
     box-shadow: inset 0 0 0 1px #232833, 0 10px 30px rgba(0,0,0,.5);
@@ -24,17 +39,17 @@
     transition: all .15s; z-index: 2; }
   .pv-btnzone:hover { border-color: #39c8e8; box-shadow: 0 0 12px rgba(57,200,232,.25); }
   .pv-device[data-dev="eu"] .pv-btnzone { height: 21.5%; width: 49%; bottom: 0; }
-  .pv-device[data-dev="eu"] #pv_bz_left { left: 0; border-radius: 6px 0 0 12px; }
-  .pv-device[data-dev="eu"] #pv_bz_right { right: 0; border-radius: 0 6px 12px 0; }
+  .pv-device[data-dev="eu"] .pv-bz-left { left: 0; border-radius: 6px 0 0 12px; }
+  .pv-device[data-dev="eu"] .pv-bz-right { right: 0; border-radius: 0 6px 12px 0; }
   .pv-device[data-dev="us_vertical"] .pv-btnzone { height: 15.6%; width: 49%; bottom: 0; }
-  .pv-device[data-dev="us_vertical"] #pv_bz_left { left: 0; }
-  .pv-device[data-dev="us_vertical"] #pv_bz_right { right: 0; }
+  .pv-device[data-dev="us_vertical"] .pv-bz-left { left: 0; }
+  .pv-device[data-dev="us_vertical"] .pv-bz-right { right: 0; }
   .pv-device[data-dev="us_horizontal"] .pv-btnzone,
   .pv-device[data-dev="us_horizontal_mirrored"] .pv-btnzone { width: 15.6%; height: 49%; right: 0; }
-  .pv-device[data-dev="us_horizontal"] #pv_bz_left,
-  .pv-device[data-dev="us_horizontal_mirrored"] #pv_bz_left { top: 0; }
-  .pv-device[data-dev="us_horizontal"] #pv_bz_right,
-  .pv-device[data-dev="us_horizontal_mirrored"] #pv_bz_right { bottom: 0; }
+  .pv-device[data-dev="us_horizontal"] .pv-bz-left,
+  .pv-device[data-dev="us_horizontal_mirrored"] .pv-bz-left { top: 0; }
+  .pv-device[data-dev="us_horizontal"] .pv-bz-right,
+  .pv-device[data-dev="us_horizontal_mirrored"] .pv-bz-right { bottom: 0; }
   .pv-screenwrap { position: absolute; background: #000; overflow: hidden;
     display: flex; justify-content: center; align-items: center; }
   .pv-device[data-dev="eu"] .pv-screenwrap { left: 0; right: 0; top: 0; height: 77%; }
@@ -57,6 +72,7 @@
    * drawn unstyled (no size / no cover) — the user saw "nothing happen".
    * The server already produces the darkened dash variant; no CSS filter. */
   #pv_bg.bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  #pvs_bg.bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   .studio-gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:.5rem; margin-top:.6rem; }
   .studio-gallery-item { border:1px solid #2a2f3a; border-radius:8px; overflow:hidden;
     cursor:pointer; background:#141821; transition:border-color .15s; }
@@ -170,37 +186,52 @@
    settings partial, so the modal must exist at page level for both pages. #}
 {% include '_background_selector_modal.html' %}
 
-<div class="flex flex-wrap gap-8 mt-4 items-start">
-  <!-- THE PREVIEW: the physical panel's representation, as the settings page shows it -->
+<div class="flex flex-col gap-6 mt-4">
+  <!-- THE PREVIEW: both panel screens, side by side in one wide card -->
   <div class="studio-panel-frame" id="pv_frame" data-dev="eu">
-    <div class="flex items-center justify-between px-1 pb-3">
+    <div class="studio-preview-head">
       <span class="text-xs" style="color:#5a6068">NSPanel <span style="color:#39c8e8">Core</span> — live preview</span>
-      <span class="text-xs" style="color:#5a6068">
-        <a href="javascript:void(0)" id="view_dash" onclick="setView('dash')" style="color:#39c8e8;margin-right:10px">Dashboard</a>
-        <a href="javascript:void(0)" id="view_scr" onclick="setView('scr')" style="color:#5a6068">Screensaver</a>
-      </span>
+      <span class="text-xs" style="color:#5a6068">Both screens are shown at the same time.</span>
     </div>
-    <div class="pv-device" id="pv_device">
-      <!-- the physical button zones (the buttons are customized in the Panel tab) -->
-      <div class="pv-btnzone" id="pv_bz_left" title="Left button — customize in Panel settings"></div>
-      <div class="pv-btnzone" id="pv_bz_right" title="Right button — customize in Panel settings"></div>
-      <!-- the screen -->
-      <div class="pv-screenwrap" id="pv_screenwrap">
-        <div class="pv-screen-inner" id="pv_inner">
-          <img id="pv_bg" class="bg" style="display:none" alt="">
-          <div id="pv_scr" style="display:none">
-            <div class="studio-clock" id="pv_clock">00:00</div>
-            <div class="studio-date" id="pv_date"></div>
+    <div class="studio-preview-grid">
+      <div class="studio-preview-cell">
+        <div class="studio-preview-label">Screensaver</div>
+        <div class="pv-device" id="pvs_device" data-dev="eu">
+          <div class="pv-btnzone pv-bz-left" id="pvs_bz_left"></div>
+          <div class="pv-btnzone pv-bz-right" id="pvs_bz_right"></div>
+          <div class="pv-screenwrap" id="pvs_screenwrap">
+            <div class="pv-screen-inner" id="pvs_inner">
+              <img id="pvs_bg" class="bg" style="display:none" alt="">
+              <div id="pvs_scr">
+                <div class="studio-clock" id="pvs_clock">00:00</div>
+                <div class="studio-date" id="pvs_date"></div>
+              </div>
+            </div>
           </div>
-          <div id="pv_tiles"></div>
+        </div>
+      </div>
+      <div class="studio-preview-cell">
+        <div class="studio-preview-label">Dashboard</div>
+        <div class="pv-device" id="pv_device" data-dev="eu">
+          <!-- the physical button zones (the buttons are customized in the Panel tab) -->
+          <div class="pv-btnzone pv-bz-left" id="pv_bz_left" title="Left button — customize in Panel settings"></div>
+          <div class="pv-btnzone pv-bz-right" id="pv_bz_right" title="Right button — customize in Panel settings"></div>
+          <!-- the screen -->
+          <div class="pv-screenwrap" id="pv_screenwrap">
+            <div class="pv-screen-inner" id="pv_inner">
+              <img id="pv_bg" class="bg" style="display:none" alt="">
+              <div id="pv_tiles"></div>
+              <div id="pv_dots" class="pv-dots"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-    <p class="studio-preview-hint">This is what the panel shows. Click an empty tile to pick where a Home Assistant entity goes.</p>
+    <p class="studio-preview-hint">This is what the panel shows. Click an empty tile to pick where a Home Assistant entity goes; the dots below the tiles are your rooms.</p>
   </div>
 
-  <!-- THE EDITORS -->
-  <div class="flex-1" style="min-width:min(560px,100%)">
+  <!-- THE EDITORS: same wide card, sitting under the preview -->
+  <div class="studio-panel-frame" id="editor_card">
     <div class="flex gap-1">
       <div class="studio-tab active" data-tab="design" onclick="setTab('design')">Build the dashboard</div>
       <div class="studio-tab" data-tab="panel" onclick="setTab('panel')">Panel hardware</div>
@@ -285,20 +316,12 @@ var targetSlot = null;     // P297: slot chosen on the preview, waiting for an e
 var galleryPhotos = [];    // P298: the panel's reusable photo library
 var settingsLoading = false; // P297: one settings fetch at a time
 var panelId = null;
-var view = "dash";
 var SLOTS = [[10,60],[165,60],[320,60],[10,190],[165,190],[320,190]];
 
 function currentMac() { return document.getElementById('panel_sel').value; }
 function setStatus(t, err) {
   var el = document.getElementById('status');
   el.textContent = t; el.style.color = err ? 'crimson' : '#39c8e8';
-}
-
-function setView(v) {
-  view = v;
-  document.getElementById('view_dash').style.color = v === 'dash' ? '#39c8e8' : '#5a6068';
-  document.getElementById('view_scr').style.color = v === 'scr' ? '#39c8e8' : '#5a6068';
-  renderPreview();
 }
 
 function setTab(t) {
@@ -857,52 +880,76 @@ function savePanelSettings() {
 }
 
 /* ---- the live preview -------------------------------------------------- */
+/* P302: both screens are rendered at once. #pv_* is the interactive dashboard
+ * device; #pvs_* is the screensaver device beside it. The old Dashboard/
+ * Screensaver text toggle is gone — nothing has to be clicked to see either. */
 function renderPreview() {
   // the device representation follows the panel type (from the settings partial)
   var dev = "eu";
   var typeSel = document.getElementById("panel_type");
   if (typeSel && typeSel.value) dev = typeSel.value;
-  document.getElementById("pv_device").dataset.dev = dev;
+  ["pv_device", "pvs_device"].forEach(function (id) {
+    var d = document.getElementById(id);
+    if (d) d.dataset.dev = dev;
+  });
 
-  // the physical button zones carry the customized modes
+  // the physical button zones carry the customized modes on BOTH devices
   var b1 = document.getElementById("button1_mode");
   var b2 = document.getElementById("button2_mode");
-  var l1 = document.getElementById("pv_bz_left"), l2 = document.getElementById("pv_bz_right");
   var lbl = function (sel, fallback) {
     if (!sel) return fallback;
     var o = sel.options[sel.selectedIndex];
     return o ? o.text : fallback;
   };
-  l1.innerHTML = '<div class="pv-btnlbl">' + (b1 ? lbl(b1, "Left button") : "Left button") + '</div>';
-  l2.innerHTML = '<div class="pv-btnlbl">' + (b2 ? lbl(b2, "Right button") : "Right button") + '</div>';
+  var leftTxt = b1 ? lbl(b1, "Left button") : "Left button";
+  var rightTxt = b2 ? lbl(b2, "Right button") : "Right button";
+  ["pv_bz_left", "pvs_bz_left"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = '<div class="pv-btnlbl">' + leftTxt + '</div>';
+  });
+  ["pv_bz_right", "pvs_bz_right"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = '<div class="pv-btnlbl">' + rightTxt + '</div>';
+  });
 
-  // P279 MEDIUM fix: no screensaver room chosen -> the plain screensaver
-  // (the panel keeps the authored one — the preview must not invent a photo)
-  var activeRoom = design.screensaver_page
+  // screensaver: clock/date always; a photo only when a screensaver room with
+  // a photo was chosen (the panel keeps its authored screensaver otherwise)
+  var scrRoom = design.screensaver_page
     ? design.pages.find(p => p.name === design.screensaver_page) : null;
-  var isScr = view === 'scr' && activeRoom;
-  document.getElementById('pv_scr').style.display = isScr ? 'block' : 'none';
-  var tilesEl = document.getElementById('pv_tiles');
-  var bg = document.getElementById('pv_bg');
+  var sbg = document.getElementById('pvs_bg');
+  if (sbg) {
+    if (scrRoom && scrRoom.background_image) {
+      sbg.style.display = 'block';
+      sbg.className = 'bg';
+      sbg.src = '/nspanel_core/dashboard_photo?panel=' + encodeURIComponent(currentMac()) +
+        '&page=' + encodeURIComponent(scrRoom.name) + '&variant=scr&r=' + Date.now();
+      sbg.onerror = function () { sbg.style.display = 'none'; };
+    } else {
+      sbg.style.display = 'none';
+      if (sbg.removeAttribute) sbg.removeAttribute('src');
+    }
+  }
+  tickClock();
 
-  if (isScr) {
-    tilesEl.innerHTML = '';
-    bg.style.display = activeRoom.background_image ? 'block' : 'none';
-    bg.className = 'bg';
-    bg.src = '/nspanel_core/dashboard_photo?panel=' + encodeURIComponent(currentMac()) +
-      '&page=' + encodeURIComponent(activeRoom.name) + '&variant=scr&r=' + Date.now();
-    bg.onerror = function () { bg.style.display = 'none'; };
-    tickClock();
+  // dashboard: background + entity tiles for the selected room
+  var room = design.pages.find(p => p.name === selectedRoom) || design.pages[0] || null;
+  var bg = document.getElementById('pv_bg');
+  var tilesEl = document.getElementById('pv_tiles');
+  var dotsEl = document.getElementById('pv_dots');
+  if (!room) {
+    if (bg) bg.style.display = 'none';
+    if (tilesEl) tilesEl.innerHTML = '';
+    if (dotsEl) dotsEl.innerHTML = '';
     scaleScreen();
     return;
   }
-  var room = design.pages.find(p => p.name === selectedRoom) || design.pages[0] || null;
-  if (!room) { bg.style.display = 'none'; tilesEl.innerHTML = ''; scaleScreen(); return; }
-  bg.style.display = room.background_image ? 'block' : 'none';
-  bg.className = 'bg dash';
-  bg.src = '/nspanel_core/dashboard_photo?panel=' + encodeURIComponent(currentMac()) +
-    '&page=' + encodeURIComponent(room.name) + '&variant=dash&r=' + Date.now();
-  bg.onerror = function () { bg.style.display = 'none'; };
+  if (bg) {
+    bg.style.display = room.background_image ? 'block' : 'none';
+    bg.className = 'bg dash';
+    bg.src = '/nspanel_core/dashboard_photo?panel=' + encodeURIComponent(currentMac()) +
+      '&page=' + encodeURIComponent(room.name) + '&variant=dash&r=' + Date.now();
+    bg.onerror = function () { bg.style.display = 'none'; };
+  }
   var pageItems = design.items.filter(it => it.page === room.name);
   var html = '';
   SLOTS.forEach(function (s, slot) {
@@ -932,22 +979,41 @@ function renderPreview() {
         ' onclick="slotClick(' + slot + ')" title="Choose a Home Assistant entity for this spot"></div>';
     }
   });
-  tilesEl.innerHTML = html;
+  if (tilesEl) tilesEl.innerHTML = html;
+
+  // P302: one dot per page, under the tile stack, only for multiple pages.
+  if (dotsEl) {
+    if (design.pages.length > 1) {
+      dotsEl.innerHTML = design.pages.map(function (p, i) {
+        var active = p.name === room.name ? ' active' : '';
+        return '<span class="pv-dot' + active + '" title="' + esc(p.title) + '"' +
+          ' onclick="selectRoom(design.pages[' + i + '].name)"></span>';
+      }).join('');
+    } else {
+      dotsEl.innerHTML = '';
+    }
+  }
   scaleScreen();
 }
 
-/* scale the 480x320 screen content into the device's screen area */
+/* scale both 480x320 screen contents into their device's screen area */
 function scaleScreen() {
-  var dev = document.getElementById("pv_device").dataset.dev || "eu";
-  var wrap = document.getElementById("pv_screenwrap");
-  var inner = document.getElementById("pv_inner");
-  var sw = wrap.clientWidth, sh = wrap.clientHeight;
-  var s = Math.min(sw / 480, sh / 320);
-  inner.style.transform = "scale(" + s + ")";
-  inner.style.left = ((sw - 480 * s) / 2) + "px";
-  inner.style.top = ((sh - 320 * s) / 2) + "px";
+  [["pv_device", "pv_screenwrap", "pv_inner"],
+   ["pvs_device", "pvs_screenwrap", "pvs_inner"]].forEach(function (ids) {
+    var devEl = document.getElementById(ids[0]);
+    var wrap = document.getElementById(ids[1]);
+    var inner = document.getElementById(ids[2]);
+    if (!devEl || !wrap || !inner) return;
+    var dev = devEl.dataset.dev || "eu";
+    var sw = wrap.clientWidth, sh = wrap.clientHeight;
+    var s = Math.min(sw / 480, sh / 320);
+    inner.style.transform = "scale(" + s + ")";
+    inner.style.left = ((sw - 480 * s) / 2) + "px";
+    inner.style.top = ((sh - 320 * s) / 2) + "px";
+  });
 }
 new ResizeObserver(scaleScreen).observe(document.getElementById("pv_screenwrap"));
+new ResizeObserver(scaleScreen).observe(document.getElementById("pvs_screenwrap"));
 
 /* the button zones jump to their settings in the Panel tab */
 function initZoneJumps() {
@@ -966,16 +1032,15 @@ function initZoneJumps() {
 function tickClock() {
   var n = new Date();
   var hh = String(n.getHours()).padStart(2, '0'), mm = String(n.getMinutes()).padStart(2, '0');
-  document.getElementById('pv_clock').textContent = hh + ':' + mm;
+  var clock = document.getElementById('pvs_clock');
+  if (clock) clock.textContent = hh + ':' + mm;
   var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   var months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-  document.getElementById('pv_date').textContent =
+  var dateEl = document.getElementById('pvs_date');
+  if (dateEl) dateEl.textContent =
     days[n.getDay()] + ' ' + n.getDate() + ' ' + months[n.getMonth()];
 }
-setInterval(function () {
-  if (view === 'scr') tickClock();
-}, 1000);
-setView('dash');
+setInterval(tickClock, 1000);
 initZoneJumps();
 /* P297: with no panel picked, the Panel sub-tabs were visible but had no form
  * behind them, so clicking one did nothing the user could see. Select the
