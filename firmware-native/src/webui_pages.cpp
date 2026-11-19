@@ -276,6 +276,20 @@ std::string nsp_web_setup_page(const NspWebStatus &s) {
     + field("Password", "<input type=password name=mqtt_pass>")
     + "</div></details>"
     + "<div class=\"actions sticky\"><button class=\"btn btn-primary\" type=submit>Save &amp; restart</button></div></form>"
+    /* P310: the setup form must submit WITH the CSRF header — the native
+     * form submission carried no X-NSPanel header, so nsp_web_post_ok
+     * rejected EVERY save with 403 Forbidden (the user stood locked out of
+     * the recovery setup form). Submit via fetch, then show the panel's
+     * response. */
+    + "<script>document.forms[0].addEventListener('submit',function(ev){"
+      "ev.preventDefault();var f=ev.target;"
+      "var b=new URLSearchParams(new FormData(f)).toString();"
+      "fetch('/save',{method:'POST',"
+      "headers:{'X-NSPanel':'1','Content-Type':'application/x-www-form-urlencoded'},"
+      "body:b}).then(function(r){return r.text();}).then(function(t){"
+      "document.body.innerHTML='<div style=\"font:14px system-ui;background:#0d1016;"
+      "color:#c8cbce;padding:24px\">'+t+'</div>';})"
+      ".catch(function(e){alert('failed: '+e);});});</script>"
     + "<script>function scan(){var b=document.getElementById('scb');b.textContent='Scanning\u2026';b.disabled=true;"
       "fetch('/scan').then(r=>r.json()).then(function(l){var s=document.getElementById('sclist');"
       "s.innerHTML='';l.forEach(function(n){var o=document.createElement('option');"

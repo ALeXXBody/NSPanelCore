@@ -1,21 +1,21 @@
 {
- "version": "0.1.16",
- "notes": "Native firmware 0.1.16 \u2014 boot power hardening (TX power cap), full serial boot story with the chip's own reset-reason report.",
+ "version": "0.1.17",
+ "notes": "Native firmware 0.1.17 \u2014 the setup form saves again (the CSRF guard had locked it out) + 0.1.16 boot hardening.",
  "files": {
   "firmware/sonoff/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.16/native-firmware-0.1.16.bin",
-   "md5": "dc651fb9c1f107e4156f27c7317bd328"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.17/native-firmware-0.1.17.bin",
+   "md5": "d2c8671ba88ce7a78ec0a5e071097938"
   },
   "firmware/sonoff/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.16/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.17/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "firmware/custom/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.16/native-firmware-0.1.16.bin",
-   "md5": "dc651fb9c1f107e4156f27c7317bd328"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.17/native-firmware-0.1.17.bin",
+   "md5": "d2c8671ba88ce7a78ec0a5e071097938"
   },
   "firmware/custom/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.16/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.17/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "tft/gui.tft": {
@@ -29,8 +29,8 @@
  },
  "changes": {
   "bug_fixes": [
-   "The radio's transmit power is capped during boot so the power-up burst can never trip a marginal supply.",
-   "The panel now reports its own reset reason and every boot step on its serial console."
+   "The panel's setup form saves again \u2014 the security guard had been rejecting every save with 403 Forbidden.",
+   "Boot hardening and the chip's own reset-reason report (0.1.16) are included."
   ],
   "features": [],
   "breaking": []
