@@ -64,6 +64,11 @@
   .studio-tile .sw { width: 26px; height: 26px; border-radius: 8px; background: #39c8e8; }
   .studio-tile .lbl { position:absolute; left:12px; bottom:8px; font-size:12px; color:#c8cbce; }
   .studio-tile .val { position:absolute; right:12px; top:10px; font-size:16px; font-weight:600; color:#fff; }
+  .studio-slot { position: absolute; width: 150px; height: 110px; border-radius: 10px;
+    border: 1px dashed rgba(57,200,232,.35); cursor: pointer;
+    transition: all .15s; }
+  .studio-slot:hover { border-color: rgba(57,200,232,.9);
+    background: rgba(57,200,232,.08); }
   .studio-clock {
     position:absolute; left:40px; top:80px; width:400px; text-align:center;
     font-size:64px; font-weight:300; color:#c8cbce; letter-spacing:2px;
@@ -182,6 +187,8 @@
 <script>
 var design = { mac: "", pages: [], items: [], screensaver_page: "" };
 var entities = [];
+var selectedRoom = null;   // the page name whose preview + items are shown
+var selectedItemId = null; // the item being placed/moved
 var panelId = null;
 var view = "dash";
 var SLOTS = [[10,60],[165,60],[320,60],[10,190],[165,190],[320,190]];
@@ -226,13 +233,16 @@ function loadDesign() {
 function opt(v, sel) { return '<option value="' + v + '"' + (v === sel ? ' selected' : '') + '>' + v + '</option>'; }
 
 function renderPages() {
+  if (!selectedRoom && design.pages.length) selectedRoom = design.pages[0].name;
+  if (selectedRoom && !design.pages.find(p => p.name === selectedRoom)) selectedRoom = design.pages[0] ? design.pages[0].name : null;
   var tb = document.querySelector('#pages_tbl tbody');
   tb.innerHTML = design.pages.map(function (p, i) {
-    return '<tr>' +
-      '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + p.title + '" onchange="design.pages[' + i + '].title=this.value;renderPreview()"></td>' +
-      '<td><input type="file" accept="image/*" style="width:10rem;color:#8b9099" onchange="uploadBg(' + i + ', this)">' +
+    var sel = p.name === selectedRoom;
+    return '<tr' + (sel ? ' style="outline:1px solid rgba(57,200,232,.4)"' : '') + ' onclick="selectRoom(\'' + p.name + '\')" style="cursor:pointer">' +
+      '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + p.title + '" onclick="event.stopPropagation()" onchange="design.pages[' + i + '].title=this.value;renderPreview()"></td>' +
+      '<td onclick="event.stopPropagation()"><input type="file" accept="image/*" style="width:10rem;color:#8b9099" onchange="uploadBg(' + i + ', this)">' +
       (p.background_image ? '<span class="tag is-small" style="background:rgba(57,200,232,.15);color:#39c8e8">photo ✓</span>' : '<span class="tag is-small" style="background:rgba(255,255,255,.06);color:#5a6068">no photo — black screen</span>') + '</td>' +
-      '<td><button class="button is-small is-danger" onclick="design.pages.splice(' + i + ',1);renderPages();renderItems();renderPreview()">✕</button></td>' +
+      '<td onclick="event.stopPropagation()"><button class="button is-small is-danger" onclick="design.pages.splice(' + i + ',1);renderPages();renderItems();renderPreview()">✕</button></td>' +
       '</tr>';
   }).join('');
   var ss = document.getElementById('scr_sel');
@@ -241,25 +251,59 @@ function renderPages() {
   }).join('');
 }
 
+function widgetFromEntity(entity_id) {
+  var d = (entity_id || '').split('.')[0];
+  if (d === 'light' || d === 'switch') return d === 'switch' ? 'switch' : 'light';
+  if (d === 'climate') return 'climate';
+  if (d === 'scene') return 'scene';
+  if (d === 'sensor') return 'sensor';
+  return 'light';
+}
+
+function selectRoom(name) {
+  selectedRoom = name; selectedItemId = null;
+  renderPages(); renderItems(); renderPreview();
+}
+
 function renderItems() {
   var tb = document.querySelector('#items_tbl tbody');
-  var pageOpts = function (sel) { return design.pages.map(function (p) { return opt(p.name, sel); }).join(''); };
   var widgetOpts = function (sel) {
     return ['switch', 'light', 'rgb_light', 'scene', 'sensor', 'climate'].map(function (w) { return opt(w, sel); }).join('');
   };
   var entityOpts = function (sel) {
     return entities.map(function (e) { return opt(e.entity_id, sel); }).join('');
   };
-  tb.innerHTML = design.items.map(function (it, i) {
-    return '<tr>' +
-      '<td><select class="select is-small" style="background:#141821;color:#e8eaec" onchange="design.items[' + i + '].page=this.value;renderPreview()">' + pageOpts(it.page) + '</select></td>' +
-      '<td><input class="input is-small" style="width:4rem;background:#141821;color:#e8eaec;border-color:#2a2f3a" type="number" min="0" max="5" value="' + it.slot + '" onchange="design.items[' + i + '].slot=parseInt(this.value);renderPreview()"></td>' +
+  var rows = design.items.filter(it => it.page === selectedRoom).map(function (it) {
+    var i = design.items.indexOf(it);
+    var sel = it.id === selectedItemId;
+    return '<tr' + (sel ? ' style="outline:1px solid rgba(57,200,232,.4)"' : '') + '>' +
+      '<td><select class="select is-small" style="background:#141821;color:#e8eaec;max-width:13rem" onchange="design.items[' + i + '].entity_id=this.value;design.items[' + i + '].widget=widgetFromEntity(this.value);renderItems();renderPreview()">' + entityOpts(it.entity_id) + '</select></td>' +
       '<td><select class="select is-small" style="background:#141821;color:#e8eaec" onchange="design.items[' + i + '].widget=this.value;renderPreview()">' + widgetOpts(it.widget) + '</select></td>' +
-      '<td><select class="select is-small" style="background:#141821;color:#e8eaec;max-width:14rem" onchange="design.items[' + i + '].entity_id=this.value">' + entityOpts(it.entity_id) + '</select></td>' +
       '<td><input class="input is-small" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + it.label + '" onchange="design.items[' + i + '].label=this.value;renderPreview()"></td>' +
-      '<td><button class="button is-small is-danger" onclick="design.items.splice(' + i + ',1);renderItems();renderPreview()">✕</button></td>' +
+      '<td><button class="button is-small is-danger" onclick="removeItem(\'' + it.id + '\')">✕</button></td>' +
       '</tr>';
   }).join('');
+  tb.innerHTML = rows || '<tr><td colspan="4" class="text-sm opacity-60">No items — click a spot on the preview to place one.</td></tr>';
+}
+
+function removeItem(id) {
+  design.items = design.items.filter(it => it.id !== id);
+  if (selectedItemId === id) selectedItemId = null;
+  renderItems(); renderPreview();
+}
+
+/* the preview IS the position: click an empty spot to place, a tile to select */
+function slotClick(slot) {
+  var taken = design.items.find(it => it.page === selectedRoom && it.slot === slot);
+  if (taken) {
+    selectedItemId = taken.id;
+    renderItems(); return;
+  }
+  var it = { id: 'item' + Date.now(), page: selectedRoom, widget: 'light',
+             entity_id: '', label: '', slot: slot };
+  design.items.push(it);
+  selectedItemId = it.id;
+  renderItems(); renderPreview();
 }
 
 function addPage() {
@@ -269,9 +313,12 @@ function addPage() {
   renderPages(); renderPreview();
 }
 function addItem() {
-  if (!design.pages.length) { setStatus('Add a room first', true); return; }
-  design.items.push({ id: 'item' + (design.items.length + 1), page: design.pages[0].name, widget: 'light', entity_id: '', label: '', slot: design.items.length % 6 });
-  renderItems(); renderPreview();
+  if (!selectedRoom) { setStatus('Select a room first (click its row)', true); return; }
+  var used = design.items.filter(it => it.page === selectedRoom).map(it => it.slot);
+  for (var s = 0; s < 6; s++) {
+    if (used.indexOf(s) === -1) { slotClick(s); return; }
+  }
+  setStatus('All 6 positions are taken in this room', true);
 }
 
 function uploadBg(i, input) {
@@ -391,22 +438,31 @@ function renderPreview() {
     scaleScreen();
     return;
   }
-  var room = design.pages[0] || null;
+  var room = design.pages.find(p => p.name === selectedRoom) || design.pages[0] || null;
   if (!room) { bg.style.display = 'none'; tilesEl.innerHTML = ''; scaleScreen(); return; }
   bg.style.display = room.background_image ? 'block' : 'none';
   bg.className = 'bg dash';
   bg.src = '/nspanel_core/dashboard_photo?panel=' + currentMac() + '&page=' + room.name + '&variant=dash&r=' + Date.now();
   bg.onerror = function () { bg.style.display = 'none'; };
   var pageItems = design.items.filter(it => it.page === room.name);
-  tilesEl.innerHTML = pageItems.map(function (it) {
-    var s = SLOTS[it.slot] || SLOTS[0];
-    var kind = (it.widget === 'sensor' || it.widget === 'climate');
-    return '<div class="studio-tile" style="left:' + s[0] + 'px;top:' + s[1] + 'px">' +
-      '<div class="sw"></div>' +
-      '<div class="lbl">' + (it.label || it.entity_id || '') + '</div>' +
-      (kind ? '<div class="val">--</div>' : '') +
-      '</div>';
-  }).join('');
+  var html = '';
+  SLOTS.forEach(function (s, slot) {
+    var taken = pageItems.find(it => it.slot === slot);
+    if (taken) {
+      var selCls = taken.id === selectedItemId ? ' box-shadow:0 0 0 2px rgba(57,200,232,.7);' : '';
+      var kind = (taken.widget === 'sensor' || taken.widget === 'climate');
+      html += '<div class="studio-tile" style="left:' + s[0] + 'px;top:' + s[1] + 'px;' + selCls + '"' +
+        ' onclick="slotClick(' + slot + ')">' +
+        '<div class="sw"></div>' +
+        '<div class="lbl">' + (taken.label || taken.entity_id || '?') + '</div>' +
+        (kind ? '<div class="val">--</div>' : '') +
+        '</div>';
+    } else {
+      html += '<div class="studio-slot" style="left:' + s[0] + 'px;top:' + s[1] + 'px"' +
+        ' onclick="slotClick(' + slot + ')" title="Place an item here"></div>';
+    }
+  });
+  tilesEl.innerHTML = html;
   scaleScreen();
 }
 
