@@ -75,6 +75,12 @@ void nsp_wifi_start(void) {
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wcfg));
     ESP_ERROR_CHECK(esp_wifi_start());
+    /* P310: cap the radio's TX power. The RF power-up burst is the single
+     * largest current draw in the entire boot, and the user's boot log shows
+     * the panel dying exactly there. 13 dBm is plenty for a LAN panel a few
+     * meters from its access point, and it cuts the burst current roughly in
+     * half. The modem stays in NONE power-save (P186 stability rule). */
+    esp_wifi_set_max_tx_power(52);
     // Advertise the config page by name during migration/completion.
     ESP_ERROR_CHECK(mdns_init());
     mdns_hostname_set("nspanelcore");

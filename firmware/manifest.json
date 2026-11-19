@@ -1,21 +1,21 @@
 {
- "version": "0.1.15",
- "notes": "Native firmware 0.1.15 \u2014 OTA/display hardening after the dead-panel incident; proven display content.",
+ "version": "0.1.16",
+ "notes": "Native firmware 0.1.16 \u2014 boot power hardening (TX power cap), full serial boot story with the chip's own reset-reason report.",
  "files": {
   "firmware/sonoff/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/native-firmware-0.1.15.bin",
-   "md5": "9270b92629967c95151f1d666e7c0e65"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.16/native-firmware-0.1.16.bin",
+   "md5": "dc651fb9c1f107e4156f27c7317bd328"
   },
   "firmware/sonoff/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.16/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "firmware/custom/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/native-firmware-0.1.15.bin",
-   "md5": "9270b92629967c95151f1d666e7c0e65"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.16/native-firmware-0.1.16.bin",
+   "md5": "dc651fb9c1f107e4156f27c7317bd328"
   },
   "firmware/custom/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.16/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "tft/gui.tft": {
@@ -29,10 +29,8 @@
  },
  "changes": {
   "bug_fixes": [
-   "A stalled display update can no longer reboot the panel (the relay self-off / dead-panel loop).",
-   "Display restart now returns the screen from the splash and re-syncs the relay buttons.",
-   "The bootloader now rolls a failed update back to the previous firmware instead of leaving the panel dark.",
-   "Panel display content reverted to the proven pre-0.2.7 files."
+   "The radio's transmit power is capped during boot so the power-up burst can never trip a marginal supply.",
+   "The panel now reports its own reset reason and every boot step on its serial console."
   ],
   "features": [],
   "breaking": []
