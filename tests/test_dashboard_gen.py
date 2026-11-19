@@ -129,7 +129,10 @@ def test_generate_source_structure():
         assert os.path.isfile(os.path.join(src, "pages", "dash_kitchen.page.toml"))
         # app.toml lists base seven + dash pages, in order
         app = tomllib.load(open(os.path.join(src, "app.toml"), "rb"))
-        assert app["pages"] == list(hg.BASE_PAGES) + ["dash_kitchen", "dash_bath"]
+        # P279: the light detail pages are IN app.toml (nxwright derives the
+        # page ids from this list — without them every dp=<id> no-oped)
+        assert app["pages"] == (list(hg.BASE_PAGES) + ["dash_kitchen", "dash_bath"]
+                                + ["det0", "det1"])  # two light-type items: light1 + rgb1
         assert app["screen"] == "NX4832F035"
         # map file written and equals the computed map
         import json

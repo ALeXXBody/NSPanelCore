@@ -19,6 +19,17 @@ extern void nsp_mqtt_publish_log(const char *msg);
 #include "provision_parse.h"
 
 esp_err_t nsp_handle_provision(httpd_req_t *req) {
+    /* P279 HIGH fix: /provision had NO CSRF guard — a cross-site POST
+     * re-provisioned the panel to an attacker's broker, whose
+     * register_accept then pointed the self-driven OTA at attacker
+     * firmware. Same X-NSPanel check as /save and /action. */
+    {
+        extern bool nsp_web_post_ok(httpd_req_t *req);
+        if (!nsp_web_post_ok(req)) {
+            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden");
+            return ESP_OK;
+        }
+    }
     if (req->content_len <= 0 || req->content_len > 2048) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Bad body");
         return ESP_OK;

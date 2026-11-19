@@ -59,7 +59,13 @@ def _write_toml(path: str, page_name: str, comps: list[dict]) -> None:
 
 def _write_app_toml(kit_dir: str, design: dd.PanelDesign, dest_dir: str,
                     extra_pictures: list[str] | None = None) -> None:
-    pages = list(BASE_PAGES) + [p.name for p in design.pages]
+    # P279 CRITICAL: the detail pages were NEVER listed — nxwright derives
+    # the page ids from app.toml's pages list, so det0..N were absent from
+    # the compiled TFT while page_ids/component_map/dash_map claimed them:
+    # every detail-page navigation no-oped and the state mirroring wrote
+    # to nonexistent pages.
+    pages = (list(BASE_PAGES) + [p.name for p in design.pages]
+             + [dd.detail_name(i) for i in range(len(dd.light_items(design)))])
     pictures = [
         line.strip().strip('"')
         for line in open(os.path.join(kit_dir, "app.toml"), encoding="utf-8")

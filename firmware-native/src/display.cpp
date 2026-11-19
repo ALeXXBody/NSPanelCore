@@ -52,7 +52,11 @@ void nsp_display_send(const char *data, size_t len) {  // P210: shared with the 
     uart_write_bytes(DISPLAY_UART, data, len);
 }
 
+/* P279 HIGH fix: the clock/relay/dash writes were NOT gated on raw mode —
+ * the MQTT task injected their bytes into a running whmi-wris block
+ * transfer, corrupting the image mid-stream while progress read 100%. */
 void nsp_display_send_command(const char *cmd) {
+    if (s_display_raw_mode) return;  // the TFT upload owns the wire
     nsp_display_send(cmd, strlen(cmd));
     nsp_display_send(END_SEQ, 3);
 }
@@ -131,7 +135,11 @@ bool nsp_display_restart(void) {
     vTaskDelay(pdMS_TO_TICKS(1000));
     nsp_display_drain(1500);
     s_display_ready = false;
-    return nsp_display_handshake(3);
+    bool ok = nsp_display_handshake(3);
+    /* P279 HIGH fix: raw mode was left STUCK after a restart —
+     * the touch task skipped every frame until the next reboot. */
+    s_display_raw_mode = false;
+    return ok;
 }
 
 /* TFT stream to the display with the baked-in offset guard (P104/P177). */

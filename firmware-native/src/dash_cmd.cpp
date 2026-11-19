@@ -102,7 +102,10 @@ int nsp_dash_parse(const std::string &payload, std::string &stmt) {
         if (text.size() > 32) return -1;
         std::string clean;
         for (unsigned char c : text) {
-            if (c < 32 || c == '"' || c == '\\') continue;  // stripped
+            /* P279 HIGH fix: 0xFF is the Nextion command terminator — a
+             * payload carrying FF FF FF terminated the statement early and
+             * executed the rest as a new display command (injection). */
+            if (c < 32 || c > 126 || c == '"' || c == '\\') continue;
             clean.push_back((char)c);
         }
         stmt = obj + ".txt=\"" + clean + "\"";

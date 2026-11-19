@@ -248,6 +248,7 @@ void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
 }
 
 void nsp_mqtt_start(const std::string &hostname) {
+    if (s_mqtt != nullptr) return;  // P279 HIGH fix: no client leak on re-IP
     s_hostname = hostname;
     char uri[128];
     snprintf(uri, sizeof(uri), "mqtt://%s:%d",

@@ -283,15 +283,26 @@ static void nsp_ota_fw_task(void *) {
         vTaskDelete(nullptr);
         return;
     }
+    bool wrote = false;
     if (g_cfg.md5_data_file.compare(0, 32, fs_checksum, 0, 32) != 0) {
         if (nsp_write_fs_partition(fs_checksum)) {
             g_cfg.md5_data_file = fs_checksum.substr(0, 32);
             nsp_config_save();
+            wrote = true;
         }
     }
     s_state = OTA_IDLE;
-    vTaskDelay(pdMS_TO_TICKS(3000));
-    esp_restart();
+    /* P279 CRITICAL FIX: the reboot ran UNCONDITIONALLY — when the fs
+     * checksum already matched (nothing written), the panel rebooted
+     * anyway, every 5 minutes, forever (the self-check reboots after
+     * each match), with the relays driven to 0 at every boot. Only a
+     * WRITTEN partition needs the restart. */
+    if (wrote) {
+        vTaskDelay(pdMS_TO_TICKS(3000));
+        esp_restart();
+    }
+    nsp_mqtt_publish_log("OTA: data-file already current — no restart");
+    vTaskDelete(nullptr);
 }
 
 void nsp_ota_start() {
@@ -434,6 +445,7 @@ static void nsp_tft_task(void *) {
         mbedtls_md5_init(&tft_md5);
         mbedtls_md5_starts(&tft_md5);
         bool resent = false;
+        long long hashed_upto = 0;  // P279 HIGH fix: never hash a byte twice
 
         bool failed = false;
         long long offset = 0;
@@ -484,9 +496,13 @@ static void nsp_tft_task(void *) {
             esp_http_client_cleanup(client);
             if (got < (size_t)want) { failed = true; break; }
 
-            if (!resent) {  // re-sent bytes were already hashed once
+            /* P279 HIGH fix: the 0x08 rewind re-downloads bytes that were
+             * already hashed — the digest became hash(file + range) ≠ md5
+             * and the manager reflashed forever. A watermark covers both
+             * the no-reply retries and the 0x08 rewinds uniformly. */
+            if (offset >= hashed_upto) {
                 mbedtls_md5_update(&tft_md5, block, got);
-                resent = false;
+                hashed_upto = offset + (long long)got;
             }
 
             nsp_display_send((const char *)block, got);

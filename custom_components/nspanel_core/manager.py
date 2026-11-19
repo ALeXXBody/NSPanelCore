@@ -1474,6 +1474,35 @@ class NSPanelCoreManager:
 
         tft_filename = "gui_us.tft" if panel.is_us_panel else "gui.tft"
         tft_md5 = self.ota_md5("tft", tft_filename)
+        # P279 CRITICAL: a panel running a DELIVERED DASHBOARD TFT reports
+        # the dash md5 — comparing it against the stock TFT wiped the
+        # dashboard ~30 min after every send (the override expires, the
+        # stock md5 mismatches, the auto-flash overwrites the design).
+        # The dashboard's own delivered md5 is the expected one while it
+        # matches; a panel reporting the STOCK md5 with an active design
+        # gets its dashboard re-delivered (self-healing).
+        dash = getattr(self, "dash", None)
+        dash_md5 = (getattr(dash, "_pushed_map", {}) or {}).get(panel.mac) if dash else None
+        if dash is not None and dash.has_design(panel.mac) and dash_md5:
+            if report.get("md5_tft_file") == dash_md5:
+                return  # current with its dashboard — leave it alone
+            if report.get("md5_tft_file") and report["md5_tft_file"] != dash_md5:
+                stored = os.path.join(self.dash.origins_dir().replace(
+                    "nspanel_core_dashboards", "nspanel_core_dashboards"),
+                    "..")  # the compiled TFT lives beside the origins
+                tft_path = self.dash.stored_tft_path(panel.mac)
+                if tft_path and os.path.isfile(tft_path):
+                    import hashlib as _h
+                    got = _h.md5(open(tft_path, "rb").read()).hexdigest()
+                    if report.get("md5_tft_file") == got:
+                        return  # the dash TFT is on the panel already
+                    # wiped by the stock auto-push: re-deliver the dashboard
+                    if report.get("md5_tft_file") == tft_md5 and self.config.settings.auto_tft_updates:
+                        _LOGGER.info("Panel %s lost its dashboard TFT — re-delivering", panel.name)
+                        dash.rearm_serving(panel.mac)
+                        await self._publish(self._panel_cmd_topic(panel, "command"),
+                                            json.dumps({"command": "tft_update"}))
+                        return
         # P239: an EMPTY reported md5 is "never delivered", not "nothing to
         # compare" — a fresh panel (or one running the pre-0.1.4 firmware,
         # which never recorded the field) must still get the display image.

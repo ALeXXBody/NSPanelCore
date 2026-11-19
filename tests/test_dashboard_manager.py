@@ -116,6 +116,9 @@ def _svc(hass=None):
     class FakeManager:
         pass
 
+    class _MgrConfig:
+        panels = []
+
     class FakeStore:
         def __init__(self, hass, v, k):
             pass
@@ -134,6 +137,7 @@ def _svc(hass=None):
     try:
         mgr = FakeManager()
         mgr.hass = hass
+        mgr.config = _MgrConfig()
         mgr._publish = _publish_capture(mgr)
         svc = dm.DashboardService(hass, mgr)
         svc._designs["e465b849a100"] = _make_design()

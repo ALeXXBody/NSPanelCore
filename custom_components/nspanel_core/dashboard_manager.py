@@ -126,6 +126,24 @@ class DashboardService:
     def serving_info(self) -> dict:
         return dict(self._serving) if self._serving else {}
 
+    def stored_tft_path(self, mac: str) -> str | None:
+        """The panel's compiled dashboard TFT on disk, if any."""
+        p = os.path.join(_dash_dir(self.hass), f"{mac}.tft")
+        return p if os.path.isfile(p) else None
+
+    def rearm_serving(self, mac: str) -> dict:
+        """Re-arm the serving slot for a panel whose dashboard was wiped
+        (the stock auto-push overwrote it) — no recompile needed."""
+        design = self._designs.get(mac)
+        if design is None or not (design.pages or design.items):
+            return {"error": "no design"}
+        path = self.stored_tft_path(mac)
+        if not path:
+            return {"error": "no stored dashboard TFT"}
+        md5 = hashlib.md5(open(path, "rb").read()).hexdigest()
+        self._serving = {"mac": mac, "path": path, "md5": md5}
+        return {"ok": True}
+
     async def async_send_to_panel(self, mac: str) -> dict:
         """Generate + compile + arm the serving slot + trigger the reflash."""
         design = self._designs.get(mac)
@@ -133,7 +151,7 @@ class DashboardService:
             return {"error": "no design saved for this panel"}
         if self._serving:
             return {"error": "a send is already in progress (panel %s)" % self._serving["mac"]}
-        panel = self.manager.panel_by_mac(mac)
+        panel = self.manager._panel_by_mac(mac)
         if panel is None or not panel.accepted:
             return {"error": "panel not found or not accepted"}
         try:
@@ -146,7 +164,7 @@ class DashboardService:
         self._page_ids[mac] = list(page_ids)
         await self._save()
         await self.manager._publish(
-            const.panel_topic(mac, "command"),
+            self._cmd_topic(mac),
             json.dumps({"command": "tft_update"}),
         )
         _LOGGER.info("Dashboard send started for panel %s (md5 %s…)", panel.name, md5[:12])
@@ -181,7 +199,7 @@ class DashboardService:
         if not page_ids:
             return
         await self.manager._publish(
-            const.panel_topic(mac, "command"),
+            self._cmd_topic(mac),
             json.dumps({"command": "dash_map", "pages": page_ids}),
         )
         await self.async_push_values(mac)
@@ -206,7 +224,7 @@ class DashboardService:
         if stmt:
             self.hass.async_create_task(
                 self.manager._publish(
-                    const.panel_topic(mac, "command"),
+                    self._cmd_topic(mac),
                     json.dumps({"command": "dash", "payload": stmt}),
                 )
             )
@@ -227,12 +245,12 @@ class DashboardService:
                 shown = "--" if not on else (
                     f"{round(int(bright) * 100 / 255)}%" if bright else "0%")
                 self.hass.async_create_task(self.manager._publish(
-                    const.panel_topic(mac, "command"),
+                    self._cmd_topic(mac),
                     json.dumps({"command": "dash",
                                 "payload": f'pct.txt="{dd.clean_text(shown, 8)}"'})))
             if pwr is not None:
                 self.hass.async_create_task(self.manager._publish(
-                    const.panel_topic(mac, "command"),
+                    self._cmd_topic(mac),
                     json.dumps({"command": "dash",
                                 "payload": f"pwr.val={1 if (state.state or '').lower() == 'on' else 0}"})))
 
@@ -346,10 +364,28 @@ class DashboardService:
     def _dash(self, mac: str, stmt: str) -> None:
         self.hass.async_create_task(
             self.manager._publish(
-                const.panel_topic(mac, "command"),
+                self._cmd_topic(mac),
                 json.dumps({"command": "dash", "payload": stmt}),
             )
         )
+
+    # -- the topic identity (P279 CRITICAL): the firmware subscribes to
+    # nspanel/<wifi_hostname>/command — the MAC-based topic black-holes
+    # everything. Resolve the panel once, publish on ITS command topic.
+    def _cmd_topic(self, mac: str) -> str:
+        panel = next(
+            (p for p in self.manager.config.panels
+             if const.topic_safe(p.mac) == mac), None)
+        if panel is None:
+            return const.panel_topic(mac, "command")
+        return self.manager._panel_cmd_topic(panel, "command")
+
+    def _design_key(self, mac: str) -> str:
+        """The topic segment -> the design key (the panel's real mac)."""
+        panel = next(
+            (p for p in self.manager.config.panels
+             if const.topic_safe(p.mac) == mac), None)
+        return topic_safe(panel.mac) if panel else mac
 
     # -- P274: the light detail pages (the entity cards on the panel) -----
 
@@ -420,8 +456,10 @@ class DashboardService:
             if i.widget not in ("scene",)
         }
         if entities:
-            self._unsub_state = self.hass.bus.async_track_state_change_event(
-                list(entities), _on_state
+            from homeassistant.helpers.event import async_track_state_change_event
+
+            self._unsub_state = async_track_state_change_event(
+                self.hass, list(entities), _on_state
             )
 
     def stop_state_listener(self) -> None:

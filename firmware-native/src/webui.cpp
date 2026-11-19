@@ -141,7 +141,7 @@ static void nsp_factory_reset(void) {
 
 /* P208#1 (web audit): CSRF guard — a cross-site no-cors fetch cannot set
  * custom headers; requiring one blocks drive-by factory resets. */
-static bool nsp_web_post_ok(httpd_req_t *req) {
+bool nsp_web_post_ok(httpd_req_t *req) {  // P279: shared with provision.cpp
     if (req->content_len <= 0 || req->content_len > 1024) return false;
     char ct[64] = "";
     if (httpd_req_get_hdr_value_str(req, "Content-Type", ct, sizeof(ct)) != ESP_OK) {
