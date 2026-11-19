@@ -45,11 +45,5 @@ pictures = [
 ]
 fonts = [
     "NotoSans24",
-    "NotoSans24Bold",
-    "NotoSans32",
-    "NotoSans32Bold",
-    "NotoSans48",
-    "NotoSans48Bold",
     "NotoSans64",
-    "NotoSans64Bold",
 ]

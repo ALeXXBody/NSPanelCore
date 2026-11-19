@@ -19,138 +19,43 @@ pic = "bg_plain"
 name = "curTime"
 type = "text"
 x = 40
-y = 15
+y = 80
 w = 400
-h = 100
+h = 110
 font = "NotoSans64"
 bco = "#0d1016"
 pco = "#c8cbce"
 xcen = 1
 ycen = 1
 txt = "00:00"
-txt_maxl = 24
 
 [[component]]
 name = "curDay"
 type = "text"
 x = 40
-y = 120
+y = 210
 w = 400
-h = 35
+h = 40
 font = "NotoSans24"
 bco = "#0d1016"
 pco = "#8b93a1"
 xcen = 1
 ycen = 1
 txt = "date"
-txt_maxl = 24
 
 [[component]]
 name = "curAMPM"
 type = "text"
-x = 200
-y = 158
-w = 80
-h = 28
+x = 40
+y = 260
+w = 400
+h = 40
 font = "NotoSans24"
 bco = "#0d1016"
 pco = "#39c8e8"
 xcen = 1
 ycen = 1
 txt = "AM"
-txt_maxl = 24
-
-# P306 — weather details. Each has a distinct name the native firmware writes
-# by attribute; text is sanitised (24-char cap) before it reaches the UART.
-[[component]]
-name = "wOutTemp"
-type = "text"
-x = 20
-y = 200
-w = 210
-h = 40
-font = "NotoSans32"
-bco = "#0d1016"
-pco = "#ffffff"
-xcen = 0
-ycen = 1
-txt = "--.-C"
-txt_maxl = 24
-
-[[component]]
-name = "wRoomTemp"
-type = "text"
-x = 250
-y = 200
-w = 210
-h = 40
-font = "NotoSans32"
-bco = "#0d1016"
-pco = "#39c8e8"
-xcen = 0
-ycen = 1
-txt = "--.-C"
-txt_maxl = 24
-
-[[component]]
-name = "wWind"
-type = "text"
-x = 20
-y = 245
-w = 160
-h = 24
-font = "NotoSans24"
-bco = "#0d1016"
-pco = "#8b93a1"
-xcen = 0
-ycen = 1
-txt = "W --"
-txt_maxl = 24
-
-[[component]]
-name = "wRain"
-type = "text"
-x = 185
-y = 245
-w = 130
-h = 24
-font = "NotoSans24"
-bco = "#0d1016"
-pco = "#8b93a1"
-xcen = 0
-ycen = 1
-txt = "R --%"
-txt_maxl = 24
-
-[[component]]
-name = "wSun"
-type = "text"
-x = 320
-y = 245
-w = 155
-h = 24
-font = "NotoSans24"
-bco = "#0d1016"
-pco = "#8b93a1"
-xcen = 0
-ycen = 1
-txt = "U--:-- D--:--"
-txt_maxl = 24
-
-[[component]]
-name = "wForecast"
-type = "text"
-x = 20
-y = 275
-w = 455
-h = 24
-font = "NotoSans24"
-bco = "#0d1016"
-pco = "#8b93a1"
-xcen = 0
-ycen = 1
-txt = "forecast"
-txt_maxl = 24
 
 [[component]]
 name = "wake"

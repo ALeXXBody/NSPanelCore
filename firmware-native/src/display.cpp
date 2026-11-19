@@ -95,6 +95,9 @@ static bool nsp_display_handshake(int attempts) {
     return false;
 }
 
+static bool nsp_display_handshake(int attempts);
+static void nsp_display_after_handshake(void);  // P310: forward decl (defined below)
+
 void nsp_display_init(void) {
     gpio_config_t io = {};
     io.pin_bit_mask = 1ULL << DISPLAY_POWER_PIN;
@@ -125,11 +128,19 @@ void nsp_display_init(void) {
         /* P211: navigate OFF the splash into the screensaver — the authored
          * splash has no auto-page code, so without this the display sits on
          * a static image forever (the user's report after the TFT update). */
-        nsp_display_show_screensaver();
-        extern int nsp_relay_state(int relay);
-        nsp_display_relay(1, nsp_relay_state(1));
-        nsp_display_relay(2, nsp_relay_state(2));
+        nsp_display_after_handshake();
     }
+}
+
+/* P310: what the display needs after ANY successful handshake — the authored
+ * splash never auto-advances, so a screen left at the logo after a manual
+ * restart (or a recovered hang) must be navigated into the screensaver and
+ * the relay buttons re-synced, exactly like the boot path. */
+static void nsp_display_after_handshake(void) {
+    nsp_display_show_screensaver();
+    extern int nsp_relay_state(int relay);
+    nsp_display_relay(1, nsp_relay_state(1));
+    nsp_display_relay(2, nsp_relay_state(2));
 }
 
 /* Manual recovery: power-cycle + handshake. ONLY from the "display_restart"
@@ -147,6 +158,13 @@ bool nsp_display_restart(void) {
     /* P279 HIGH fix: raw mode was left STUCK after a restart —
      * the touch task skipped every frame until the next reboot. */
     s_display_raw_mode = false;
+    /* P310: a successful restart must actually TAKE OVER the screen — the
+     * old code re-handshaked and left the display on the splash forever
+     * (the user's "stuck at logo"). */
+    if (ok) {
+        s_display_ready = true;
+        nsp_display_after_handshake();
+    }
     return ok;
 }
 

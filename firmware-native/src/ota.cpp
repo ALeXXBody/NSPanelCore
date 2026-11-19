@@ -358,6 +358,14 @@ static void nsp_tft_task(void *) {
     bool power_cycle_needed = false;
     for (int attempt = 0; attempt < 3; attempt++) {
         s_no_reply_strikes = 0;  // P242: fresh count per clean attempt
+        /* P310 (the dead-panel incident): every attempt must feed the OTA
+         * watchdog — the comok wait, the power-cycle and the retry paths
+         * previously left s_last_progress_us frozen, so a display that
+         * stopped answering turned the 120 s stall watchdog into a PANEL
+         * reboot loop (relays reset at every boot = the user's
+         * "self-deactivating relays"). The watchdog must never kill the
+         * panel because a DISPLAY is unresponsive. */
+        s_last_progress_us = esp_timer_get_time();
         if (power_cycle_needed) {
             nsp_display_power(1);
             vTaskDelay(pdMS_TO_TICKS(1000));

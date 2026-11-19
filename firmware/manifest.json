@@ -1,39 +1,39 @@
 {
-  "version": "0.1.14",
-  "notes": "Native firmware 0.1.14 \u2014 screensaver clock/date styling and weather details rendered on the panel.",
-  "files": {
-    "firmware/sonoff/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/native-firmware-0.1.14.bin",
-      "md5": "35aa4bfc38952c5cfd186b0e32bfb16f"
-    },
-    "firmware/sonoff/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/data_file.bin",
-      "md5": "74d7ce6e39754a9bec2ae3a075620c49"
-    },
-    "firmware/custom/firmware.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/native-firmware-0.1.14.bin",
-      "md5": "35aa4bfc38952c5cfd186b0e32bfb16f"
-    },
-    "firmware/custom/data_file.bin": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/data_file.bin",
-      "md5": "74d7ce6e39754a9bec2ae3a075620c49"
-    },
-    "tft/gui.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/gui.tft",
-      "md5": "91f3dff0c0ae4d3a4f6e78cd7148f62e"
-    },
-    "tft/gui_us.tft": {
-      "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/gui_us.tft",
-      "md5": "91f3dff0c0ae4d3a4f6e78cd7148f62e"
-    }
+ "version": "0.1.14",
+ "notes": "Native firmware 0.1.14 \u2014 screensaver clock/date styling and weather details rendered on the panel.",
+ "files": {
+  "firmware/sonoff/firmware.bin": {
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/native-firmware-0.1.14.bin",
+   "md5": "35aa4bfc38952c5cfd186b0e32bfb16f"
   },
-  "changes": {
-    "bug_fixes": [],
-    "features": [
-      "Screensaver clock and date support font size, weight, color, and alignment chosen in the Dashboard studio.",
-      "Screensaver can show outside temperature, inside temperature, forecast, wind, rain, and sunrise/sunset details on the panel.",
-      "Per-panel temperature sources can use a Home Assistant sensor or the panel/default source."
-    ],
-    "breaking": []
+  "firmware/sonoff/data_file.bin": {
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/data_file.bin",
+   "md5": "74d7ce6e39754a9bec2ae3a075620c49"
+  },
+  "firmware/custom/firmware.bin": {
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/native-firmware-0.1.14.bin",
+   "md5": "35aa4bfc38952c5cfd186b0e32bfb16f"
+  },
+  "firmware/custom/data_file.bin": {
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/data_file.bin",
+   "md5": "74d7ce6e39754a9bec2ae3a075620c49"
+  },
+  "tft/gui.tft": {
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/gui.tft",
+   "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
+  },
+  "tft/gui_us.tft": {
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/gui_us.tft",
+   "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
   }
+ },
+ "changes": {
+  "bug_fixes": [],
+  "features": [
+   "Screensaver clock and date support font size, weight, color, and alignment chosen in the Dashboard studio.",
+   "Screensaver can show outside temperature, inside temperature, forecast, wind, rain, and sunrise/sunset details on the panel.",
+   "Per-panel temperature sources can use a Home Assistant sensor or the panel/default source."
+  ],
+  "breaking": []
+ }
 }
