@@ -65,8 +65,11 @@ move procedure.
 
 ## Firmware
 
-Panel firmware sources live in [`firmware/`](firmware/). The panels' screen
-protocol and MQTT contract are documented in [`BRIDGE_GO_REWRITE.md`](BRIDGE_GO_REWRITE.md).
+Panel firmware sources live in [`firmware-native/`](firmware-native/). The
+panel's status, logs and recovery tools are on each panel's own web page;
+[ADDING_A_PANEL.md](docs/ADDING_A_PANEL.md) and
+[TRANSFER_TO_NSPANEL_CORE.md](docs/TRANSFER_TO_NSPANEL_CORE.md) cover the
+flows.
 
 ## Support
 

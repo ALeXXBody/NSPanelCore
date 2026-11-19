@@ -4,7 +4,7 @@ A Home Assistant-native replacement for the NSPanel Core add-on: manages
 Sonoff NSPanel panels over MQTT using the same protobuf wire protocol the
 panels' firmware already speaks, and exposes panel data as native HA entities.
 
-Architecture (see BRIDGE_GO_REWRITE.md for the full wire contract):
+Architecture:
 - Panel <-> integration: MQTT, protobuf + JSON (same topics as the add-on)
 - Integration <-> HA: event bus (state changes), service calls — no WebSocket
   client, no token, no separate process.

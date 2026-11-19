@@ -85,8 +85,8 @@ def test_status_report_parse_firmware_shape():
 
 def _fw_sources():
     files = []
-    for root in (REPO / "firmware" / "lib", REPO / "firmware" / "src"):
-        files += list(root.rglob("*.cpp")) + list(root.rglob("*.hpp"))
+    for root in (REPO / "firmware-native" / "src",):
+        files += list(root.rglob("*.cpp")) + list(root.rglob("*.h"))
     return files
 
 
@@ -122,26 +122,12 @@ def test_manager_panel_topics_have_firmware_subscriber():
     assert "wifi_hostname" in fw_text  # firmware builds topics from hostname
 
 
-def test_config_json_keys_cover_firmware_reads():
-    """Keys RoomManager reads from /api/get_nspanel_config must be emitted
-    by _panel_json_config in dashboard.py."""
-    dash = (REPO / "custom_components" / "nspanel_core" / "dashboard.py").read_text()
-    rm = (REPO / "firmware" / "lib" / "RoomManager" / "RoomManager.cpp").read_text()
-    reads = set(re.findall(r'\(\*roomData\)\["([a-z_0-9]+)"\]', rm))
-    # keys the dashboard builder emits (string literals in _panel_json_config)
-    builder_region = dash[dash.find("def _panel_json_config"):dash.find("def _panel_json_config") + 4000]
-    emitted = set(re.findall(r'"([a-z_0-9]+)":', builder_region))
-    # "rooms" is the id list alongside the builder; "lights"/"scenes"/"name"
-    # belong to the per-room document (/api/get_nspanel_config room branch),
-    # covered by test_room_json_keys_cover_firmware_reads — not this builder.
-    room_scoped = {"rooms", "lights", "scenes", "name"}
-    missing = {k for k in reads if k not in emitted and k not in room_scoped}
-    assert not missing, f"firmware reads keys the manager never sends: {missing}"
-
-
-def test_room_json_keys_cover_firmware_reads():
-    dash = (REPO / "custom_components" / "nspanel_core" / "dashboard.py").read_text()
-    rm = (REPO / "firmware" / "lib" / "RoomManager" / "RoomManager.cpp").read_text()
-    assert '"lights"' in dash and '"scenes"' in dash
-    assert '"can_dim"' in dash and '"ceiling"' in dash
-    assert "can_save" in dash
+def test_native_firmware_never_reads_the_server_json():
+    """The native firmware consumes pre-formatted MQTT topics — no JSON
+    config fetch, no RoomManager reads. Guard that the static config
+    channels stay absent from the native sources."""
+    native = "\n".join(
+        f.read_text(errors="replace")
+        for f in (REPO / "firmware-native" / "src").rglob("*.cpp"))
+    assert "get_nspanel_config" not in native
+    assert "(*roomData)" not in native

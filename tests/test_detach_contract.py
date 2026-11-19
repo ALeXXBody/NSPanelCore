@@ -72,27 +72,31 @@ def test_topic_safe_never_escalates():
 # 2. Registration contract (panel → manager, both directions)
 # --------------------------------------------------------------------------
 
-def test_firmware_registration_payload_fields():
-    """register_request carries every field the manager needs to identify,
-    version and OTA-check the panel."""
-    src = _src(FW / "src" / "main.cpp")
-    i = src.index("void sendMqttManagerRegistrationRequest() {")
-    body = src[i:src.index("\n}", i)]
+def test_native_registration_is_periodic_and_complete():
+    """register_request carries the identification fields and the native
+    loop re-registers every 5 minutes (P135)."""
+    mqtt = (ROOT / "firmware-native" / "src" / "mqtt.cpp").read_text()
+    proto = (ROOT / "firmware-native" / "src" / "protocol.h").read_text()
     for field in ("command", "mac_origin", "friendly_name", "version",
                   "md5_firmware", "md5_data_file", "md5_tft_file", "address"):
-        assert f'doc["{field}"]' in body, f"registration field {field} missing"
-    assert 'MqttManager::publish("nspanel/mqttmanager/command", buffer)' in body
+        assert f'\\"{field}\\":' in mqtt, f"registration field {field} missing"
+    assert "REREGISTRATION_PERIOD_MS" in (ROOT / "firmware-native" / "src" / "main.cpp").read_text()
+    assert "#define REREGISTRATION_PERIOD_MS 300000" in proto
 
 
-def test_firmware_registration_is_periodic():
-    """Version display must never go stale (P135): 5-minute re-registration."""
-    src = _src(FW / "src" / "main.cpp")
-    assert "millis() - lastPeriodicRegistration > 300000" in src
+def test_native_status_report_carries_version():
+    mqtt = (ROOT / "firmware-native" / "src" / "mqtt.cpp").read_text()
+    assert '\\"version\\":\\"' in mqtt and "FW_VERSION" in mqtt
 
 
-def test_firmware_status_report_carries_version():
-    src = _src(FW / "src" / "main.cpp")
-    assert 'status_report_doc["version"] = NSPanelCoreFirmwareVersion' in src
+def test_native_command_names_frozen():
+    """The native firmware answers the frozen command strings."""
+    proto = (ROOT / "firmware-native" / "src" / "protocol.h").read_text()
+    mqtt = (ROOT / "firmware-native" / "src" / "mqtt.cpp").read_text()
+    for command in ("reboot", "firmware_update", "tft_update"):
+        assert f'"{command}"' in proto
+        assert f"CMD_{command.upper()}" in mqtt
+    assert "register_accept" in mqtt
 
 
 def test_manager_registration_handler_updates_version():
@@ -118,13 +122,6 @@ def test_manager_status_report_adopts_version():
 # --------------------------------------------------------------------------
 # 3. Command contract (manager → panel)
 # --------------------------------------------------------------------------
-
-@pytest.mark.parametrize("command", ["reboot", "firmware_update", "tft_update", "register_accept"])
-def test_panel_command_names_frozen(command):
-    """Both firmware generations must answer these exact command strings."""
-    ours = _src(FW / "lib" / "InterfaceManager" / "InterfaceManager.cpp")
-    assert f'"{command}"' in ours, f"our firmware must handle '{command}'"
-
 
 def test_dashboard_update_actions_use_frozen_command_names():
     if _is_v2_line():
@@ -182,22 +179,15 @@ def test_app_auto_activates_manifest_firmware():
         assert "_initial_firmware_check" in src
 
 
-def test_firmware_ota_rails_all_present():
-    """The load-bearing OTA rails (P126–P133): all must survive the rewrite."""
-    src = _src(FW / "lib" / "WebManager" / "WebManager.cpp")
-    # fw/fs split across reboots
-    assert "Firmware flashed — rebooting before the fs update" in src
-    # fs unmount before write + remount after
-    upd = src[src.index("bool WebManager::_update"):]
-    upd = upd[:upd.index("\n}\n", 100)]
-    assert upd.find("LittleFS.end();") < upd.find("Update.begin(")
-    # bounded retries
-    task = src[src.index("void WebManager::_taskPerformOTAUpdate"):]
-    assert task.count("of 5.") == 2
-    assert "save_attempt < 10" in task
-    # watchdog
-    main_src = _src(FW / "src" / "main.cpp")
-    assert "OTA progress frozen for 120s" in main_src
+def test_native_ota_rails_all_present():
+    """The load-bearing OTA rails on the NATIVE line (P179-P187, P310)."""
+    ota = (ROOT / "firmware-native" / "src" / "ota.cpp").read_text()
+    assert "OTA_MAX_ATTEMPTS" in ota                     # bounded retries
+    assert "OTA_STALL_TIMEOUT_MS" in ota                # watchdog rail
+    assert "boot slot set" in ota                       # fw/fs split reboots
+    assert "no data-file update available" in ota       # bounded fs fetch
+    main = (ROOT / "firmware-native" / "src" / "main.cpp").read_text()
+    assert "nsp_ota_watchdog_feed_check" in main        # the 1 s watchdog
 
 
 # --------------------------------------------------------------------------
@@ -224,22 +214,6 @@ def test_manifest_json_is_current_and_md5_backed():
         local = hashlib.md5(local_file.read_bytes()).hexdigest()
         remote = entry.get("md5") if isinstance(entry, dict) else entry
         assert local == remote, f"manifest md5 drift for {path}"
-
-
-def test_evergreen_release_asset_set():
-    """publish.sh must upload exactly the six servable files."""
-    src = (ROOT / "firmware" / "publish.sh").read_text()
-    for name in ("sonoff-firmware.bin", "sonoff-data_file.bin",
-                 "custom-firmware.bin", "custom-data_file.bin",
-                 "gui.tft", "gui_us.tft"):
-        assert name in src
-
-
-def test_recovery_page_serves_full_ours_image():
-    inst = ROOT / "firmware" / ".pio" / "build" / "esp32dev_idf5"
-    fw = inst / "firmware.bin"
-    if fw.exists():
-        assert (b"0.0.1" in fw.read_bytes()) or (b"0.0.2" in fw.read_bytes()), "built image must match a published migration-era version"
 
 
 # --------------------------------------------------------------------------

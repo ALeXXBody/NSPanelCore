@@ -51,6 +51,9 @@ def test_no_weather_components_in_the_panel_pages():
 
 def test_the_served_tft_is_the_proven_release_bytes():
     served = REPO / "custom_components" / "nspanel_core" / "tft"
-    proven = REPO / "firmware" / "releases" / "v0.1.13"
+    import hashlib
     for name in ("gui.tft", "gui_us.tft"):
-        assert (served / name).read_bytes() == (proven / name).read_bytes(), name
+        digest = hashlib.md5((served / name).read_bytes()).hexdigest()
+        # the proven pre-0.2.7 display build — pinned so no accidental
+        # re-delivery of the unreferenced-font content can slip through
+        assert digest == "b2b6a2e3e53ab56405d2202d51c98a29", (name, digest)

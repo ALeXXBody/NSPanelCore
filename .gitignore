@@ -11,3 +11,4 @@ firmware/node_modules/
 *.log
 custom_components/**/node_modules/
 firmware-native/.pio/
+firmware-native/.pio/
