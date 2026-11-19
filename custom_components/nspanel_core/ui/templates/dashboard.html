@@ -108,6 +108,12 @@
     position:absolute; left:40px; top:210px; width:400px; text-align:center;
     font-size:20px; color:#8b9099; letter-spacing:3px;
   }
+  /* P306: the weather strip is part of the screensaver preview, so a toggle
+   * is visibly on/off before the settings are saved to the panel. */
+  .studio-ss-weather { position:absolute; left:24px; top:20px; right:24px;
+    display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px;
+    letter-spacing:1px; color:#8b9099; }
+  .studio-ss-weather span { white-space:nowrap; }
   .studio-tab { cursor: pointer; padding: 8px 18px; border-radius: 10px 10px 0 0;
     border: 1px solid #232833; border-bottom: none; color: #8b9099; background: #141821; }
   .studio-tab.active { color: #39c8e8; background: #0d1016; border-color: #2a2f3a; }
@@ -210,6 +216,7 @@
             <div class="pv-screen-inner" id="pvs_inner">
               <img id="pvs_bg" class="bg" style="display:none" alt="">
               <div id="pvs_scr">
+                <div class="studio-ss-weather" id="pvs_weather"></div>
                 <div class="studio-clock" id="pvs_clock">00:00</div>
                 <div class="studio-date" id="pvs_date"></div>
               </div>
@@ -242,6 +249,7 @@
     <div class="flex gap-1">
       <div class="studio-tab active" data-tab="design" onclick="setTab('design')">Build the dashboard</div>
       <div class="studio-tab" data-tab="panel" onclick="setTab('panel')">Panel hardware</div>
+      <div class="studio-tab" data-tab="screensaver" onclick="setTab('screensaver')">Build the screensaver</div>
     </div>
 
     <div class="studio-tabpane active" id="pane_design">
@@ -306,6 +314,16 @@
         <button class="studio-btn" style="margin-top:.75rem" onclick="savePanelSettings()">Save panel settings</button>
       </section>
     </div>
+
+    <div class="studio-tabpane" id="pane_screensaver">
+      <section class="studio-step plain">
+        <div class="studio-step-head"><span class="studio-step-num">5</span><span class="studio-step-title">Build the screensaver</span></div>
+        <p class="studio-step-desc">Style the clock and date, choose the weather details, then save. The preview above shows every change before it reaches the panel.</p>
+        <div id="screensaver_settings_box">
+          <p class="text-sm opacity-60">Choose a panel above to load its screensaver settings.</p>
+        </div>
+      </section>
+    </div>
   </div>
 </div>
 
@@ -318,6 +336,7 @@ var selectedItemId = null; // the item being placed/moved
 var targetSlot = null;     // P297: slot chosen on the preview, waiting for an entity
 var galleryPhotos = [];    // P298: the panel's reusable photo library
 var settingsLoading = false; // P297: one settings fetch at a time
+var screensaverLoading = false; // P306: one screensaver-settings fetch at a time
 var panelId = null;
 var SLOTS = [[10,60],[165,60],[320,60],[10,190],[165,190],[320,190]];
 
@@ -333,6 +352,7 @@ function setTab(t) {
   // P305: never gate the load on panelId — an empty id must show an explicit
   // failure message, not leave the sub-tabs silently blank.
   if (t === 'panel') loadPanelSettings();
+  if (t === 'screensaver') loadScreensaverSettings();
 }
 
 /* P292: parse a studio response defensively. The save error the user saw —
@@ -369,6 +389,8 @@ function loadDesign() {
   var sel = document.getElementById('panel_sel');
   panelId = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].dataset.id : null;
   if (document.getElementById('pane_panel').classList.contains('active')) loadPanelSettings();
+  var ssPane = document.getElementById('pane_screensaver');
+  if (ssPane && ssPane.classList && ssPane.classList.contains('active')) loadScreensaverSettings();
   if (!mac) {
     document.getElementById('panel_settings_box').innerHTML =
       '<p class="text-sm opacity-60">Choose a panel to load its settings.</p>';
@@ -875,6 +897,121 @@ function savePanelSettings() {
     .catch(e => setStatus('Save failed: ' + e, true));
 }
 
+/* ---- P306: Build the screensaver --------------------------------------- */
+function screensaverForm() {
+  var box = document.getElementById('screensaver_settings_box');
+  if (!box || typeof box.querySelector !== 'function') return null;
+  return box.querySelector('form');
+}
+
+function loadScreensaverSettings() {
+  var box = document.getElementById('screensaver_settings_box');
+  if (!box) return;
+  if (!panelId) {
+    box.innerHTML = '<p class="text-sm" style="color:#e07070">No panel id — reload the Dashboard page, then choose a panel.</p>';
+    setStatus('No panel id on the selected panel — reload the Dashboard page.', true);
+    return;
+  }
+  if (screensaverLoading) return;
+  screensaverLoading = true;
+  box.innerHTML = '<p class="text-sm opacity-60">Loading…</p>';
+  nspanelFetch('/nspanel_core/dashboard/screensaver_settings?panel_id=' + panelId)
+    .then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then(function (t) {
+      screensaverLoading = false;
+      box.innerHTML = t;
+      var form = screensaverForm();
+      if (!form) return;
+      bindScreensaverBehavior();
+      form.addEventListener('submit', function (ev) {
+        ev.preventDefault(); saveScreensaverSettings();
+      });
+      renderScreensaverPreview();
+    })
+    .catch(function (e) {
+      screensaverLoading = false;
+      box.innerHTML = '<p class="text-sm" style="color:#e07070">Failed to load screensaver settings: ' + e.message + '</p>';
+      setStatus('Failed to load screensaver settings: ' + e, true);
+    });
+}
+
+function readScreensaverSettings() {
+  var form = screensaverForm();
+  var data = {};
+  if (!form || !form.elements) return data;
+  ['clock_font', 'clock_weight', 'clock_color', 'clock_align',
+   'date_font', 'date_weight', 'date_color', 'date_align',
+   'show_ss_outside_temp', 'show_ss_room_temp', 'show_ss_forecast',
+   'show_ss_wind', 'show_ss_rain', 'show_ss_sunrise_sunset',
+   'ss_outside_temp_entity', 'ss_room_temp_entity'].forEach(function (name) {
+    var el = form.elements[name];
+    if (!el) return;
+    data[name] = el.type === 'checkbox' ? !!el.checked : el.value;
+  });
+  return data;
+}
+
+function bindScreensaverBehavior() {
+  var form = screensaverForm();
+  if (!form || typeof form.querySelectorAll !== 'function') return;
+  form.querySelectorAll('select, input').forEach(function (el) {
+    el.addEventListener('change', renderScreensaverPreview);
+  });
+}
+
+function saveScreensaverSettings() {
+  var body = readScreensaverSettings();
+  var status = document.getElementById('screensaver_status');
+  return nspanelFetch('/nspanel_core/api/screensaver_save/' + panelId, {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(studioJson).then(function () {
+    if (status) status.textContent = 'Saved';
+    setStatus('Screensaver saved', false);
+    return true;
+  }).catch(function (e) {
+    if (status) status.textContent = 'Save failed';
+    setStatus('Screensaver save failed: ' + e, true);
+    return false;
+  });
+}
+
+/* The compiled HMI fonts are NotoSans24/32/48/64 — the preview uses those
+ * pixel sizes so what you see matches the panel, not an arbitrary scale. */
+function ssFontSize(font, fallback) {
+  return ({ small: 24, medium: 32, large: 48, xlarge: 64 })[font] || fallback;
+}
+
+function renderScreensaverPreview() {
+  var s = readScreensaverSettings();
+  var clock = document.getElementById('pvs_clock');
+  if (clock && clock.style) {
+    clock.style.fontSize = ssFontSize(s.clock_font, 48) + 'px';
+    clock.style.fontWeight = s.clock_weight === 'bold' ? '700' : '400';
+    clock.style.color = s.clock_color || '#c8cbce';
+    clock.style.textAlign = s.clock_align || 'center';
+  }
+  var dateEl = document.getElementById('pvs_date');
+  if (dateEl && dateEl.style) {
+    dateEl.style.fontSize = ssFontSize(s.date_font, 24) + 'px';
+    dateEl.style.fontWeight = s.date_weight === 'bold' ? '700' : '400';
+    dateEl.style.color = s.date_color || '#8b93a1';
+    dateEl.style.textAlign = s.date_align || 'center';
+  }
+  var strip = document.getElementById('pvs_weather');
+  if (strip) {
+    var rows = [];
+    if (s.show_ss_outside_temp) rows.push('Outside 21°C');
+    if (s.show_ss_room_temp) rows.push('Inside 19.5°C');
+    if (s.show_ss_forecast) rows.push('Mon 23°/9°');
+    if (s.show_ss_wind) rows.push('W 12 km/h');
+    if (s.show_ss_rain) rows.push('R 0.2 mm');
+    if (s.show_ss_sunrise_sunset) rows.push('U06:12 D19:45');
+    strip.innerHTML = rows.map(function (t) { return '<span>' + t + '</span>'; }).join('');
+  }
+}
+
 /* ---- the live preview -------------------------------------------------- */
 /* P302: both screens are rendered at once. #pv_* is the interactive dashboard
  * device; #pvs_* is the screensaver device beside it. The old Dashboard/
@@ -926,6 +1063,7 @@ function renderPreview() {
     }
   }
   tickClock();
+  if (typeof renderScreensaverPreview === 'function') renderScreensaverPreview();
 
   // dashboard: background + entity tiles for the selected page
   var page = design.pages.find(p => p.name === selectedPage) || design.pages[0] || null;

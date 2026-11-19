@@ -53,17 +53,21 @@ def _between(text: str, start: str, end: str) -> str:
 # ------------------------------------------------------------- the layout
 
 def test_studio_is_a_numbered_guided_flow():
-    assert HTML.count('class="studio-step-num"') == 4
+    assert HTML.count('class="studio-step-num"') == 5
     for title in ("Pages", "Photos", "Items (what sits on the photo)",
-                  "Panel hardware"):
+                  "Panel hardware", "Build the screensaver"):
         assert f'class="studio-step-title">{title}</span>' in HTML
     assert "Choose a panel, set up its pages, then send the design" in HTML
     assert ">Build the dashboard</div>" in HTML
     assert ">Panel hardware</div>" in HTML
+    assert ">Build the screensaver</div>" in HTML
     # step 4 explains the sub-tabs instead of dropping three dead headings
     step4 = _between(HTML, 'studio-step-title">Panel hardware', "</section>")
     for label in ("Screen &amp; screensaver", "Physical buttons", "General"):
         assert label in step4
+    step5 = _between(HTML, 'studio-step-title">Build the screensaver', "</section>")
+    assert "Style the clock and date" in step5
+    assert 'id="screensaver_settings_box"' in step5
 
 
 def test_no_entity_library_block_or_migration_copy_remains():
