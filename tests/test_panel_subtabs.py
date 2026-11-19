@@ -6,7 +6,7 @@ GENERAL are plain text, they do nothing" and then "you made the tabs but where
 are the functions for these tabs?! ... you have a ledger... USE IT!!!".
 
 The fields were MOVED from the per-panel settings page (P263/P266), so the JS
-behavior that came with them (update_shown_elements, update_nspanel_example_view
+behavior that came with them (update_shown_elements
 from edit_nspanel.js, and the background picker from edit_nspanel.html) had to
 move with them. The shared static JS + the shared modal are that move — one
 source loaded by BOTH pages. The fields must never be moved out of their form
@@ -120,7 +120,7 @@ def test_panel_selection_and_zone_jumps_open_the_right_tab():
 
 def test_moved_field_behavior_is_in_one_shared_static_file():
     js = JS.read_text()
-    for fn in ("function update_shown_elements()", "function update_nspanel_example_view()",
+    for fn in ("function update_shown_elements()",
                "function bindPanelSettingsBehavior()"):
         assert fn in js, f"missing {fn}"
     # direct/detached/mqtt/follow modes for BOTH physical buttons
@@ -135,10 +135,11 @@ def test_moved_field_behavior_is_in_one_shared_static_file():
     for ident in ("button1_mode", "button2_mode", "screensaver_mode",
                   "button1_detached_mode_room", "button2_detached_mode_room"):
         assert f'$("#{ident}").change(update_shown_elements)' in js
-    assert '$("#panel_type").on("change", update_nspanel_example_view)' in js
+    # P309: the panel example drawing and its update function are deleted
+    assert "update_nspanel_example_view" not in js
     for example in ("eu-panel-example", "us-panel-vertical-example",
                     "us-panel-horizontal-example", "us-panel-horizontal-mirrored-example"):
-        assert f'#{example}"' in js
+        assert example not in js
 
 
 def test_settings_page_uses_the_same_behavior_single_source():
@@ -154,26 +155,23 @@ def test_studio_binds_the_behavior_after_injecting_the_form():
     fn = _between(HTML, "function loadPanelSettings", "function savePanelSettings")
     assert "box.innerHTML = t;" in fn
     assert fn.index("box.innerHTML = t;") < fn.index("bindPanelSettingsBehavior();")
-    # panel type drives BOTH the example graphics and the live device preview
-    assert '$("#panel_type").on("change", update_nspanel_example_view)' in JS.read_text()
+    # the panel type drives the live device preview
     assert "typeSel.addEventListener('change', renderPreview)" in fn
     # switching sub-tabs re-evaluates the conditional controls
     sub = _between(HTML, "function setPanelSubTab", "function loadPanelSettings")
     assert "update_shown_elements()" in sub
 
 
-def test_background_picker_is_live_in_both_pages():
-    """The four overlay click targets in the shared partial called a function
-    that existed only on the settings page — a dead onclick in the studio."""
-    assert FIELDS.count('onclick="openBackgroundSelector();"') == 4
-    modal = MODAL.read_text()
-    for name in ("function openBackgroundSelector()", "function selectBackground(background, image)",
-                 'id="select_background_modal"', 'eu-backgrounds',
-                 'us-vertical-backgrounds', 'us-horizontal-backgrounds',
-                 'us-horizontal-mirrored-backgrounds'):
-        assert name in modal, f"background picker missing {name}"
-    assert "$(\"#selected_tft\").val(\"tft\" + background)" in modal
-    for page in (HTML, EDIT.read_text()):
-        assert "{% include '_background_selector_modal.html' %}" in page
-    # the settings page no longer carries a second copy of the modal
-    assert 'id="select_background_modal"' not in EDIT.read_text()
+def test_the_panel_drawing_and_background_selector_are_gone():
+    """P309 (user: "you can remove the panel drawing from there, you can
+    delete the code as well, is not used anymore") — the example drawing, its
+    update function, the background-selector modal and every trigger are
+    deleted; the background is chosen through the studio's photo gallery."""
+    for text, label in ((FIELDS, "partial"), (HTML, "dashboard"), (EDIT.read_text(), "edit")):
+        assert "eu-panel-example" not in text, label
+        assert "us-panel-vertical-example" not in text, label
+        assert "openBackgroundSelector" not in text, label
+        assert "selected_tft" not in text, label
+        assert "_background_selector_modal" not in text, label
+    assert "update_nspanel_example_view" not in JS.read_text()
+    assert not MODAL.exists(), "the background selector modal file must be deleted"

@@ -90,8 +90,6 @@ def test_edit_panel_renders_with_truthy_checks():
     m = re.search(r'<select name="button1_detached_mode_room".*?</select>', out, re.S)
     assert m and 'value="3" selected' in m.group(0)  # detached room pre-selected
     assert 'Thermostat' not in out  # no invalid button modes 4/5 (light id 5 legitimately renders value="5")
-    m = re.search(r'id="us-panel-vertical-example"[^>]*>', out)
-    assert m and "hidden" in m.group(0)  # EU panel hides US preview
 
 
 def test_settings_page_has_tabs():

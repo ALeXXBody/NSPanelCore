@@ -55,7 +55,7 @@ def test_preview_image_has_a_real_covering_css_rule():
 
 
 def test_render_preview_points_the_live_image_at_the_pages_photo():
-    script = _js("renderPreview", "esc") + """
+    script = _js("photoAuth", "renderPreview", "esc") + """
 var design = {mac: 'AA', pages: [{name: 'dash_kitchen', title: 'Kitchen',
   background_image: 'gal_aa_111.jpg'}], items: [], screensaver_page: ''};
 var entities = [], selectedPage = 'dash_kitchen', selectedItemId = null;
@@ -133,7 +133,7 @@ console.log(JSON.stringify(out));
 # --------------------------------------------------------------- the gallery
 
 def test_gallery_renders_thumbnails_and_applies_a_photo():
-    script = _js("renderGallery", "applyGalleryPhoto", "esc") + """
+    script = _js("photoAuth", "renderGallery", "applyGalleryPhoto", "esc") + """
 var galleryPhotos = [{name: 'gal_aa_111.jpg'}, {name: 'gal_aa_222.png'}];
 var design = {mac: 'AA', pages: [{name: 'dash_kitchen', title: 'Kitchen',
   background_image: 'gal_aa_111.jpg'}]};

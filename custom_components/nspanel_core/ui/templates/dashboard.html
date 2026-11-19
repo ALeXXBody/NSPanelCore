@@ -204,10 +204,6 @@
 </div>
 <div id="status" class="text-sm" style="min-height:1.4rem;color:#39c8e8"></div>
 
-{# P290: the moved fields' background picker — the overlays live in the shared
-   settings partial, so the modal must exist at page level for both pages. #}
-{% include '_background_selector_modal.html' %}
-
 <div class="flex flex-col gap-6 mt-4">
   <!-- THE PREVIEW: both panel screens, side by side in one wide card -->
   <div class="studio-panel-frame" id="pv_frame" data-dev="eu">
@@ -262,7 +258,7 @@
 
     <div class="studio-tabpane active" id="pane_screensaver">
       <section class="studio-step plain">
-        <div class="studio-step-head"><span class="studio-step-num">5</span><span class="studio-step-title">Build the screensaver</span></div>
+        <div class="studio-step-head"><span class="studio-step-num">1</span><span class="studio-step-title">Build the screensaver</span></div>
         <p class="studio-step-desc">Style the clock and date, choose the weather details, then save. The preview above shows every change before it reaches the panel.</p>
         <div class="studio-pagebar">
           <label for="scr_sel">Picture shown on the screensaver:</label>
@@ -277,7 +273,7 @@
 
     <div class="studio-tabpane" id="pane_design">
       <section class="studio-step">
-        <div class="studio-step-head"><span class="studio-step-num">1</span><span class="studio-step-title">Pages</span></div>
+        <div class="studio-step-head"><span class="studio-step-num">2</span><span class="studio-step-title">Pages</span></div>
         <p class="studio-step-desc">Each page is one screen on the panel. Type a name and press Enter — that name becomes the page on the panel.</p>
         <div class="studio-step-body">
           <table class="table is-fullwidth" id="pages_tbl" style="background:transparent;color:#c8cbce">
@@ -288,7 +284,7 @@
       </section>
 
       <section class="studio-step">
-        <div class="studio-step-head"><span class="studio-step-num">2</span><span class="studio-step-title">Photos</span></div>
+        <div class="studio-step-head"><span class="studio-step-num">3</span><span class="studio-step-title">Photos</span></div>
         <p class="studio-step-desc">Upload your pictures once. Click a picture to put it on the page selected above.</p>
         <div class="studio-step-body">
           <input id="gallery_upload" type="file" accept="image/*" multiple
@@ -298,7 +294,7 @@
       </section>
 
       <section class="studio-step">
-        <div class="studio-step-head"><span class="studio-step-num">3</span><span class="studio-step-title">Items (what sits on the photo)</span></div>
+        <div class="studio-step-head"><span class="studio-step-num">4</span><span class="studio-step-title">Items (what sits on the photo)</span></div>
         <p class="studio-step-desc">Every item is a Home Assistant entity. Search here to find one, add it to this page, and click its tile on the preview to choose where it goes.</p>
         <div class="studio-step-body">
           <input id="entity_filter" class="input is-small" type="search"
@@ -318,7 +314,7 @@
 
     <div class="studio-tabpane" id="pane_panel">
       <section class="studio-step plain">
-        <div class="studio-step-head"><span class="studio-step-num">4</span><span class="studio-step-title">Panel hardware</span></div>
+        <div class="studio-step-head"><span class="studio-step-num">5</span><span class="studio-step-title">Panel hardware</span></div>
         <p class="studio-step-desc">These settings belong to the device itself — its screen, its two buttons, and its general options. Choose one below to show its fields.</p>
         <div class="studio-subtabs" id="panel_subtabs">
           <div class="studio-subtab active" data-sec="screen" onclick="setPanelSubTab('screen')">Screen &amp; screensaver</div>
@@ -350,6 +346,17 @@ function currentMac() { return document.getElementById('panel_sel').value; }
 function setStatus(t, err) {
   var el = document.getElementById('status');
   el.textContent = t; el.style.color = err ? 'crimson' : '#39c8e8';
+}
+
+/* P309: <img> tags cannot send the Authorization header — the photo views
+ * accept the live HA token as ?ha_token= (the same bootstrap fallback the
+ * page loads use), so a browser whose session cookie was not exchanged can
+ * still load the user's photos instead of silently hiding them. */
+function photoAuth() {
+  try {
+    var t = (typeof nspanelGetToken === 'function') ? nspanelGetToken() : '';
+    return t ? '&ha_token=' + encodeURIComponent(t) : '';
+  } catch (e) { return ''; }
 }
 
 function setTab(t) {
@@ -481,8 +488,8 @@ function renderPages() {
       '<td onclick="event.stopPropagation()"><input type="file" accept="image/*" style="width:10rem;color:#8b9099" onchange="uploadBg(' + i + ', this)">' +
       (p.background_image ? '<span class="tag is-small" style="background:rgba(57,200,232,.15);color:#39c8e8">photo ✓</span>' : '<span class="tag is-small" style="background:rgba(255,255,255,.06);color:#5a6068">no photo — black screen</span>') +
       ' <button class="button is-small is-ghost" style="color:#39c8e8" onclick="document.getElementById(\'photo_gallery\').scrollIntoView({behavior:\'smooth\',block:\'nearest\'})">gallery</button></td>' +
-      '<td onclick="event.stopPropagation()"><button class="button is-small is-ghost" style="color:#39c8e8" onclick="addPage(' + i + ')" title="Add a page after this one">+</button>' +
-      ' <button class="button is-small is-danger" onclick="deletePage(' + i + ')">✕</button></td>' +
+      '<td onclick="event.stopPropagation()"><button class="button is-small is-ghost" style="min-width:2.6rem;padding:2px 10px" onclick="addPage(' + i + ')" title="Add a page after this one">+</button>' +
+      ' <button class="button is-small is-ghost" style="min-width:2.6rem;padding:2px 10px" onclick="deletePage(' + i + ')" title="Delete this page">✕</button></td>' +
       '</tr>';
   }).join('');
   var ss = document.getElementById('scr_sel');
@@ -752,7 +759,7 @@ function renderGallery() {
   var mac = encodeURIComponent(currentMac() || design.mac || '');
   el.innerHTML = galleryPhotos.map(function (p) {
     var url = '/nspanel_core/dashboard_gallery_image?panel=' + mac +
-              '&photo=' + encodeURIComponent(p.name);
+              '&photo=' + encodeURIComponent(p.name) + photoAuth();
     var used = p.name === current;
     return '<div class="studio-gallery-item' + (used ? ' selected' : '') + '"' +
       ' onclick="applyGalleryPhoto(\'' + p.name + '\')"' +
@@ -1139,7 +1146,7 @@ function renderPreview() {
       sbg.style.display = 'block';
       sbg.className = 'bg';
       sbg.src = '/nspanel_core/dashboard_photo?panel=' + encodeURIComponent(currentMac()) +
-        '&page=' + encodeURIComponent(scrPage.name) + '&variant=scr&r=' + Date.now();
+        '&page=' + encodeURIComponent(scrPage.name) + '&variant=scr&r=' + Date.now() + photoAuth();
       sbg.onerror = function () {
         sbg.style.display = 'none';
         if (scrPage.background_image)
@@ -1169,7 +1176,7 @@ function renderPreview() {
     bg.style.display = page.background_image ? 'block' : 'none';
     bg.className = 'bg dash';
     bg.src = '/nspanel_core/dashboard_photo?panel=' + encodeURIComponent(currentMac()) +
-      '&page=' + encodeURIComponent(page.name) + '&variant=dash&r=' + Date.now();
+      '&page=' + encodeURIComponent(page.name) + '&variant=dash&r=' + Date.now() + photoAuth();
     // P308: a chosen photo that will not load must say so — silently hiding
     // the background looked like "the page refreshed without any picture".
     bg.onerror = function () {

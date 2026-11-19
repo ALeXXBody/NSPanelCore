@@ -37,7 +37,7 @@ def _body(start: str, end: str) -> str:
     return HTML[begin:HTML.index(end, begin)]
 
 
-RENDER = _FNS["renderPreview"]
+RENDER = _FNS["photoAuth"] + _FNS["renderPreview"]
 TICK = _body("function tickClock()", "setInterval(")
 SCALE = _body("function scaleScreen()", "new ResizeObserver")
 

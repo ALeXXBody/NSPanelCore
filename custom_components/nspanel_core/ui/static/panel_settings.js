@@ -76,34 +76,6 @@ function update_shown_elements() {
   }
 }
 
-// Update the view of the example NSPanel model and orientation.
-function update_nspanel_example_view() {
-  var selected_type = $("#panel_type").val();
-  if (selected_type == "eu") {
-    $("#eu-panel-example").show();
-  } else {
-    $("#eu-panel-example").hide();
-  }
-
-  if (selected_type == "us_vertical") {
-    $("#us-panel-vertical-example").show();
-  } else {
-    $("#us-panel-vertical-example").hide();
-  }
-
-  if (selected_type == "us_horizontal") {
-    $("#us-panel-horizontal-example").show();
-  } else {
-    $("#us-panel-horizontal-example").hide();
-  }
-
-  if (selected_type == "us_horizontal_mirrored") {
-    $("#us-panel-horizontal-mirrored-example").show();
-  } else {
-    $("#us-panel-horizontal-mirrored-example").hide();
-  }
-}
-
 /* Bind the settings fields. Called by the settings page on DOM ready and by
  * the studio AFTER it injects the server-rendered form into the Panel tab —
  * the injected nodes do not exist when the page's ready handler runs. */
@@ -116,7 +88,4 @@ function bindPanelSettingsBehavior() {
   $("#screensaver_mode").change(update_shown_elements);
   $("#button1_detached_mode_room").change(update_shown_elements);
   $("#button2_detached_mode_room").change(update_shown_elements);
-
-  $("#panel_type").on("change", update_nspanel_example_view);
-  update_nspanel_example_view(); // Update once manually depending on selected choice.
 }
