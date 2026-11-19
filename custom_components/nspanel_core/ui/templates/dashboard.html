@@ -223,8 +223,10 @@ function loadDesign() {
   if (!mac) { document.getElementById('pv_frame').style.opacity = .35; return; }
   document.getElementById('pv_frame').style.opacity = 1;
   Promise.all([
-    fetch('/nspanel_core/dashboard_design?panel=' + mac, { credentials: 'same-origin' }).then(r => r.json()),
-    fetch('/nspanel_core/dashboard_entities', { credentials: 'same-origin' }).then(r => r.json())
+    nspanelFetch('/nspanel_core/dashboard_design?panel=' + mac, { credentials: 'same-origin' })
+      .then(r => r.text()).then(t => { try { return JSON.parse(t); } catch (e) { throw new Error('HTTP ' + r.status + ' — ' + t.slice(0, 120)); } }),
+    nspanelFetch('/nspanel_core/dashboard_entities', { credentials: 'same-origin' })
+      .then(r => r.text()).then(t => { try { return JSON.parse(t); } catch (e) { throw new Error('HTTP ' + r.status + ' — ' + t.slice(0, 120)); } })
   ]).then(([dj, ej]) => {
     design = dj.design; design.mac = mac;
     entities = ej.entities || [];

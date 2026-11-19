@@ -57,10 +57,17 @@ function nspanelGetToken() {
   } catch (e) {}
   try {
     var found = nspanelTokenStore();
-    return found ? found.tokens.access_token : "";
-  } catch (e2) {
-    return "";
-  }
+    if (found && found.tokens && found.tokens.access_token) return found.tokens.access_token;
+  } catch (e2) {}
+  /* P282: the URL fallback — panel.js passes the live token as ?ha_token=
+   * on the iframe URL; remote browsers with partitioned/empty storage get
+   * their credential here instead of going out unauthenticated. */
+  try {
+    var u = new URLSearchParams(window.location.search);
+    var t = u.get("ha_token");
+    if (t) return t;
+  } catch (e3) {}
+  return "";
 }
 
 // Top-level auth helpers (must live outside $(document).ready so
@@ -116,13 +123,24 @@ function nspanelClientId() {
 
 // Authed fetch for native-fetch callers (navbar buttons etc.): attaches the
 // HA bearer token like htmx/jQuery paths do.
-async function nspanelFetch(url, options) {
+async function nspanelFetchOnce(url, options) {
   options = options || {};
   var headers = Object.assign({}, options.headers || {});
   try { await nspanelRefreshTokenIfNeeded(); } catch (err) {}
   var tok = nspanelGetToken();
   if (tok) headers["Authorization"] = "Bearer " + tok;
   return fetch(url, Object.assign({}, options, { headers: headers }));
+}
+
+/* P282: a 401 (a stale token — the remote sessions rotate) forces the
+ * refresh and retries ONCE before surfacing the failure. */
+async function nspanelFetch(url, options) {
+  var resp = await nspanelFetchOnce(url, options);
+  if (resp.status === 401) {
+    try { await nspanelRefreshTokenIfNeeded(true); } catch (e) {}
+    resp = await nspanelFetchOnce(url, options);
+  }
+  return resp;
 }
 
 async function nspanelRefreshTokenIfNeeded(force) {
