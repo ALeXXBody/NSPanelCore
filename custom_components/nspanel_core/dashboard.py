@@ -672,6 +672,55 @@ def _panel_settings_context(manager, panel) -> dict:
     }
 
 
+# P306 — the closed value sets for the "Build the screensaver" tab. These are
+# the same keys the native firmware maps to compiled HMI font/align ids; a
+# value outside these tuples can never reach the panel's display commands.
+SS_CLOCK_FONTS = ("small", "medium", "large", "xlarge")
+SS_DATE_FONTS = ("small", "medium", "large")
+SS_WEIGHTS = ("regular", "bold")
+SS_ALIGNS = ("left", "center", "right")
+SS_COLOR_FIELDS = ("clock_color", "date_color")
+SS_FLAGS = (
+    "show_ss_outside_temp", "show_ss_room_temp", "show_ss_forecast",
+    "show_ss_wind", "show_ss_rain", "show_ss_sunrise_sunset",
+)
+SS_ENTITY_FIELDS = ("ss_outside_temp_entity", "ss_room_temp_entity")
+
+
+def _screensaver_entities(manager) -> list[dict[str, str]]:
+    """Temperature-capable HA entities for the per-panel binding selects."""
+    hass = getattr(manager, "hass", None)
+    if hass is None:
+        return []
+    try:
+        states = hass.states.async_all()
+    except Exception:  # noqa: BLE001 — a picker must not break the whole tab
+        return []
+    out = []
+    for state in states:
+        entity_id = getattr(state, "entity_id", "")
+        if entity_id.split(".", 1)[0] not in ("sensor", "climate", "input_number"):
+            continue
+        attrs = getattr(state, "attributes", {}) or {}
+        out.append({
+            "entity_id": entity_id,
+            "label": attrs.get("friendly_name") or entity_id,
+        })
+    out.sort(key=lambda e: e["entity_id"])
+    return out
+
+
+def _screensaver_context(manager, panel) -> dict:
+    """The context for the screensaver fields — real stored values, never
+    markup defaults, so a saved setting can't look like the default."""
+    from dataclasses import asdict
+
+    return {
+        "panel_info": {"data": asdict(panel)},
+        "entities": _screensaver_entities(manager),
+    }
+
+
 class EditPanelView(HomeAssistantView):
     """The ORIGINAL panel settings page (edit_nspanel template)."""
 
@@ -722,6 +771,111 @@ class DashboardPanelSettingsView(HomeAssistantView):
         ctx = _panel_settings_context(manager, panel)
         html = _render("_panel_settings_fields.html", **ctx)
         return web.Response(text=html, content_type="text/html")
+
+
+class DashboardScreensaverSettingsView(HomeAssistantView):
+    """P306: the "Build the screensaver" fields for the studio's third tab."""
+
+    url = f"{URL_BASE}/dashboard/screensaver_settings"
+    name = "nspanel_core:dashboard_screensaver_settings"
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
+
+    @_gated
+    async def get(self, request, **kwargs):
+        manager = _manager(request)
+        try:
+            panel_id = int(request.query.get("panel_id", ""))
+        except (KeyError, ValueError, TypeError):
+            return web.Response(text="<p class='text-sm'>Choose a panel.</p>",
+                                content_type="text/html")
+        panel = next((p for p in manager.panels() if p.id == panel_id), None)
+        if panel is None:
+            return web.Response(text="<p class='text-sm'>Panel not found.</p>",
+                                content_type="text/html")
+        html = _render("_screensaver_fields.html",
+                       **_screensaver_context(manager, panel))
+        return web.Response(text=html, content_type="text/html")
+
+
+class DashboardScreensaverSaveView(HomeAssistantView):
+    """P306: validate, persist and publish the screensaver style + weather.
+
+    The retained screensaver topic is the only thing re-sent: a style change
+    must not resend the whole panel config, and screensaver_mode stays in the
+    Panel hardware tab (no duplicate control here).
+    """
+
+    url = f"{URL_BASE}/api/screensaver_save/{{panel_id}}"
+    name = "nspanel_core:api:screensaver_save"
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
+
+    @_gated
+    async def post(self, request, **kwargs):
+        import re as _re
+
+        manager = _manager(request)
+        try:
+            panel_id = int(request.match_info["panel_id"])
+        except (KeyError, ValueError, TypeError):
+            return web.json_response({"error": "Bad panel id"}, status=400)
+        panel = next((p for p in manager.config.panels if p.id == panel_id), None)
+        if panel is None:
+            return web.json_response({"error": "Panel not found"}, status=404)
+        try:
+            body = await request.json()
+        except (ValueError, TypeError):
+            return web.json_response({"error": "malformed body"}, status=400)
+        if not isinstance(body, dict):
+            return web.json_response({"error": "malformed body"}, status=400)
+
+        updates: dict[str, Any] = {}
+        errors: dict[str, str] = {}
+        for key, allowed in (
+            ("clock_font", SS_CLOCK_FONTS), ("date_font", SS_DATE_FONTS),
+            ("clock_weight", SS_WEIGHTS), ("date_weight", SS_WEIGHTS),
+            ("clock_align", SS_ALIGNS), ("date_align", SS_ALIGNS),
+        ):
+            if key not in body:
+                continue
+            value = body[key]
+            if not isinstance(value, str) or value not in allowed:
+                errors[key] = "must be one of " + ", ".join(allowed)
+            else:
+                updates[key] = value
+        for key in SS_COLOR_FIELDS:
+            if key not in body:
+                continue
+            value = body[key]
+            if not isinstance(value, str) or not _re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+                errors[key] = "must be #RRGGBB"
+            else:
+                updates[key] = value.lower()
+        for key in SS_FLAGS:
+            if key not in body:
+                continue
+            value = body[key]
+            if not isinstance(value, bool):
+                errors[key] = "must be true or false"
+            else:
+                updates[key] = value
+        for key in SS_ENTITY_FIELDS:
+            if key not in body:
+                continue
+            value = str(body[key] or "").strip()
+            if value and not _re.fullmatch(r"[a-z_][a-z0-9_]*\.[a-z0-9_]+", value):
+                errors[key] = "must be a Home Assistant entity id"
+            else:
+                updates[key] = value
+        if errors:
+            return web.json_response(
+                {"error": "invalid screensaver settings", "fields": errors}, status=422)
+
+        for key, value in updates.items():
+            setattr(panel, key, value)
+        await manager.async_save()
+        await manager._publish_screensaver(panel)
+        manager.notify_panels_changed()
+        return web.json_response({"ok": True, "panel_id": panel_id})
 
 
 class SavePanelSettingsView(HomeAssistantView):
@@ -2622,6 +2776,8 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         GeneralSettingsView,
         DashboardView,
         DashboardPanelSettingsView,
+        DashboardScreensaverSettingsView,
+        DashboardScreensaverSaveView,
         DashboardPhotoView,
         DashboardDesignView,
         DashboardSaveView,

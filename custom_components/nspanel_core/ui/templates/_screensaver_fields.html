@@ -1,0 +1,139 @@
+{# P306 Step 3: the "Build the screensaver" fields, served into the studio's
+   third tab. Every value comes from the real PanelConfig; no default is
+   invented in markup so a stored setting can never look like the default. #}
+{% macro ss_option(name, current, value, label) -%}
+<option value="{{ value }}" {% if current == value %}selected{% endif %}>{{ label }}</option>
+{%- endmacro %}
+{% macro ss_entity_select(name, current) -%}
+<select name="{{ name }}" id="{{ name }}" class="ss-control">
+  <option value="" {% if not current %}selected{% endif %}>Use the global / panel sensor</option>
+  {%- for entity in entities %}
+  <option value="{{ entity.entity_id }}" {% if entity.entity_id == current %}selected{% endif %}>{{ entity.label }}</option>
+  {%- endfor %}
+</select>
+{%- endmacro %}
+<form id="screensaver_form" data-authed data-panel-id="{{ panel_info.data.id }}"
+      action="/nspanel_core/api/screensaver_save/{{ panel_info.data.id }}" method="post">
+  <div class="p-4 bg-base-100 rounded-md shadow-lg w-full" data-section="screensaver">
+
+    <span class="block mb-2 text-xl">Clock and date</span>
+    <p class="text-xs opacity-60 mb-3">Font, weight, colour and alignment are written to the real panel — the preview above follows every change.</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label for="clock_font" class="block mb-1 text-sm font-medium">Clock font</label>
+        <select name="clock_font" id="clock_font" class="ss-control">
+          {{ ss_option('clock_font', panel_info.data.clock_font, 'small', 'Small') }}
+          {{ ss_option('clock_font', panel_info.data.clock_font, 'medium', 'Medium') }}
+          {{ ss_option('clock_font', panel_info.data.clock_font, 'large', 'Large') }}
+          {{ ss_option('clock_font', panel_info.data.clock_font, 'xlarge', 'Extra large') }}
+        </select>
+      </div>
+      <div>
+        <label for="clock_weight" class="block mb-1 text-sm font-medium">Clock weight</label>
+        <select name="clock_weight" id="clock_weight" class="ss-control">
+          {{ ss_option('clock_weight', panel_info.data.clock_weight, 'regular', 'Regular') }}
+          {{ ss_option('clock_weight', panel_info.data.clock_weight, 'bold', 'Bold') }}
+        </select>
+      </div>
+      <div>
+        <label for="clock_color" class="block mb-1 text-sm font-medium">Clock colour</label>
+        <input type="color" name="clock_color" id="clock_color" class="ss-control"
+               value="{{ panel_info.data.clock_color }}">
+      </div>
+      <div>
+        <label for="clock_align" class="block mb-1 text-sm font-medium">Clock alignment</label>
+        <select name="clock_align" id="clock_align" class="ss-control">
+          {{ ss_option('clock_align', panel_info.data.clock_align, 'left', 'Left') }}
+          {{ ss_option('clock_align', panel_info.data.clock_align, 'center', 'Center') }}
+          {{ ss_option('clock_align', panel_info.data.clock_align, 'right', 'Right') }}
+        </select>
+      </div>
+      <div>
+        <label for="date_font" class="block mb-1 text-sm font-medium">Date font</label>
+        <select name="date_font" id="date_font" class="ss-control">
+          {{ ss_option('date_font', panel_info.data.date_font, 'small', 'Small') }}
+          {{ ss_option('date_font', panel_info.data.date_font, 'medium', 'Medium') }}
+          {{ ss_option('date_font', panel_info.data.date_font, 'large', 'Large') }}
+        </select>
+      </div>
+      <div>
+        <label for="date_weight" class="block mb-1 text-sm font-medium">Date weight</label>
+        <select name="date_weight" id="date_weight" class="ss-control">
+          {{ ss_option('date_weight', panel_info.data.date_weight, 'regular', 'Regular') }}
+          {{ ss_option('date_weight', panel_info.data.date_weight, 'bold', 'Bold') }}
+        </select>
+      </div>
+      <div>
+        <label for="date_color" class="block mb-1 text-sm font-medium">Date colour</label>
+        <input type="color" name="date_color" id="date_color" class="ss-control"
+               value="{{ panel_info.data.date_color }}">
+      </div>
+      <div>
+        <label for="date_align" class="block mb-1 text-sm font-medium">Date alignment</label>
+        <select name="date_align" id="date_align" class="ss-control">
+          {{ ss_option('date_align', panel_info.data.date_align, 'left', 'Left') }}
+          {{ ss_option('date_align', panel_info.data.date_align, 'center', 'Center') }}
+          {{ ss_option('date_align', panel_info.data.date_align, 'right', 'Right') }}
+        </select>
+      </div>
+    </div>
+
+    <div class="divider my-4"></div>
+
+    <span class="block mb-2 text-xl">Weather details</span>
+    <p class="text-xs opacity-60 mb-3">Each detail can be hidden. Leave the entity on the global / panel sensor to use the shared weather feed or the panel's own temperature sensor.</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="screensaver-weather-row">
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="show_ss_outside_temp" id="show_ss_outside_temp"
+                 {% if panel_info.data.show_ss_outside_temp %}checked{% endif %}>
+          Show outside temperature
+        </label>
+        <label for="ss_outside_temp_entity" class="block mt-1 text-xs opacity-70">Home Assistant sensor</label>
+        {{ ss_entity_select('ss_outside_temp_entity', panel_info.data.ss_outside_temp_entity) }}
+      </div>
+      <div class="screensaver-weather-row">
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="show_ss_room_temp" id="show_ss_room_temp"
+                 {% if panel_info.data.show_ss_room_temp %}checked{% endif %}>
+          Show room temperature
+        </label>
+        <label for="ss_room_temp_entity" class="block mt-1 text-xs opacity-70">Home Assistant sensor</label>
+        {{ ss_entity_select('ss_room_temp_entity', panel_info.data.ss_room_temp_entity) }}
+      </div>
+      <div class="screensaver-weather-row">
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="show_ss_forecast" id="show_ss_forecast"
+                 {% if panel_info.data.show_ss_forecast %}checked{% endif %}>
+          Show forecast
+        </label>
+      </div>
+      <div class="screensaver-weather-row">
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="show_ss_wind" id="show_ss_wind"
+                 {% if panel_info.data.show_ss_wind %}checked{% endif %}>
+          Show wind
+        </label>
+      </div>
+      <div class="screensaver-weather-row">
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="show_ss_rain" id="show_ss_rain"
+                 {% if panel_info.data.show_ss_rain %}checked{% endif %}>
+          Show rain
+        </label>
+      </div>
+      <div class="screensaver-weather-row">
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="show_ss_sunrise_sunset" id="show_ss_sunrise_sunset"
+                 {% if panel_info.data.show_ss_sunrise_sunset %}checked{% endif %}>
+          Show sunrise / sunset
+        </label>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3 mt-5">
+      <button type="submit" class="studio-btn">Save screensaver</button>
+      <span id="screensaver_status" class="text-xs opacity-70"></span>
+    </div>
+  </div>
+</form>
