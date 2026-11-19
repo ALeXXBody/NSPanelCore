@@ -189,6 +189,25 @@ class PanelConfig:
     optimistic_mode: bool = False
     temperature_unit: str = "celsius"
     inside_temperature_sensor_topic: str = ""
+    # P306 — "Build the screensaver": clock/date style + weather details.
+    # These are genuine persisted settings; every new field has a safe default
+    # so an old stored config (from_dict filters unknown keys) upgrades cleanly.
+    clock_font: str = "large"          # small | medium | large | xlarge
+    clock_weight: str = "regular"      # regular | bold
+    clock_color: str = "#c8cbce"       # #RRGGBB
+    clock_align: str = "center"        # left | center | right
+    date_font: str = "small"           # small | medium | large
+    date_weight: str = "regular"       # regular | bold
+    date_color: str = "#8b93a1"        # #RRGGBB
+    date_align: str = "center"         # left | center | right
+    show_ss_outside_temp: bool = False
+    show_ss_room_temp: bool = False
+    show_ss_forecast: bool = False
+    show_ss_wind: bool = False
+    show_ss_rain: bool = False
+    show_ss_sunrise_sunset: bool = False
+    ss_outside_temp_entity: str = ""
+    ss_room_temp_entity: str = ""
     rooms: list[int] = field(default_factory=list)
     relay1_group: list[int] = field(default_factory=list)
     relay2_group: list[int] = field(default_factory=list)
@@ -211,6 +230,12 @@ class PanelConfig:
         "datetime_with_background", "datetime_without_background",
         "no_screensaver", "global",
     )
+    # P306: closed enums for the screensaver style controls. Anything else
+    # (stored garbage, a hostile POST) falls back to the safe default.
+    _CLOCK_FONTS = ("small", "medium", "large", "xlarge")
+    _DATE_FONTS = ("small", "medium", "large")
+    _WEIGHTS = ("regular", "bold")
+    _ALIGNS = ("left", "center", "right")
 
     def __post_init__(self) -> None:
         # Migrate legacy stored values (pre-string-enum): int 0/1/2 and
@@ -223,6 +248,37 @@ class PanelConfig:
             self.temperature_calibration = float(self.temperature_calibration)
         except (ValueError, TypeError):
             self.temperature_calibration = 0.0
+        # P306: validate the screensaver style enums + colours. The firmware
+        # turns these into display commands, so only closed values may pass.
+        import re as _re
+
+        defaults = {
+            "clock_font": "large", "clock_weight": "regular",
+            "clock_color": "#c8cbce", "clock_align": "center",
+            "date_font": "small", "date_weight": "regular",
+            "date_color": "#8b93a1", "date_align": "center",
+        }
+        for name, allowed in (
+            ("clock_font", self._CLOCK_FONTS), ("date_font", self._DATE_FONTS),
+            ("clock_weight", self._WEIGHTS), ("date_weight", self._WEIGHTS),
+            ("clock_align", self._ALIGNS), ("date_align", self._ALIGNS),
+        ):
+            if getattr(self, name) not in allowed:
+                setattr(self, name, defaults[name])
+        for name in ("clock_color", "date_color"):
+            value = getattr(self, name)
+            if not isinstance(value, str) or not _re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+                setattr(self, name, defaults[name])
+            else:
+                setattr(self, name, value.lower())
+        for name in (
+            "show_ss_outside_temp", "show_ss_room_temp", "show_ss_forecast",
+            "show_ss_wind", "show_ss_rain", "show_ss_sunrise_sunset",
+        ):
+            setattr(self, name, bool(getattr(self, name)))
+        for name in ("ss_outside_temp_entity", "ss_room_temp_entity"):
+            value = getattr(self, name)
+            setattr(self, name, value if isinstance(value, str) else "")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

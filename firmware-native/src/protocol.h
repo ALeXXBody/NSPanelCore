@@ -22,6 +22,11 @@ inline std::string topic_screen_cmd(const std::string &hostname) {
 inline std::string topic_panel_cmd(const std::string &hostname) {
     return "nspanel/" + hostname + "/command";
 }
+/* P306: retained "Build the screensaver" payload (style + weather flags +
+ * resolved temperature overrides) for one panel. */
+inline std::string topic_panel_screensaver(const std::string &hostname) {
+    return "nspanel/" + hostname + "/screensaver";
+}
 inline std::string topic_relay_cmd(const std::string &hostname, int relay) {
     return "nspanel/" + hostname + "/r" + std::to_string(relay) + "_cmd";
 }

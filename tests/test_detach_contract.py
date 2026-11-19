@@ -269,6 +269,17 @@ def test_v2_app_has_light_platform_parity():
     assert "RelayLight" in src and "set_relay" in src
 
 
+def test_screensaver_builder_topic_contract():
+    """P306: the retained per-panel screensaver topic is part of the wire
+    contract, frozen on BOTH sides (manager publishes, firmware subscribes)."""
+    proto = _src(ROOT / "firmware-native" / "src" / "protocol.h")
+    assert 'inline std::string topic_panel_screensaver' in proto
+    assert 'return "nspanel/" + hostname + "/screensaver";' in proto
+    mgr = _py(INT / "manager.py")
+    assert 'def build_panel_screensaver_config' in mgr
+    assert '_panel_cmd_topic(panel, "screensaver")' in mgr
+
+
 def test_time_date_publishing_contract():
     """P159: the panel's screensaver clock lives off the retained
     nspanel/status/{time,date,ampm} topics — the manager must publish them

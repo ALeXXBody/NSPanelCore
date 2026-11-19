@@ -59,6 +59,66 @@ def _read_manifest_version() -> str:
         return "v0.0.0"
 
 
+# ---------------------------------------------------------------------------
+# P306 — "Build the screensaver": the canonical panel payload.
+#
+# One pure builder owns the shape so the studio saver, the register path and
+# the tests all emit EXACTLY the same keys. Values are closed enums / #RRGGBB
+# already validated by PanelConfig.__post_init__, plus resolved temperature
+# strings. The native firmware maps the font/weight/align KEYS to compiled HMI
+# ids locally, so no numeric id is baked into this contract.
+# ---------------------------------------------------------------------------
+def build_panel_screensaver_config(
+    panel: PanelConfig,
+    settings: Any,
+    outside_temp: str = "",
+    room_temp: str = "",
+) -> dict[str, Any]:
+    """Return the screensaver style + weather payload for one panel."""
+    return {
+        "clock": {
+            "font": panel.clock_font,
+            "weight": panel.clock_weight,
+            "color": panel.clock_color,
+            "align": panel.clock_align,
+        },
+        "date": {
+            "font": panel.date_font,
+            "weight": panel.date_weight,
+            "color": panel.date_color,
+            "align": panel.date_align,
+        },
+        "weather": {
+            "outside_temp": bool(panel.show_ss_outside_temp),
+            "room_temp": bool(panel.show_ss_room_temp),
+            "forecast": bool(panel.show_ss_forecast),
+            "wind": bool(panel.show_ss_wind),
+            "rain": bool(panel.show_ss_rain),
+            "sunrise_sunset": bool(panel.show_ss_sunrise_sunset),
+            # Empty means "use the global weather topic / the panel's own NTC
+            # sensor"; a non-empty string overrides it (resolved HA entity).
+            "outside_temp_override": str(outside_temp or ""),
+            "room_temp_override": str(room_temp or ""),
+        },
+    }
+
+
+def _state_value(hass: Any, entity_id: str) -> str:
+    """Read an HA sensor's state as a clean string, ignoring missing/bad ones."""
+    if not entity_id or hass is None:
+        return ""
+    try:
+        state = hass.states.get(entity_id)
+    except Exception:  # noqa: BLE001
+        return ""
+    if state is None:
+        return ""
+    value = getattr(state, "state", "")
+    if value in (None, "", "unknown", "unavailable"):
+        return ""
+    return str(value)
+
+
 def mac_from_topic(topic: str, suffix: str) -> str:
     parts = topic.split("/")
     if len(parts) >= 3 and parts[2] == suffix:
@@ -1367,6 +1427,34 @@ class NSPanelCoreManager:
         nspanel/<wifi_hostname>/..., never on the curated display name.
         """
         return panel_mqtt_topic(panel.wifi_hostname or panel.name, suffix)
+
+    async def _publish_screensaver(self, panel: PanelConfig) -> None:
+        """P306: publish the retained "Build the screensaver" payload.
+
+        Resolves the per-panel HA temperature overrides at publish time (the
+        panel itself cannot read HA); an empty override tells the firmware to
+        keep using the global weather topic / its own NTC sensor.
+        """
+        settings = self.config.settings
+        outside_id = (
+            panel.ss_outside_temp_entity
+            or getattr(settings, "outside_temp_sensor_entity", "")
+        )
+        room_id = panel.ss_room_temp_entity
+        if not room_id:
+            room = next((r for r in self.config.rooms if r.id == panel.room_id), None)
+            room_id = getattr(room, "temp_sensor_entity", "") if room else ""
+        payload = build_panel_screensaver_config(
+            panel,
+            settings,
+            outside_temp=_state_value(self.hass, outside_id),
+            room_temp=_state_value(self.hass, room_id),
+        )
+        await self._publish(
+            self._panel_cmd_topic(panel, "screensaver"),
+            json.dumps(payload, separators=(",", ":")),
+            True,
+        )
 
     @staticmethod
     def _topic_segment(topic: str) -> str:
