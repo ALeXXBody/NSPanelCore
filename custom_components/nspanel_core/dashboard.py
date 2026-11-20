@@ -1298,6 +1298,11 @@ class SettingsView(HomeAssistantView):
             # general tab context
             manager_address=s.manager_address,
             manager_port=s.manager_port,
+            # P311: Panel MQTT — what the ACCEPT action sends to panels
+            panel_broker_host=getattr(s, "panel_broker_host", ""),
+            panel_broker_port=getattr(s, "panel_broker_port", 1883),
+            panel_broker_user=getattr(s, "panel_broker_user", ""),
+            panel_broker_pass_placeholder="(saved — type a new one to change)" if getattr(s, "panel_broker_pass", "") else "",
             mqtt_server=getattr(s, "mqtt_server", ""),
             mqtt_port=getattr(s, "mqtt_port", 1883),
             mqtt_username=getattr(s, "mqtt_username", ""),

@@ -38,6 +38,33 @@
             </div>
         </div>
 
+        <!-- P311: Panel MQTT — the credentials the ACCEPT action sends to
+             panels. Editable after the first run (the first-run page is a
+             one-time gate; these are live settings). -->
+        <div class="my-4 pt-2 border-t border-base-300">
+            <span class="block mb-2 text-lg">Panel MQTT <span class="text-sm opacity-60">(sent to panels on Accept)</span></span>
+            <div class="my-2">
+                <label for="panel_broker_host" class="block mb-1 text-sm font-medium">Broker address</label>
+                <input class="outline-none bg-base-300 border-neutral border block w-full text-sm p-2.5"
+                    type="text" id="panel_broker_host" name="panel_broker_host" value="{{ panel_broker_host }}" placeholder="e.g. 192.168.50.20">
+            </div>
+            <div class="my-2">
+                <label for="panel_broker_port" class="block mb-1 text-sm font-medium">Broker port</label>
+                <input class="outline-none bg-base-300 border-neutral border block w-full text-sm p-2.5"
+                    type="number" id="panel_broker_port" name="panel_broker_port" value="{{ panel_broker_port }}">
+            </div>
+            <div class="my-2">
+                <label for="panel_broker_user" class="block mb-1 text-sm font-medium">Broker user <span class="opacity-60">(leave empty only if the broker allows anonymous)</span></label>
+                <input class="outline-none bg-base-300 border-neutral border block w-full text-sm p-2.5"
+                    type="text" id="panel_broker_user" name="panel_broker_user" value="{{ panel_broker_user }}">
+            </div>
+            <div class="my-2">
+                <label for="panel_broker_pass" class="block mb-1 text-sm font-medium">Broker password</label>
+                <input class="outline-none bg-base-300 border-neutral border block w-full text-sm p-2.5"
+                    type="password" id="panel_broker_pass" name="panel_broker_pass" placeholder="{{ panel_broker_pass_placeholder }}">
+            </div>
+        </div>
+
         <!-- New section-->
       </div>
     </div>

@@ -359,7 +359,24 @@ class NSPanelCoreManager:
             return n
 
         for key, value in user_input.items():
-            if key == "manager_address":
+            if key == "panel_broker_host":
+                # P311: the panel-broker credentials are editable AFTER the
+                # first run too (Settings → Panel MQTT) — the first-run page
+                # is a one-time gate, but the settings are live data: a
+                # broker migration or a lost password must not dead-end the
+                # provisioning flow.
+                v = str(value or "").strip()
+                if v and ("/" in v or "://" in v or "@" in v):
+                    errors[key] = "must be a host or IP"
+                else:
+                    clean[key] = v
+            elif key == "panel_broker_port":
+                n = _int(key, value, 1, 65535)
+                if n is not None:
+                    clean[key] = n
+            elif key in ("panel_broker_user", "panel_broker_pass"):
+                clean[key] = str(value or "")
+            elif key == "manager_address":
                 v = str(value or "").strip()
                 if not v or not topic_safe(v):
                     errors[key] = "address must not be empty"

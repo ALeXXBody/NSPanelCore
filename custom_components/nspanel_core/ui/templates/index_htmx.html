@@ -60,13 +60,18 @@ function nspanelDiscoveredRow(p) {
 var _nsp_disc_timer = null;
 function nspanelDiscoveredAction(action, p, btn) {
   if (btn) btn.disabled = true;
+  var box = document.getElementById("nsp_discovery_msg");
+  if (box) { box.textContent = action === "accept"
+    ? "Sending the MQTT settings to " + (p.hostname || p.address) + " …"
+    : "Declining " + (p.hostname || p.address) + " …"; }
   nspanelFetch("/nspanel_core/api/discovered_panel", {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: "action=" + action + "&address=" + encodeURIComponent(p.address) + "&hostname=" + encodeURIComponent(p.hostname || ""),
   }).then(function (r) { return r.text().then(function (t) { return [r.ok, t]; }); }).then(function (res) {
-    if (!res[0]) { if (btn) { btn.disabled = false; btn.title = res[1] || "failed"; } return; }
+    if (box) box.textContent = res[1] || (res[0] ? "Done." : "Failed.");
+    if (!res[0]) { if (btn) btn.disabled = false; return; }
     if (action === "accept") {
       // the panel saves, reboots into the broker and registers — refresh
       try { var sec = document.getElementById("nspanels_section"); if (sec) htmx.trigger(sec, "register_request"); } catch (e) {}
@@ -93,6 +98,10 @@ function nspanelRefreshDiscovery() {
       title.className = "text-sm font-medium mb-1";
       title.textContent = "New NSPanel" + (panels.length > 1 ? "s" : "") + " found on the network:";
       card.appendChild(title);
+      var msg = document.createElement("div");
+      msg.id = "nsp_discovery_msg";
+      msg.className = "text-sm opacity-80 mb-1";
+      card.appendChild(msg);
       panels.forEach(function (p) { card.appendChild(nspanelDiscoveredRow(p)); });
       box.innerHTML = "";
       box.appendChild(card);
