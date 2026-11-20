@@ -454,9 +454,17 @@ class ProvisionPushView(HomeAssistantView):
 
         def _push():
             import urllib.request
+            # FULL AUDIT FIX: the panel's CSRF guard (P279) only accepts
+            # requests whose Content-Type header is
+            # application/x-www-form-urlencoded (nsp_web_post_ok) — an
+            # application/json push is 403-rejected before the body is
+            # ever parsed (the body itself is format-agnostic: the firmware
+            # extracts mqtt_server/port/user/pass fields from the raw
+            # string). The manager's zero-typing provisioning could never
+            # succeed against the native firmware because of this header.
             req = urllib.request.Request(
                 f"{base}/provision", data=body.encode(),
-                headers={"Content-Type": "application/json"})
+                headers={"Content-Type": "application/x-www-form-urlencoded"})
             with urllib.request.urlopen(req, timeout=30) as resp:
                 return resp.read().decode("utf-8", "replace")
 
