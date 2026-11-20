@@ -1557,7 +1557,16 @@ class NSPanelCoreManager:
         fw_md5 = self.ota_md5("firmware", f"{model}/firmware.bin")
         data_md5 = self.ota_md5("firmware", f"{model}/data_file.bin")
 
-        if fw_cooled and fw_md5 and report.get("md5_firmware") and report["md5_firmware"] != fw_md5:
+        if fw_cooled and fw_md5 and (
+            not report.get("md5_firmware")
+            or report["md5_firmware"] != fw_md5
+        ):
+            # P311 (md5-hooked, never version-hooked): an EMPTY reported
+            # firmware md5 is "unknown firmware" — the same contract the TFT
+            # branch already follows (P239 "never delivered"). A panel running
+            # the pre-0.1.4 line never records the field, so the old guard
+            # (report must be truthy AND differ) meant such a panel could
+            # never OTA itself — it sat on stricken firmware forever.
             _LOGGER.info("Firmware update available for panel %s — triggering OTA", panel.name)
             await self._publish(self._panel_cmd_topic(panel, "command"), json.dumps({"command": "firmware_update"}))
 
