@@ -77,3 +77,20 @@ def test_no_panel_data_without_credential(path, cls):
     assert resp.status == 401
     body = str(getattr(resp, "text", ""))
     assert "KitchenPanel" not in body, f"{cls} leaked panel data without a credential"
+
+
+def test_settings_denied_tab_receives_ignored_macs():
+    """The Denied tab must receive the manager's ignored MACs — without the
+    context the 'Deleted panels' section renders nothing and a deleted panel
+    becomes invisible (it can never be allowed again from the UI)."""
+    import jinja2
+    mgr = _mgr()
+    mgr.config.settings.ignored_macs = ["e465b849a100"]
+    tpl_dir = D.TEMPLATES_DIR
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(tpl_dir)))
+    tpl = env.get_template("_tab_denied.html")
+    html = tpl.render(nspanels=[{"denied": False}], ignored=["e465b849a100"])
+    assert "e465b849a100" in html
+    assert "Allow again" in html
+    html_empty = tpl.render(nspanels=[], ignored=[])
+    assert "No deleted panels" in html_empty

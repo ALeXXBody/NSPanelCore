@@ -1250,6 +1250,8 @@ class SettingsView(HomeAssistantView):
             theme=s.theme,
             # denied tab context
             nspanels=[asdict(p) for p in manager.config.panels],
+            # deleted panels (MACs the manager ignores) — the tab renders them
+            ignored=list(getattr(s, "ignored_macs", []) or []),
             # weather tab context (names match the weather partial)
             location_latitude=s.location_latitude,
             location_longitude=s.location_longitude,
