@@ -191,9 +191,6 @@
     <div class="select" style="background:#141821;border:1px solid #2a2f3a;border-radius:10px">
       <select id="panel_sel" onchange="loadDesign()" style="background:transparent;color:#e8eaec;padding:8px 12px">
         <option value="">— choose a panel —</option>
-        {% for p in panels %}
-        <option value="{{ p.mac }}" data-id="{{ p.id }}">{{ p.name }}</option>
-        {% endfor %}
       </select>
     </div>
     <button class="studio-btn ghost" onclick="saveDesign()"
@@ -1280,12 +1277,25 @@ initZoneJumps();
 /* P297: with no panel picked, the Panel sub-tabs were visible but had no form
  * behind them, so clicking one did nothing the user could see. Select the
  * first real panel on load — the studio is always usable immediately. */
-(function autoSelectPanel() {
+function populatePanels(list) {
   var sel = document.getElementById('panel_sel');
-  if (sel && !sel.value && sel.options.length > 1) {
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— choose a panel —</option>' +
+    list.map(function (p) {
+      return '<option value="' + p.mac + '" data-id="' + p.id + '">' + p.name + '</option>';
+    }).join('');
+  if (sel.options.length > 1) {
     sel.value = sel.options[1].value; // option 0 is the "choose a panel" prompt
     loadDesign();
   }
+}
+/* P311: the studio shell is public — the panel list arrives from the AUTHED
+ * endpoint after the page's JS runs (the HA app delivers its token async). */
+(function autoSelectPanel() {
+  nspanelFetch('/nspanel_core/dashboard_panels', { credentials: 'same-origin' })
+    .then(studioJson)
+    .then(function (j) { populatePanels(j.panels || []); })
+    .catch(function (e) { setStatus('Failed to load panels: ' + e, true); });
 })();
 loadEntities();  // P292: import HA entities on load, independent of any design
 </script>

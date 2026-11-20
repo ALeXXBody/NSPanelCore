@@ -42,6 +42,9 @@ def _run(coro):
 # ------------------------------------------------------------ the real view
 
 def test_real_dashboard_view_puts_a_numeric_panel_id_on_the_option():
+    """P311: the studio shell is PUBLIC — the options come from the AUTHED
+    panel-list endpoint (the HA app's webview has no stored credential, so
+    the shell must load without one)."""
     cfg = IntegrationConfig()
     cfg.rooms.append(RoomConfig(id=1, name="Living"))
     cfg.panels.append(PanelConfig(id=7, mac="aabbcc", name="Kitchen Panel",
@@ -55,9 +58,18 @@ def test_real_dashboard_view_puts_a_numeric_panel_id_on_the_option():
 
     resp = _run(D.DashboardView().get(Req()))
     assert resp.status == 200
-    assert 'data-id="7"' in resp.text, "the studio option must carry the panel id"
-    assert 'value="aabbcc"' in resp.text
-    assert 'data-id=""' not in resp.text
+    # the shell carries NO panel names — nothing is leaked to an
+    # unauthenticated viewer
+    assert "Kitchen Panel" not in resp.text
+    # the client populates the selector from the authed endpoint
+    assert "dashboard_panels" in resp.text and "populatePanels" in resp.text
+
+    list_resp = _run(D.DashboardPanelsView().get(Req()))
+    assert list_resp.status == 200
+    import json as _json
+    body = _json.loads(list_resp.text)
+    assert body["panels"] == [{"mac": "aabbcc", "name": "Kitchen Panel",
+                               "id": 7}]
 
 
 # ----------------------------------------------------------- the real inline JS

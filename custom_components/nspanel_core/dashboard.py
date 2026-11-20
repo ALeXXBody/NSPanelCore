@@ -445,9 +445,13 @@ class MainPageView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
-
+        # P311 (the user's order: the APP dashboard must load): the page
+        # shell is PUBLIC by design — zero panel data is rendered into it
+        # (the section starts empty) and every byte of real data arrives
+        # through the AUTHED endpoints after the page's own JS runs. The
+        # old page-load 401 is what made the HA companion app show a bare
+        # "Unauthorized" — its webview has no stored credential on first
+        # use, and the app delivers its token asynchronously afterwards.
         manager = _manager(request)
         # P216/P222: the first-run gate is for FRESH installs only. An
         # existing install (any accepted panel) must NEVER be gated — the
@@ -463,7 +467,7 @@ class MainPageView(HomeAssistantView):
             return _redirect(request, f"{URL_BASE}/first_run")
         html = _render(
             "index_htmx.html",
-            nspanels=_panels_context(manager),
+            nspanels=[],  # P311: the section is pulled client-side (authed)
             manager_address=manager.config.settings.manager_address,
             temperature_unit="°C",
             has_unread_messages=any(not m.read for m in manager.config.messages),
@@ -2385,22 +2389,33 @@ class DashboardView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
+        # P311: the studio shell is PUBLIC (static markup only — the panel
+        # selector is populated client-side via the AUTHED panel-list
+        # endpoint), so the HA companion app can load it. Every data path
+        # stays authed.
+        return web.Response(
+            text=_render("dashboard.html", request=request, panels=[]),
+            content_type="text/html",
+        )
 
+
+class DashboardPanelsView(HomeAssistantView):
+    """P311: the accepted panels for the studio's selector — AUTHED (the
+    names only reach an authenticated viewer)."""
+
+    url = f"{URL_BASE}/dashboard_panels"
+    name = "nspanel_core:dashboard_panels"
+    requires_auth = False
+
+    @_gated
+    async def get(self, request, **kwargs):
         manager = _manager(request)
         panels = [
-            # P305: the studio needs the numeric id — it is the key used by
-            # /dashboard/panel_settings. Without it the option's data-id was
-            # empty, panelId stayed falsy and the Panel sub-tabs never loaded.
             {"mac": p.mac, "name": p.name, "id": p.id}
             for p in manager.config.panels
             if p.accepted and not p.denied
         ]
-        return web.Response(
-            text=_render("dashboard.html", request=request, panels=panels),
-            content_type="text/html",
-        )
+        return web.json_response({"panels": panels})
 
 
 class DashboardDesignView(HomeAssistantView):
@@ -2790,6 +2805,7 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         DashboardScreensaverSettingsView,
         DashboardScreensaverSaveView,
         DashboardPhotoView,
+        DashboardPanelsView,
         DashboardDesignView,
         DashboardSaveView,
         DashboardSendView,

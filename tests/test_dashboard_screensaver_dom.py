@@ -64,6 +64,8 @@ w.fetch = function (url, options) {
   else if (u.indexOf('screensaver_save') >= 0) body = JSON.stringify({ok: true});
   else if (u.indexOf('dashboard_design') >= 0) body = JSON.stringify({design: P.design});
   else if (u.indexOf('dashboard_entities') >= 0) body = JSON.stringify({entities: P.entities});
+  else if (u.indexOf('dashboard_panels') >= 0) body = JSON.stringify(
+      {panels: [{mac: 'aabbcc', name: 'Kitchen', id: 7}]});
   return Promise.resolve({
     ok: true, status: 200,
     text: function () { return Promise.resolve(body); },
