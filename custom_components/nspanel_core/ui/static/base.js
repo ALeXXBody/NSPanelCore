@@ -198,6 +198,108 @@ async function nspanelBootstrapFromFrontend() {
   }
 })();
 
+async function nspanelFetchOnce(url, options) {
+  options = options || {};
+  var headers = Object.assign({}, options.headers || {});
+  try { await nspanelRefreshTokenIfNeeded(); } catch (err) {}
+  var tok = nspanelGetToken();
+  if (tok) headers["Authorization"] = "Bearer " + tok;
+  return fetch(url, Object.assign({}, options, { headers: headers }));
+}
+
+/* P282: a 401 (a stale token — the remote sessions rotate) forces the
+ * refresh and retries ONCE before surfacing the failure. */
+async function nspanelFetch(url, options) {
+  var resp = await nspanelFetchOnce(url, options);
+  if (resp.status === 401) {
+    try { await nspanelRefreshTokenIfNeeded(true); } catch (e) {}
+    resp = await nspanelFetchOnce(url, options);
+  }
+  return resp;
+}
+
+async function nspanelRefreshTokenIfNeeded(force) {
+  var found = null;
+  try { found = nspanelTokenStore(); } catch (e) { return; }
+  if (!found || !found.tokens || !found.tokens.refresh_token) return;
+  var tok = found.tokens;
+  var expiresAt = tok.expires || 0;
+  if (!force && expiresAt - Date.now() > 120000) return; // still fresh
+  try {
+    var body = "grant_type=refresh_token&refresh_token=" + encodeURIComponent(tok.refresh_token) +
+               "&client_id=" + encodeURIComponent(nspanelClientId());
+    var resp = await fetch("/auth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body,
+    });
+    if (!resp.ok) return;
+    var fresh = await resp.json();
+    tok.access_token = fresh.access_token;
+    tok.expires_in = fresh.expires_in;
+    tok.expires = Date.now() + fresh.expires_in * 1000;
+    tok.token_type = "Bearer";
+    try { found.store.setItem("hassTokens", JSON.stringify(tok)); } catch (e) {}
+  } catch (e) { /* offline — keep the old token; calls will 401 visibly */ }
+}
+
+document.addEventListener("htmx:configRequest", function (e) {
+  var tok = nspanelGetToken();
+  if (tok) e.detail.headers["Authorization"] = "Bearer " + tok;
+});
+
+// Close any open modal dialogs (used by modal buttons across pages).
+function close_modals() {
+  document.querySelectorAll("dialog.modal[open], dialog[open]").forEach((d) => {
+    try { d.close(); } catch (e) {}
+  });
+  var modal = document.getElementById("modal");
+  if (modal) {
+    try { modal.close(); } catch (e) {}
+    modal.remove();
+  }
+  document.querySelectorAll(".modal-backdrop").forEach((b) => b.remove());
+}
+
+// jQuery XHR (entity pickers, legacy posts) carries the same bearer token.
+if (typeof $ !== "undefined" && $.ajaxSetup) {
+  $.ajaxSetup({
+    beforeSend: function (xhr, settings) {
+      if (settings.url && settings.url.indexOf("/nspanel_core/") === 0) {
+        var tok = nspanelGetToken();
+        if (tok) xhr.setRequestHeader("Authorization", "Bearer " + tok);
+      }
+    },
+  });
+}
+
+// Full-page forms can't set headers, so authed document forms are submitted
+// via fetch with the bearer token; the server redirects are followed here.
+document.addEventListener("submit", function (e) {
+  var form = e.target;
+  if (!form || !form.hasAttribute || !form.hasAttribute("data-authed")) return;
+  e.preventDefault();
+  (async function () {
+    try { await nspanelRefreshTokenIfNeeded(); } catch (err) {}
+    var tok = nspanelGetToken();
+    var headers = {};
+    if (tok) headers["Authorization"] = "Bearer " + tok;
+    fetch(form.action, { method: form.method || "POST", body: new FormData(form), headers: headers, redirect: "follow" })
+      .then(async function (resp) {
+      if (resp.ok) {
+        window.location.href = resp.url;
+      } else if (resp.status === 401) {
+        alert("Not authorized — please log in to Home Assistant first.");
+      } else {
+        var detail = "";
+        try { detail = (await resp.text()).slice(0, 300); } catch (e) {}
+        alert("Save failed (HTTP " + resp.status + ")" + (detail ? ": " + detail : ""));
+      }
+    })
+    .catch(function (err) { alert("Save failed: " + err); });
+  })();
+});
+
 function attach_cursor_change_events() {
   $(".cursor-grab")
     .on("mousedown", function () {
@@ -313,6 +415,10 @@ try {
         ERROR_TOAST_SOURCE_WEB_INTERFACE,
       );
       try { nspanelRefreshTokenIfNeeded(); } catch (e) {}
+      /* P311: in the HA companion app the automatic token hand-off can
+       * fail silently — give the user the ONE-TIME login card instead of
+       * a dead end: a long-lived HA token pasted once sets the panel's
+       * own 24h session and the app works from then on. */
       return;
     }
     try {
