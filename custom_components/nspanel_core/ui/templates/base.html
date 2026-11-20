@@ -68,7 +68,10 @@
       </div>
       <div class="mt-4 px-2">
         <!-- If no manager address is set, show the initial setup guide. -->
-        {% if manager_address == "" %}{% include 'modals/initial_setup/welcome.html' %}{% endif %}
+        <!-- CONNECTION AUDIT: the old initial-setup wizard modal is deleted
+             (its 5 step endpoints existed nowhere). The supported first-run
+             path is the first_run page — MainPageView redirects fresh
+             installs there. -->
 
         <!-- Any content that uses this as the base template will place its own elements within the "content" block -->
         {% block content %}
