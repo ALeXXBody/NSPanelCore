@@ -13,6 +13,7 @@
 class NSPanelCorePanel extends HTMLElement {
   set hass(h) {
     try {
+      this._hassRef = h;  // P311: the poll re-reads the LIVE auth later
       const t = h && h.auth && h.auth.data && h.auth.data.access_token;
       if (t && t !== this._liveToken) {
         this._liveToken = t;
@@ -65,10 +66,26 @@ class NSPanelCorePanel extends HTMLElement {
       try { this._pushToken(); } catch (e) {}
     });
     this.appendChild(iframe);
+    /* P311 (A-to-Z): the app delivers its token LATE — `set hass` may run
+     * before auth.data exists and is never re-fired. Poll the LIVE hass
+     * (the same one HA assigned us) and navigate the moment it lands. */
+    this._pollStart = Date.now();
+    this._tokenPoll = setInterval(() => {
+      try {
+        const t = this._extractToken(this._hassRef || this._lastHass);
+        if (t && t !== this._liveToken) {
+          this._liveToken = t;
+          clearInterval(this._tokenPoll);
+          this._exchangeSession(t);
+          this._frame.src = "/nspanel_core/ui?ha_token=" + encodeURIComponent(t);
+        }
+        if (Date.now() - this._pollStart > 120000) clearInterval(this._tokenPoll);
+      } catch (e) {}
+    }, 1500);
     if (!this._liveToken) {
-      this._tokenWait = setTimeout(() => {
-        if (!this._liveToken) iframe.src = "/nspanel_core/ui";
-      }, 10000);
+      // the shell is PUBLIC and self-authenticates (the bridges) — a
+      // tokenless load is no longer a dead end
+      iframe.src = "/nspanel_core/ui";
     }
   }
 
