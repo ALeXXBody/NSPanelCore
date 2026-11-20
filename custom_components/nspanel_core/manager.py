@@ -39,6 +39,7 @@ from .const import (
     TOPIC_PANEL_STATUS,
     TOPIC_PANEL_STATUS_REPORT,
     TOPIC_MANAGER_COMMAND,
+    TOPIC_PANEL_BUTTON,
     panel_topic,
     panel_mqtt_topic,
     topic_safe,
@@ -211,6 +212,7 @@ class NSPanelCoreManager:
             (TOPIC_PANEL_STATUS, self._on_panel_status, None),
             (TOPIC_PANEL_STATUS_REPORT, self._on_panel_status_report, None),
             ("nspanel/+/touch", self._on_panel_touch, None),
+            (TOPIC_PANEL_BUTTON, self._on_panel_button, None),
             (TOPIC_MANAGER_COMMAND, self._on_manager_command, None),
             ("nspanel/+/r1_state", self._on_relay_state, None),
             ("nspanel/+/r2_state", self._on_relay_state, None),
@@ -1199,6 +1201,22 @@ class NSPanelCoreManager:
             self._panel_cmd_topic(panel, "command"),
             json.dumps({"command": "reload"}),
         )
+        # P312: deliver the physical-button configuration — the firmware
+        # never consumed the old JSON config, so modes/custom topics were
+        # dead at every layer. Sent on accept AND after every settings save
+        # (both paths run through here).
+        await self._publish(
+            self._panel_cmd_topic(panel, "command"),
+            json.dumps({
+                "command": "set_button_config",
+                "button1_mode": panel.button1_mode,
+                "button2_mode": panel.button2_mode,
+                "button1_mqtt_topic": panel.button1_mqtt_topic,
+                "button1_mqtt_payload": panel.button1_mqtt_payload,
+                "button2_mqtt_topic": panel.button2_mqtt_topic,
+                "button2_mqtt_payload": panel.button2_mqtt_payload,
+            }),
+        )
         # The stored checksums (from registration) decide OTA here: accept is
         # the consent gate, so a newly accepted panel updates on the spot
         # instead of waiting for its next register. Cooldown-guarded (see
@@ -1224,6 +1242,55 @@ class NSPanelCoreManager:
         if not mac:
             return
         self.dash.on_touch(mac, page, component, event)
+
+    async def _on_panel_button(self, msg) -> None:
+        """P312: PHYSICAL button presses in DETACHED mode
+        (nspanel/<hostname>/button — {"button":1,"event":"press"}).
+
+        The press routes to the button's bound target, in order:
+        1. buttonN_detached_entity — a Home Assistant entity_id DIRECTLY
+           (the user's rule: entities come straight from HA, no
+           lights-in-rooms detour) — toggled via the entity's own domain.
+        2. buttonN_detached_light — the LEGACY binding (a manager light id)
+           for configs stored before this rework.
+        """
+        segment = mac_from_topic(msg.topic, "button")
+        panel = self._panel_by_topic(segment)
+        if not panel:
+            return
+        try:
+            data = json.loads(msg.payload)
+            button = int(data.get("button"))
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+            return
+        if button not in (1, 2):
+            return
+        mode = panel.button1_mode if button == 1 else panel.button2_mode
+        if mode != 1:  # only DETACHED is routed by the manager
+            return
+        entity = panel.button1_detached_entity if button == 1 else panel.button2_detached_entity
+        light_id = panel.button1_detached_light if button == 1 else panel.button2_detached_light
+        if entity:
+            domain = entity.split(".", 1)[0]
+            service = {"script": "turn_on", "input_button": "press",
+                       "automation": "trigger"}.get(domain, "toggle")
+            try:
+                await self.hass.services.async_call(
+                    domain, service, {"entity_id": entity}, blocking=False)
+                _LOGGER.info("Button %s on %s -> %s.%s (%s)",
+                             button, panel.name, domain, service, entity)
+            except Exception as err:  # noqa: BLE001 — a bad binding must not crash the handler
+                _LOGGER.warning("Button %s on %s: %s.%s failed: %s",
+                                button, panel.name, domain, service, err)
+            return
+        if light_id:
+            light = self._light_by_id(light_id)
+            if light is not None:
+                await self._apply_light_command(light, None)
+                _LOGGER.info("Button %s on %s -> legacy light %s (%s)",
+                             button, panel.name, light_id, light.name)
+                return
+        _LOGGER.info("Button %s on %s: DETACHED but nothing bound", button, panel.name)
 
     async def _on_panel_status_report(self, msg) -> None:
         """Status report: nspanel/<panel>/status_report (retained).

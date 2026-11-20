@@ -26,3 +26,6 @@ g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_t10 test_screensaver_parse.cpp
 # P311 FULL-APP/FIRMWARE AUDIT — edge cases for the paths nothing covered
 g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_edge ../../tests/test_edge_cases.cpp ../src/form_parse.cpp ../src/provision_parse.cpp
 /tmp/opencode/nsp_edge
+# P312: the physical button action decision (the canonical modes)
+g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_btn ../../tests/test_button_cmd.cpp ../src/button_cmd.cpp
+/tmp/opencode/nsp_btn

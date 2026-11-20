@@ -44,6 +44,8 @@ def test_topic_constants_frozen():
     assert 'TOPIC_PANEL_COMMAND = "nspanel/+/command"' in src
     assert 'TOPIC_PANEL_STATUS_REPORT = "nspanel/+/status_report"' in src
     assert 'TOPIC_MANAGER_COMMAND = "nspanel/mqttmanager/command"' in src
+    # P312: the PHYSICAL button press events (DETACHED/FOLLOW modes)
+    assert 'TOPIC_PANEL_BUTTON = "nspanel/+/button"' in src
 
 
 def test_panel_topic_builder_verbatim_hostname():

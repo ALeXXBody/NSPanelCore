@@ -169,14 +169,20 @@ class PanelConfig:
     temperature_calibration: float = 0.0
     has_humidity: bool = False
     has_pressure: bool = False
-    button1_mode: int = 0  # 0=DIRECT 1=FOLLOW 2=NOTIFY_MANAGER 3/4 thermostat
+    # P312 canonical button modes (match the firmware + UI):
+    # 0=DIRECT 1=DETACHED 2=CUSTOM_MQTT 3=FOLLOW
+    button1_mode: int = 0
     button2_mode: int = 0
     button1_mqtt_topic: str = ""
     button1_mqtt_payload: str = ""
     button2_mqtt_topic: str = ""
     button2_mqtt_payload: str = ""
-    button1_detached_light: int = 0  # LightConfig.id toggled in DETACHED mode (0 = none)
+    button1_detached_light: int = 0  # LEGACY binding (a manager light id) — kept for old configs
     button2_detached_light: int = 0
+    # P312: the DETACHED binding is a Home Assistant entity_id DIRECTLY —
+    # no lights-in-rooms detour. The manager routes the press to it.
+    button1_detached_entity: str = ""
+    button2_detached_entity: str = ""
     show_home_scenes: bool = True
     show_home_ceiling: bool = True
     show_home_table: bool = True

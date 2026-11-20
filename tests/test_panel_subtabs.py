@@ -91,10 +91,18 @@ def test_the_partial_renders_all_three_sections_as_siblings():
     assert '<select name="default_page"' not in general
     assert '<label for="default_page"' not in general
     assert "Reverse relays" not in general
-    for field in ("button1_mode", "button2_mode", "button1_detached_mode_room",
-                  "button2_detached_mode_room", "button1_mqtt_mode_controls",
+    for field in ("button1_mode", "button2_mode", "button1_mqtt_mode_controls",
                   "button2_mqtt_mode_controls"):
         assert field in buttons, f"{field} missing from the buttons section"
+    # P312: the detached binding is a Home Assistant entity DIRECTLY —
+    # the room/light pickers are gone (the user's rule: no lights-in-rooms
+    # detour; entities come straight from HA).
+    for field in ("button1_detached_entity", "button2_detached_entity",
+                  "data-nspanel-entity-select"):
+        assert field in buttons, f"{field} missing from the buttons section"
+    for legacy in ("button1_detached_mode_room", "button2_detached_mode_room",
+                   "button1_detached_mode_light", "button2_detached_mode_light"):
+        assert legacy not in buttons, f"{legacy} (the lights-in-rooms detour) must be gone"
     for field in ("screen_dim_level", "screensaver_dim_level",
                   "screensaver_activation_timeout", "screensaver_mode"):
         assert field in screen, f"{field} missing from the screen section"
@@ -126,14 +134,18 @@ def test_moved_field_behavior_is_in_one_shared_static_file():
     # direct/detached/mqtt/follow modes for BOTH physical buttons
     for n in ("1", "2"):
         for ident in (f"button{n}_mode", f"button{n}_detached_mode_controls",
-                      f"button{n}_detached_mode_light", f"button{n}_mqtt_mode_controls",
-                      f"button{n}_detached_mode_room"):
+                      f"button{n}_mqtt_mode_controls"):
             assert f'#{ident}' in js, f"missing {ident} handling"
-        assert f'.button{n}_detached_mode_light_option[data-room-id=' in js
-        assert f'button{n}_detached_mode_light").prop("required", true)' in js
+    # P312: the detached picker loads HA entities directly — the loader is
+    # generic (driven by data-nspanel-entity-select on BOTH selects)
+    assert "data-nspanel-entity-select" in js, "the HA-entity select loader missing"
+    assert "get_all_available_entities" in js, "the entity list source missing"
+    assert "_NSPANEL_TOGGLE_DOMAINS" in js, "the toggleable-domain filter missing"
+    # the lights-in-rooms detour is gone from the behavior file
+    for legacy in ("detached_mode_light_option", "detached_mode_room"):
+        assert legacy not in js, f"{legacy} (the detour) must be gone"
     # the original change bindings, including the screensaver-mode one
-    for ident in ("button1_mode", "button2_mode", "screensaver_mode",
-                  "button1_detached_mode_room", "button2_detached_mode_room"):
+    for ident in ("button1_mode", "button2_mode", "screensaver_mode"):
         assert f'$("#{ident}").change(update_shown_elements)' in js
     # P309: the panel example drawing and its update function are deleted
     assert "update_nspanel_example_view" not in js

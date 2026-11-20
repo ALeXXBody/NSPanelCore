@@ -15,7 +15,7 @@ struct NSPConfig {
     std::string manager_address;
     int32_t manager_port = 8123;
     bool reverse_relays = false;
-    int32_t button1_mode = 0;  // 0=DIRECT 1=FOLLOW 2=DETACHED 3=CUSTOM_MQTT
+    int32_t button1_mode = 0;  // canonical enum: 0=DIRECT 1=DETACHED 2=CUSTOM_MQTT 3=FOLLOW
     int32_t button2_mode = 0;
     std::string button1_mqtt_topic;
     std::string button1_mqtt_payload;

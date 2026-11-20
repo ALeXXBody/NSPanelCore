@@ -1,21 +1,21 @@
 {
- "version": "0.1.4",
- "notes": "Native firmware 0.1.4 \u2014 the setup form works + boot hardening and the serial boot story. The broken attempts were stricken; the numbering follows the user's epoch-reset rule (P181).",
+ "version": "0.1.5",
+ "notes": "Native firmware 0.1.5 \u2014 the physical button modes are implemented: DIRECT toggles the relay on-panel, DETACHED reports the press to the manager (which routes it to the bound Home Assistant entity), CUSTOM_MQTT publishes the button's configured topic/payload, FOLLOW toggles and reports. The button configuration is delivered to the panel by the manager (set_button_config).",
  "files": {
   "firmware/sonoff/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.4/native-firmware-0.1.4.bin",
-   "md5": "587386d3e042c6303087745a7341ebcf"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/native-firmware-0.1.5.bin",
+   "md5": "71c77ab228e482aed9679309bd95b4a0"
   },
   "firmware/sonoff/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.4/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "firmware/custom/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.4/native-firmware-0.1.4.bin",
-   "md5": "587386d3e042c6303087745a7341ebcf"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/native-firmware-0.1.5.bin",
+   "md5": "71c77ab228e482aed9679309bd95b4a0"
   },
   "firmware/custom/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.4/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "tft/gui.tft": {
@@ -29,8 +29,9 @@
  },
  "changes": {
   "bug_fixes": [
-   "The panel's setup form saves again \u2014 the security guard had been rejecting every save with 403 Forbidden.",
-   "Boot hardening and the chip's own reset-reason report (0.1.16) are included."
+   "The physical button modes are IMPLEMENTED on the panel \u2014 previously every press toggled the relay regardless of the configured mode.",
+   "DETACHED/FOLLOW presses are reported to the manager; CUSTOM_MQTT publishes the configured topic/payload.",
+   "The button configuration is delivered by the manager (set_button_config) \u2014 the old JSON config was never consumed by the firmware."
   ],
   "features": [],
   "breaking": []

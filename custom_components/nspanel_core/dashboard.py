@@ -1027,6 +1027,10 @@ class SavePanelSettingsView(HomeAssistantView):
             "button1_custom_mqtt_payload": ("button1_mqtt_payload", str),
             "button2_custom_mqtt_topic": ("button2_mqtt_topic", str),
             "button2_custom_mqtt_payload": ("button2_mqtt_payload", str),
+            # P312: the DETACHED binding is a Home Assistant entity_id
+            # DIRECTLY (the user's rule: entities come straight from HA).
+            "button1_detached_entity": ("button1_detached_entity", str),
+            "button2_detached_entity": ("button2_detached_entity", str),
             "screensaver_mode": ("screensaver_mode", int),
             "screensaver_activation_timeout": ("screensaver_activation_timeout", int),
             "min_button_push_time": ("min_button_push_time", int),

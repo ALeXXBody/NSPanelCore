@@ -7,7 +7,7 @@
 
 #include <string>
 
-#define FW_VERSION "0.1.4"
+#define FW_VERSION "0.1.5"
 
 /* Publish topics (built from wifi_hostname, VERBATIM — no sanitization) */
 inline std::string topic_status_report(const std::string &hostname) {
@@ -40,6 +40,11 @@ inline std::string topic_relay_state(const std::string &hostname, int relay) {
 }
 inline std::string topic_touch(const std::string &hostname) {
     return "nspanel/" + hostname + "/touch";
+}
+/* P312: the PHYSICAL button press event (DETACHED/FOLLOW modes) — the
+ * manager routes DETACHED presses to the bound Home Assistant entity. */
+inline std::string topic_button(const std::string &hostname) {
+    return "nspanel/" + hostname + "/button";
 }
 inline std::string topic_log(const std::string &hostname) {
     return "nspanel/" + hostname + "/log";

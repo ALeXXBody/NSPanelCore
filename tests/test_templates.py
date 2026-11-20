@@ -50,6 +50,7 @@ def _panel(**kw):
     d = dict(
         id=1, name="Demo Panel", mac="aabbcc", wifi_hostname="DemoPanel",
         button1_mode=1, button2_mode=2, button1_detached_light=5,
+        button1_detached_entity="light.ceiling",
         button2_detached_light=0, button1_detached_room=3, button2_detached_room=1,
         reverse_relays=False, relay1_default_mode=True, relay2_default_mode=False,
         relay1_is_light=True, relay2_is_light=False, lock_to_default_room=True,
@@ -86,10 +87,13 @@ def test_edit_panel_renders_with_truthy_checks():
             current_ram_usage=0,
         )
     )
-    assert 'value="5" selected' in out  # detached light pre-selected
-    m = re.search(r'<select name="button1_detached_mode_room".*?</select>', out, re.S)
-    assert m and 'value="3" selected' in m.group(0)  # detached room pre-selected
-    assert 'Thermostat' not in out  # no invalid button modes 4/5 (light id 5 legitimately renders value="5")
+    # P312: the detached binding is a Home Assistant entity selected
+    # DIRECTLY — the room/light pickers are gone; the select carries the
+    # stored entity in data-current for the JS loader to preselect.
+    assert 'data-current="light.ceiling"' in out, "detached entity pre-selected"
+    assert 'name="button1_detached_entity"' in out
+    assert 'button1_detached_mode_room' not in out  # the detour is gone
+    assert 'Thermostat' not in out  # no invalid button modes 4/5
 
 
 def test_settings_page_has_tabs():

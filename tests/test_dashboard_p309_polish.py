@@ -138,6 +138,10 @@ def _render_panel_settings(manager, panel_id=7):
 
 
 def test_detached_entity_options_name_the_ha_entity():
+    """P312 REWORK: the detached binding is a Home Assistant entity selected
+    DIRECTLY from the live entity list — the lights-in-rooms detour (room
+    select + manager-light options) is gone, replaced by the direct entity
+    dropdown the JS loader fills from /api/get_all_available_entities."""
     cfg = IntegrationConfig()
     cfg.settings.nspanel_sessions = {"sess": 9e18}
     room = RoomConfig(id=1, name="Living")
@@ -146,33 +150,38 @@ def test_detached_entity_options_name_the_ha_entity():
                                   ha_entity="light.ceiling_light",
                                   room_id=1, page_id=0, page_slot=0))
     cfg.panels.append(PanelConfig(id=7, mac="aabbcc", name="Kitchen",
-                                  room_id=1, accepted=True))
+                                  room_id=1, accepted=True,
+                                  button1_detached_entity="switch.coffee"))
     manager = MagicMock()
     manager.config = cfg
     manager.panels.return_value = list(cfg.panels)
     manager.hass = SimpleNamespace(states=SimpleNamespace(async_all=lambda: []))
     html = _render_panel_settings(manager)
-    assert ">Ceiling Light · light.ceiling_light</option>" in html
-    # the value stays the LightConfig id — the save contract is unchanged
-    assert 'value="5"' in html
+    # the DIRECT entity binding renders as data-current for the loader
+    assert 'data-current="switch.coffee"' in html
+    # the lights-in-rooms detour is GONE
+    assert 'button1_detached_mode_room' not in html
+    assert 'button1_detached_mode_light' not in html
+    assert "No lights are registered yet" not in html
 
 
-def test_detached_controls_hint_when_no_lights_are_registered():
+def test_detached_binding_carries_the_ha_entity():
+    """The stored binding is the HA entity_id itself (P312) — and legacy
+    light-id bindings still render/round-trip untouched."""
     cfg = IntegrationConfig()
     cfg.settings.nspanel_sessions = {"sess": 9e18}
     cfg.rooms.append(RoomConfig(id=1, name="Living"))
     cfg.panels.append(PanelConfig(id=7, mac="aabbcc", name="Kitchen",
-                                  room_id=1, accepted=True))
+                                  room_id=1, accepted=True,
+                                  button1_detached_light=5))
     manager = MagicMock()
     manager.config = cfg
     manager.panels.return_value = list(cfg.panels)
     manager.hass = SimpleNamespace(states=SimpleNamespace(async_all=lambda: []))
     html = _render_panel_settings(manager)
-    assert "No lights are registered yet" in html
-    assert "add lights to your rooms first" in html
+    assert 'data-current=""' in html  # no entity binding — the dropdown shows none
+    assert "button1_detached_light" not in html  # legacy ids are not UI anymore
 
-
-# ----------------------------------------------------- the deleted drawing
 
 def test_the_panel_drawing_and_background_selector_are_deleted():
     assert "eu-panel-example" not in _FIELDS

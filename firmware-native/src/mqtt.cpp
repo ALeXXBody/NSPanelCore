@@ -6,6 +6,7 @@
 #include "protocol.h"
 #include "config.h"
 #include "accept_parse.h"
+#include "provision_parse.h"
 #include "dash_cmd.h"
 #include "screensaver_parse.h"
 
@@ -257,11 +258,57 @@ void nsp_mqtt_handle_command(const std::string &payload) {
         } else {
             nsp_mqtt_publish_log("dash_map: rejected payload");
         }
+    } else if (cmd_field == "set_button_config") {
+        /* P312: the manager delivers the physical-button configuration —
+         * modes + custom MQTT topics/payloads (the panel never fetched the
+         * old JSON config, so the modes were dead at every layer). Fields
+         * parsed with the host-tested provision_field extractor. */
+        std::string v;
+        if (nsp_provision_field(payload, "button1_mode", v))
+            g_cfg.button1_mode = atoi(v.c_str());
+        if (nsp_provision_field(payload, "button2_mode", v))
+            g_cfg.button2_mode = atoi(v.c_str());
+        if (nsp_provision_field(payload, "button1_mqtt_topic", v))
+            g_cfg.button1_mqtt_topic = v;
+        if (nsp_provision_field(payload, "button1_mqtt_payload", v))
+            g_cfg.button1_mqtt_payload = v;
+        if (nsp_provision_field(payload, "button2_mqtt_topic", v))
+            g_cfg.button2_mqtt_topic = v;
+        if (nsp_provision_field(payload, "button2_mqtt_payload", v))
+            g_cfg.button2_mqtt_payload = v;
+        nsp_config_save();
+        nsp_mqtt_publish_log("button config applied");
     }
 }
 
 void nsp_mqtt_send_register(void) {
     nsp_mqtt_send_register(s_mqtt);
+}
+
+/* P312: the physical-button press event (DETACHED/FOLLOW) — the manager
+ * routes DETACHED presses to the bound Home Assistant entity. */
+void nsp_mqtt_publish_button_event(int button) {
+    if (s_mqtt == nullptr) return;
+    char buf[96];
+    snprintf(buf, sizeof(buf), "{\"button\":%d,\"event\":\"press\"}", button);
+    esp_mqtt_client_publish(s_mqtt, topic_button(s_hostname).c_str(), buf, 0, 0, false);
+}
+
+/* P312: CUSTOM_MQTT mode — publish the button's configured topic/payload.
+ * Empty topic = unconfigured: log it, never publish to a partial topic. */
+void nsp_mqtt_publish_button_custom(int button) {
+    if (s_mqtt == nullptr) return;
+    const std::string &topic = (button == 1) ? g_cfg.button1_mqtt_topic
+                                             : g_cfg.button2_mqtt_topic;
+    const std::string &payload = (button == 1) ? g_cfg.button1_mqtt_payload
+                                               : g_cfg.button2_mqtt_payload;
+    if (topic.empty()) {
+        char l[80];
+        snprintf(l, sizeof(l), "button %d: custom MQTT topic not configured", button);
+        nsp_mqtt_publish_log(l);
+        return;
+    }
+    esp_mqtt_client_publish(s_mqtt, topic.c_str(), payload.c_str(), 0, 0, false);
 }
 
 void nsp_mqtt_send_register(esp_mqtt_client_handle_t client) {

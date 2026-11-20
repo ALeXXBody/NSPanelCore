@@ -8,6 +8,7 @@
  */
 
 #include "relay_cmd.h"
+#include "button_cmd.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -29,6 +30,9 @@ static int64_t s_btn1_last_us = 0;
 static int64_t s_btn2_last_us = 0;
 
 extern void nsp_mqtt_publish_relay_state(int relay, bool state);
+extern void nsp_mqtt_publish_button_event(int button);          // P312: DETACHED/FOLLOW report
+extern void nsp_mqtt_publish_button_custom(int button);         // P312: CUSTOM_MQTT topic/payload
+extern void nsp_mqtt_publish_log(const char *msg);
 
 static int map_relay(int relay) {
     if (g_cfg.reverse_relays) {
@@ -85,12 +89,32 @@ void nsp_relay_handle_cmd(int relay, const std::string &payload) {
     nsp_relay_set(relay, v == 1);
 }
 
-/* Physical button press (debounced, active-low buttons). */
+/* Physical button press (debounced, active-low buttons).
+ * P312: the button MODES are implemented — DIRECT toggles the mapped relay,
+ * DETACHED reports the press to the manager (which routes it to the bound
+ * Home Assistant entity), CUSTOM_MQTT publishes the button's custom
+ * topic/payload, FOLLOW toggles AND reports. Unknown modes are a no-op:
+ * a config glitch must never actuate hardware. */
 static void nsp_button_pressed(int button) {
-    // Alpha: DIRECT mode — press toggles the mapped relay.
-    int relay = button;
-    bool new_state = !nsp_relay_state(relay);
-    nsp_relay_set(relay, new_state);
+    NspButtonAction action;
+    int mode = (button == 1) ? g_cfg.button1_mode : g_cfg.button2_mode;
+    if (nsp_button_action(mode, &action) != 0) {
+        char l[96];
+        snprintf(l, sizeof(l), "button %d: unknown mode %d — ignored", button, mode);
+        nsp_mqtt_publish_log(l);
+        return;
+    }
+    if (action.toggle_relay) {
+        int relay = button;
+        bool new_state = !nsp_relay_state(relay);
+        nsp_relay_set(relay, new_state);
+    }
+    if (action.report_manager) {
+        nsp_mqtt_publish_button_event(button);
+    }
+    if (action.publish_custom) {
+        nsp_mqtt_publish_button_custom(button);
+    }
 }
 
 /* P259: the buttons are scanned on their OWN fast task — they used to sit

@@ -13,6 +13,7 @@ TOPIC_PANEL_STATUS = "nspanel/+/status"
 TOPIC_PANEL_COMMAND = "nspanel/+/command"
 TOPIC_PANEL_STATUS_REPORT = "nspanel/+/status_report"
 TOPIC_MANAGER_COMMAND = "nspanel/mqttmanager/command"
+TOPIC_PANEL_BUTTON = "nspanel/+/button"  # P312: DETACHED/FOLLOW press events
 
 
 def topic_safe(value: str | None) -> str:

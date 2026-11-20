@@ -3,76 +3,80 @@
  * Extracted from edit_nspanel.js (P290): the fields were MOVED into the
  * Dashboard studio's Panel tab (P263/P266), so their behavior had to move with
  * them. This single file is loaded by BOTH the original settings page and the
- * studio — one source for the button-mode/detached-light/panel-type logic.
+ * studio — one source for the button-mode/detached-entity/panel-type logic.
+ *
+ * P312 REWORK: the DETACHED binding is a Home Assistant entity selected
+ * DIRECTLY from the live entity list — no lights-in-rooms detour. The
+ * dropdowns are filled from /nspanel_core/api/get_all_available_entities,
+ * filtered to toggleable domains.
  */
+
+var _NSPANEL_TOGGLE_DOMAINS = [
+  "light", "switch", "fan", "input_boolean", "script",
+  "automation", "siren", "input_button", "button", "scene", "media_player",
+];
+
+function _nspanelFillEntitySelect($sel) {
+  var current = ($sel.attr("data-current") || "").trim();
+  nspanelFetch("/nspanel_core/api/get_all_available_entities", { credentials: "same-origin" })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var entities = (d && d.home_assistant_entities) || [];
+      var opts = '<option value="">Nothing bound (press does nothing)</option>';
+      var found = false;
+      entities.forEach(function (e) {
+        var domain = (e.entity_id || "").split(".")[0];
+        if (_NSPANEL_TOGGLE_DOMAINS.indexOf(domain) === -1) return;
+        var selected = (e.entity_id === current) ? " selected" : "";
+        if (selected) found = true;
+        opts += '<option value="' + e.entity_id + '"' + selected + '>' +
+                (e.label || e.entity_id) + " · " + e.entity_id + "</option>";
+      });
+      if (current && !found) {
+        // a binding the entity list no longer reports (e.g. HA offline):
+        // keep it visible so a save does not silently unbind it
+        opts += '<option value="' + current + '" selected>' + current + " (current)</option>";
+      }
+      $sel.html(opts);
+    })
+    .catch(function () {
+      $sel.html('<option value="">Could not load Home Assistant entities</option>');
+      if (current) {
+        $sel.html('<option value="' + current + '" selected>' + current + " (current)</option>");
+      }
+    });
+}
+
+function _nspanelFillEntitySelects() {
+  $("[data-nspanel-entity-select]").each(function () {
+    if (this.dataset.nspanelLoaded === "1") return;
+    this.dataset.nspanelLoaded = "1";
+    _nspanelFillEntitySelect($(this));
+  });
+}
 
 function update_shown_elements() {
   $("#button1_detached_mode_controls").addClass("hidden");
   $("#button2_detached_mode_controls").addClass("hidden");
-  $("#button1_detached_mode_light").addClass("hidden");
-  $("#button2_detached_mode_light").addClass("hidden");
   $("#button1_mqtt_mode_controls").addClass("hidden");
   $("#button2_mqtt_mode_controls").addClass("hidden");
-  $("#button1_detached_mode_light").prop("required", false);
-  $("#button2_detached_mode_light").prop("required", false);
 
-  if ($("#button1_mode").val() == 0) {
-    // Direct mode
-  } else if ($("#button1_mode").val() == 1) {
+  if ($("#button1_mode").val() == 1) {
     // Detached mode
     $("#button1_detached_mode_controls").removeClass("hidden");
-    $("#button1_detached_mode_light").prop("required", true);
-    $("#button1_detached_mode_light").removeClass("hidden");
+    _nspanelFillEntitySelects();
   } else if ($("#button1_mode").val() == 2) {
-    // MQTT mode
+    // Custom MQTT mode
     $("#button1_mqtt_mode_controls").removeClass("hidden");
-  } else if ($("#button1_mode").val() == 3) {
-    // Follow mode
   }
 
-  if ($("#button2_mode").val() == 0) {
-    // Direct mode
-  } else if ($("#button2_mode").val() == 1) {
+  if ($("#button2_mode").val() == 1) {
     // Detached mode
     $("#button2_detached_mode_controls").removeClass("hidden");
-    $("#button2_detached_mode_light").prop("required", true);
-    $("#button2_detached_mode_light").removeClass("hidden");
+    _nspanelFillEntitySelects();
   } else if ($("#button2_mode").val() == 2) {
-    // MQTT mode
+    // Custom MQTT mode
     $("#button2_mqtt_mode_controls").removeClass("hidden");
-  } else if ($("#button2_mode").val() == 3) {
-    // Follow mode
-  }
-
-  // Update shown lights depending on selected room
-  var button1_selected_room_id = $("#button1_detached_mode_room").val();
-  $(".button1_detached_mode_light_option[data-room-id='" + button1_selected_room_id + "']").show();
-  $(".button1_detached_mode_light_option[data-room-id!='" + button1_selected_room_id + "']").hide();
-
-  // Check if selected button1_detached_mode_light option is visible, if not, select the first of the options.
-  if ($(".button1_detached_mode_light_option[data-room-id='" + button1_selected_room_id + "']:selected").length == 0) {
-    var button1_detached_light_first_value = $(".button1_detached_mode_light_option[data-room-id='" + button1_selected_room_id + "']:first").val();
-    if (button1_detached_light_first_value) {
-      console.log("Selected option for button1 detached light is no longer accessible in selected room, will select '", button1_detached_light_first_value, "' instead.");
-      $("#button1_detached_mode_light").val(button1_detached_light_first_value).change();
-    } else {
-      $("#button1_detached_mode_light").val("").change();
-    }
-  }
-
-  var button2_selected_room_id = $("#button2_detached_mode_room").val();
-  $(".button2_detached_mode_light_option[data-room-id='" + button2_selected_room_id + "']").show();
-  $(".button2_detached_mode_light_option[data-room-id!='" + button2_selected_room_id + "']").hide();
-
-  // Check if selected button2_detached_mode_light option is visible, if not, select the first of the options.
-  if ($(".button2_detached_mode_light_option[data-room-id='" + button2_selected_room_id + "']:selected").length == 0) {
-    var button2_detached_light_first_value = $(".button2_detached_mode_light_option[data-room-id='" + button2_selected_room_id + "']:first").val();
-    if (button2_detached_light_first_value) {
-      console.log("Selected option for button2 detached light is no longer accessible in selected room, will select '", button2_detached_light_first_value, "' instead.");
-      $("#button2_detached_mode_light").val(button2_detached_light_first_value).change();
-    } else {
-      $("#button2_detached_mode_light").val("").change();
-    }
   }
 }
 
@@ -86,6 +90,4 @@ function bindPanelSettingsBehavior() {
   $("#button1_mode").change(update_shown_elements);
   $("#button2_mode").change(update_shown_elements);
   $("#screensaver_mode").change(update_shown_elements);
-  $("#button1_detached_mode_room").change(update_shown_elements);
-  $("#button2_detached_mode_room").change(update_shown_elements);
 }
