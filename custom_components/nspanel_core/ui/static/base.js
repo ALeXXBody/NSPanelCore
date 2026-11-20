@@ -132,6 +132,72 @@ async function nspanelEnsureSession() {
 }
 document.addEventListener("DOMContentLoaded", function () { nspanelEnsureSession(); });
 
+/* P311 (the HA companion app): the app's webview has NO stored session and
+ * the app delivers its token through its own external-auth channel — the
+ * panel shim never sees it. But our page is SAME-ORIGIN with the HA
+ * frontend: reach the frontend's <home-assistant> through the iframe chain
+ * (inner page -> shim -> frontend), take the live token from whatever shape
+ * the frontend exposes, and exchange it for the manager's 24h session
+ * cookie. After that every pull, htmx request and STOMP connect carries the
+ * session. */
+async function nspanelBootstrapFromFrontend() {
+  if (nspanelGetToken()) return nspanelGetToken();
+  let w = window;
+  for (let hop = 0; hop < 3 && w; hop++) {
+    try {
+      if (w.document && w.document.querySelector) {
+        const ha = w.document.querySelector("home-assistant");
+        const a = ha && ha.hass && ha.hass.auth;
+        if (a) {
+          let tok = (a.data && a.data.access_token) ||
+                    (typeof a.accessToken === "string" ? a.accessToken : "") ||
+                    (a.tokens && a.tokens.access_token) || "";
+          if (!tok && typeof a.getAccessToken === "function") {
+            try { tok = await a.getAccessToken(); } catch (e) {}
+          }
+          if (tok && typeof tok === "string") {
+            nspanelLiveToken = tok;
+            await nspanelEnsureSession();
+            return tok;
+          }
+        }
+      }
+    } catch (e) {}
+    w = (w.parent && w.parent !== w) ? w.parent : null;
+  }
+  return "";
+}
+
+(function nspanelBootstrapRetry() {
+  let tries = 0, misses = 0;
+  const tick = function () {
+    tries++;
+    nspanelBootstrapFromFrontend().then(function (tok) {
+      if (tok) return;  // the session is set; the pulls proceed
+      // stop early: no HA frontend anywhere in the chain means this page
+      // was opened standalone — nothing to bootstrap from
+      let found = false, w = window;
+      for (let hop = 0; hop < 3 && w; hop++) {
+        try {
+          if (w.document && w.document.querySelector &&
+              w.document.querySelector("home-assistant")) { found = true; break; }
+        } catch (e) {}
+        w = (w.parent && w.parent !== w) ? w.parent : null;
+      }
+      misses = found ? 0 : misses + 1;
+      if (misses >= 3 || tries >= 10) return;
+      setTimeout(tick, 1500);
+    }).catch(function () {
+      if (tries < 10) setTimeout(tick, 1500);
+    });
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", tick);
+  } else {
+    tick();
+  }
+})();
+
 function nspanelClientId() {
   var base = "";
   try {
