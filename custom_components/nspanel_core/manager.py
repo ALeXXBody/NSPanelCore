@@ -375,7 +375,15 @@ class NSPanelCoreManager:
                 if n is not None:
                     clean[key] = n
             elif key in ("panel_broker_user", "panel_broker_pass"):
-                clean[key] = str(value or "")
+                # P311: blank password = KEEP the stored one (standard
+                # leave-blank-to-keep semantics). The settings form always
+                # posts every field — a later save of ANY setting with an
+                # untouched empty password box would otherwise silently
+                # WIPE the stored credential and break provisioning.
+                v = str(value or "")
+                if key == "panel_broker_pass" and v == "" and current.get("panel_broker_pass"):
+                    continue  # keep existing
+                clean[key] = v
             elif key == "manager_address":
                 v = str(value or "").strip()
                 if not v or not topic_safe(v):

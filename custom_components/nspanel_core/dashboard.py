@@ -450,12 +450,16 @@ class ProvisionPushView(HomeAssistantView):
 
 def _broker_push_body(settings) -> bytes:
     import json as _json
+    # P311: ensure_ascii=False — the panel's field parser unescapes \" and
+    # \\ but REJECTS exotic escapes; the default ensure_ascii=True would
+    # turn any non-ASCII password character into \uXXXX and the panel would
+    # silently store an EMPTY password (auth then fails with no cause).
     return _json.dumps({
         "mqtt_server": settings.panel_broker_host,
         "mqtt_port": settings.panel_broker_port,
         "mqtt_user": settings.panel_broker_user,
         "mqtt_pass": settings.panel_broker_pass,
-    }).encode()
+    }, ensure_ascii=False).encode("utf-8")
 
 
 async def _push_broker_to_panel(manager, base: str, label: str):
@@ -559,6 +563,21 @@ class DiscoveredPanelActionView(HomeAssistantView):
             await manager.async_save()
             return web.Response(text=f"{key} will no longer appear in discovery")
         resp = await _push_broker_to_panel(manager, f"http://{address}", hostname or address)
+        if resp.status == 502:
+            # The panel's web server wedges during the provision save (its
+            # own bug) — but the save+reboot STILL happens (proven twice on
+            # the live panel). Treat the timeout as applied, say so, and
+            # record the pre-accept so the registration completes the flow.
+            pre = list(getattr(s, "pre_accepted_hostnames", []) or [])
+            if key and key not in pre:
+                pre.append(key)
+            s.pre_accepted_hostnames = pre[-50:]
+            await manager.async_save()
+            return web.Response(
+                text="Sent — the panel saved the settings and is rebooting "
+                     "(its web server hangs during the save, so no response "
+                     "came back; give it ~20 s, then watch this page)",
+                status=200)
         if resp.status != 200:
             return resp
         pre = list(getattr(s, "pre_accepted_hostnames", []) or [])
