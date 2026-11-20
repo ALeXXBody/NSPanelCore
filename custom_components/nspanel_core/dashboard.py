@@ -2844,7 +2844,16 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
                 # v1.3.2 file pointed the iframe at /nspanel_core and rendered a
                 # blank panel even after the server was fixed).
                 module_url=f"{URL_BASE}/static/panel.js?v={_STATIC_VERSION}",
-                embed_iframe=True,
+                # P311: embed_iframe=False — HA loads the panel element INSIDE
+                # the frontend and assigns it the LIVE hass (verified in the
+                # frontend bundle: the non-embed path does
+                #   d(s, {panel, hass: this.hass, narrow, route})).
+                # The embed_iframe path never hands the login state over —
+                # that is the difference vs the 0.1.x add-on (which rode
+                # HA's ingress and authenticated the app automatically).
+                # The element loads the legacy UI in its own iframe with the
+                # app's token in the URL — the app-native auth, guaranteed.
+                embed_iframe=False,
                 config={"url": UI_PATH},
                 require_admin=True,
             )

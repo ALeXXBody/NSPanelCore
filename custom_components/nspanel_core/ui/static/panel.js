@@ -48,9 +48,15 @@ class NSPanelCorePanel extends HTMLElement {
     this.style.cssText = "display:block;width:100%;height:100%;min-height:100vh;";
 
     const iframe = document.createElement("iframe");
+    /* P311: WITHOUT embed_iframe, HA assigns the LIVE hass to THIS element
+     * (its own contract — verified in the frontend bundle:
+     *   d(s, {panel, hass: this.hass, narrow, route})).
+     * The token is therefore guaranteed in the app and in the browser —
+     * never load the gated page before it arrives; `set hass` points the
+     * iframe. The 10 s fallback covers a hass that never lands. */
     iframe.src = this._liveToken
       ? "/nspanel_core/ui?ha_token=" + encodeURIComponent(this._liveToken)
-      : "/nspanel_core/ui";
+      : "about:blank";
     iframe.title = "NSPanel Core";
     iframe.style.cssText = "border:0;width:100%;height:100%;min-height:100vh;display:block;";
     iframe.setAttribute("allowfullscreen", "");
@@ -59,6 +65,11 @@ class NSPanelCorePanel extends HTMLElement {
       try { this._pushToken(); } catch (e) {}
     });
     this.appendChild(iframe);
+    if (!this._liveToken) {
+      this._tokenWait = setTimeout(() => {
+        if (!this._liveToken) iframe.src = "/nspanel_core/ui";
+      }, 10000);
+    }
   }
 
   _exchangeSession(token) {
