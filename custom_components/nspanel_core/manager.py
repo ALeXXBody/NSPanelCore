@@ -48,6 +48,10 @@ from .models import IntegrationConfig, LightConfig, PanelConfig, SceneConfig, Th
 
 _LOGGER = logging.getLogger(__name__)
 
+# P311: a candidate is an NSPanel Core panel only if its status.json carries
+# the firmware's status signature — never because of its mDNS name.
+_PANEL_STATUS_KEYS = ("hostname", "version", "mqtt")
+
 _MANIFEST_PATH = pathlib.Path(__file__).parent / "manifest.json"
 _MANAGER_VERSION = "v0.0.0"
 
@@ -158,6 +162,7 @@ class NSPanelCoreManager:
         self._discovered_panels: dict[str, dict] = {}   # ip -> status dict
         self._discovered_name_ips: dict[str, set] = {}  # service name -> ips
         self._discovery_browser = None
+        self._discovery_zc = None
         self._ota_active_version: str = ""
         self._firmware_unsubs: list = []
         self._firmware_notified_version: str = ""
@@ -1919,14 +1924,16 @@ class NSPanelCoreManager:
     # P215/P216 discovery — SEE panels that have no MQTT credentials yet
     # ------------------------------------------------------------------
 
-    _MDNS_INSTANCE_PREFIX = "nspanelcore"
-    _MDNS_INSTANCE = "NSPanelCore._http._tcp.local."  # wifi.cpp advertisement
     _MDNS_TYPE = "_http._tcp.local."
 
     async def _start_discovery_browser(self) -> None:
         """Continuous mDNS browser: the freshly flashed panel advertises
         itself the moment it joins WiFi; this keeps the discovered cache
-        live so the manager sees it WITHOUT any user action."""
+        live so the manager sees it WITHOUT any user action. NOT name-based:
+        any _http._tcp service is looked up and identified by its status
+        signature — a hardcoded advertisement name would both miss renamed
+        panels and conflict when several panels exist (the firmware's
+        fixed 'NSPanelCore' name is a P148-era leftover)."""
         try:
             from homeassistant.components.zeroconf import async_get_instance
             zc = await async_get_instance(self.hass)
@@ -1935,6 +1942,7 @@ class NSPanelCoreManager:
             return
         from zeroconf import ServiceBrowser
 
+        self._discovery_zc = zc
         manager = self
 
         class _Listener:
@@ -1959,17 +1967,16 @@ class NSPanelCoreManager:
         _LOGGER.info("Panel discovery browser running on %s", self._MDNS_TYPE)
 
     def _schedule_discovery_lookup(self, type_: str, name: str) -> None:
-        if not name.lower().startswith(self._MDNS_INSTANCE_PREFIX):
-            return
+        # No name gate: identity comes from the status signature, not the
+        # advertised name. Unrelated _http._tcp services fail the fetch or
+        # the signature check and are dropped cheaply.
         self.hass.loop.call_soon_threadsafe(
             self.hass.async_create_task, self._adopt_discovered_service(name)
         )
 
     async def _adopt_discovered_service(self, name: str) -> None:
-        try:
-            from homeassistant.components.zeroconf import async_get_instance
-            zc = await async_get_instance(self.hass)
-        except Exception:  # noqa: BLE001
+        zc = self._discovery_zc
+        if zc is None:
             return
         info = await self.hass.async_add_executor_job(
             zc.get_service_info, self._MDNS_TYPE, name, 2500
@@ -1977,6 +1984,8 @@ class NSPanelCoreManager:
         if info is None:
             return
         addresses = [a for a in info.parsed_addresses() if a]
+        if not addresses:
+            return
         self._discovered_name_ips[name] = set(addresses)
         for addr in addresses:
             if addr in self._discovered_panels:
@@ -1993,6 +2002,7 @@ class NSPanelCoreManager:
         for addr in self._discovered_name_ips.pop(name, set()):
             self._discovered_panels.pop(addr, None)
 
+
     async def _fetch_panel_status(self, addr: str) -> dict | None:
         def _get():
             import urllib.request
@@ -2003,7 +2013,7 @@ class NSPanelCoreManager:
             data = await self.hass.async_add_executor_job(_get)
         except Exception:  # noqa: BLE001 — one dead candidate must not kill discovery
             return None
-        if not isinstance(data, dict):
+        if not isinstance(data, dict) or not all(k in data for k in _PANEL_STATUS_KEYS):
             return None
         return {
             "address": addr,
@@ -2012,6 +2022,51 @@ class NSPanelCoreManager:
             "mqtt": str(data.get("mqtt") or ""),
             "warnings": str(data.get("warnings") or ""),
         }
+
+    async def discover_panels(self, browse_seconds: float = 2.5) -> list[dict]:
+        """On-demand fallback scan (used only when the continuous browser's
+        cache is still empty). Name-agnostic like the browser: browse every
+        _http._tcp service, keep the ones whose status.json carries the
+        panel signature."""
+        zc = self._discovery_zc
+        if zc is None:
+            return []
+
+        import queue
+        import threading
+
+        def _scan() -> list[str]:
+            from zeroconf import ServiceBrowser
+
+            q: "queue.Queue[str]" = queue.Queue()
+
+            class _QListener:
+                def add_service(self, zc_, type_, name):
+                    q.put(name)
+
+                def update_service(self, zc_, type_, name):
+                    q.put(name)
+
+                def remove_service(self, zc_, type_, name):
+                    pass
+
+            browser = ServiceBrowser(zc, self._MDNS_TYPE, _QListener())
+            try:
+                threading.Event().wait(browse_seconds)
+            finally:
+                browser.cancel()
+            names = []
+            while True:
+                try:
+                    names.append(q.get_nowait())
+                except queue.Empty:
+                    break
+            return names
+
+        names = await self.hass.async_add_executor_job(_scan)
+        for name in names:
+            await self._adopt_discovered_service(name)
+        return list(self._discovered_panels.values())
 
     async def discover_snapshot(self) -> list[dict]:
         """The live discovery list for the UI: the browser's cache, filtered
@@ -2031,36 +2086,6 @@ class NSPanelCoreManager:
                 continue
             out.append(status)
         return out
-
-    async def discover_panels(self, zc=None, browse_seconds: float = 2.5) -> list[dict]:
-        """Find unprovisioned panels on the LAN: the freshly flashed panel
-        joins WiFi and ADVERTISES itself (mDNS `NSPanelCore` + /status.json);
-        the manager queries the advertisement and reads each candidate's
-        status. No MQTT involved — a panel without broker credentials can
-        still be SEEN, accepted, and then provisioned (the user's flow).
-        Declined hostnames are filtered out."""
-        if zc is None:
-            try:
-                from homeassistant.components.zeroconf import async_get_async_instance
-                zc = await async_get_async_instance(self.hass)
-            except Exception:  # noqa: BLE001 — zeroconf not available: no discovery
-                return []
-        candidates = []
-        try:
-            info = await zc.async_get_service_info(self._MDNS_TYPE, self._MDNS_INSTANCE, browse_seconds * 1000)
-        except Exception:  # noqa: BLE001
-            info = None
-        if info is not None:
-            for addr in info.parsed_addresses():
-                if addr and addr not in candidates:
-                    candidates.append(addr)
-        if not candidates:
-            return []
-        async def _fetch(addr: str) -> dict | None:
-            return await self._fetch_panel_status(addr)
-
-        results = await asyncio.gather(*[_fetch(a) for a in candidates])
-        return [r for r in results if r]
 
     def maybe_preaccept_hostname(self, panel, friendly_name: str) -> bool:
         """The discovery-accept contract: a hostname accepted at DISCOVERY
