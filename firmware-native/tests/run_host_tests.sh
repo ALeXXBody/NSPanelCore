@@ -23,3 +23,6 @@ g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_t9 test_dash_cmd.cpp ../src/da
 /tmp/opencode/nsp_t9
 g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_t10 test_screensaver_parse.cpp ../src/screensaver_parse.cpp
 /tmp/opencode/nsp_t10
+# P311 FULL-APP/FIRMWARE AUDIT — edge cases for the paths nothing covered
+g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_edge ../../tests/test_edge_cases.cpp ../src/form_parse.cpp ../src/provision_parse.cpp
+/tmp/opencode/nsp_edge

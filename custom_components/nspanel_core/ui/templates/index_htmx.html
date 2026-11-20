@@ -110,9 +110,26 @@ function nspanelRefreshDiscovery() {
 }
 (function () {
   var boot = function () {
-    nspanelRefreshDiscovery();
-    if (_nsp_disc_timer) clearInterval(_nsp_disc_timer);
-    _nsp_disc_timer = setInterval(nspanelRefreshDiscovery, 20000);
+    // P311: the FIRST discovery pull must ride an established credential —
+    // before the auth bootstrap lands it would fire unauthenticated and
+    // fail silently. Wait (bounded) for the session, then start the loop.
+    var tries = 0;
+    var start = function () {
+      nspanelRefreshDiscovery();
+      if (_nsp_disc_timer) clearInterval(_nsp_disc_timer);
+      _nsp_disc_timer = setInterval(nspanelRefreshDiscovery, 20000);
+    };
+    var wait = function () {
+      tries++;
+      var authed = false;
+      try {
+        authed = !!(window._nspanelBootstrapDone || window._nspanelSessionEstablished ||
+                    (typeof nspanelGetToken === "function" && nspanelGetToken()));
+      } catch (e) {}
+      if (authed || tries >= 20) { start(); return; }
+      setTimeout(wait, 500);
+    };
+    wait();
   };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
