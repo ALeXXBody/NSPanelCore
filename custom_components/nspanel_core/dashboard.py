@@ -2924,6 +2924,10 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         DashboardGalleryView,
         DashboardGalleryImageView,
         DashboardEntitiesView,
+        # P311 the P215/P216 discovery flow — the manager sees unprovisioned
+        # panels automatically; accept sends the MQTT settings
+        DiscoveredPanelsView,
+        DiscoveredPanelActionView,
     ]
     for view_cls in views:
         try:
