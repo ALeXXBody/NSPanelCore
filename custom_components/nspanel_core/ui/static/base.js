@@ -149,12 +149,6 @@ async function nspanelBootstrapFromFrontend() {
         const ha = w.document.querySelector("home-assistant");
         const a = ha && ha.hass && ha.hass.auth;
         if (a) {
-          /* P311: the app delivers its token on request — the frontend's
-           * own refresh call makes the companion app hand the fresh token
-           * over NOW (externalAuthSetToken fills auth.data). */
-          if (typeof a.refreshAccessToken === "function") {
-            try { await a.refreshAccessToken(); } catch (e) {}
-          }
           let tok = (a.data && a.data.access_token) ||
                     (typeof a.accessToken === "string" ? a.accessToken : "") ||
                     (a.tokens && a.tokens.access_token) || "";
@@ -164,36 +158,14 @@ async function nspanelBootstrapFromFrontend() {
           if (tok && typeof tok === "string") {
             nspanelLiveToken = tok;
             await nspanelEnsureSession();
-            try { nspanelBootStatus("login received from the app — loading…"); } catch (e) {}
             return tok;
           }
-          try { nspanelBootStatus("the app login state was reached, but delivered no token"); } catch (e) {}
-        } else {
-          try { nspanelBootStatus("hop " + hop + ": no login state in this frame"); } catch (e) {}
         }
       }
-    } catch (e) {
-      try { nspanelBootStatus("hop " + hop + ": " + (e && e.message || e)); } catch (e2) {}
-    }
+    } catch (e) {}
     w = (w.parent && w.parent !== w) ? w.parent : null;
   }
-  try { nspanelBootStatus("no Home Assistant login state reachable"); } catch (e) {}
   return "";
-}
-
-function nspanelBootStatus(text) {
-  try {
-    let el = document.getElementById("nspanel-boot-status");
-    if (!el && document.body) {
-      el = document.createElement("div");
-      el.id = "nspanel-boot-status";
-      el.style.cssText = "position:fixed;inset:auto 10px 10px 10px;z-index:99998;" +
-        "background:#141821;color:#8b93a1;border:1px solid #2a2f3a;border-radius:8px;" +
-        "padding:6px 10px;font:11px system-ui,sans-serif;text-align:center";
-      document.body.appendChild(el);
-    }
-    if (el) el.textContent = "NSPanel Core: " + text;
-  } catch (e) {}
 }
 
 (function nspanelBootstrapRetry() {
@@ -225,165 +197,6 @@ function nspanelBootStatus(text) {
     tick();
   }
 })();
-
-/* P311: the ONE-TIME manual login — a Home Assistant long-lived token
- * pasted once sets the panel's 24h session; after that the app works with
- * no further ceremony. Shown when the automatic hand-off fails. */
-function nspanelShowLoginCard(reason) {
-  try {
-    let card = document.getElementById("nspanel-login-card");
-    if (!card) {
-      card = document.createElement("div");
-      card.id = "nspanel-login-card";
-      card.style.cssText = "position:fixed;inset:auto 12px 12px 12px;z-index:99999;" +
-        "background:#141821;color:#c8cbce;border:1px solid #2a2f3a;border-radius:12px;" +
-        "padding:14px;font:13px system-ui,sans-serif;max-width:520px;margin:0 auto;";
-      document.body.appendChild(card);
-    }
-    card.innerHTML =
-      "<div style='font-weight:700;margin-bottom:6px'>NSPanel Core needs a one-time login</div>" +
-      "<div style='opacity:.8;margin-bottom:8px'>" +
-      "Home Assistant → your profile → Security → Long-lived access tokens → Create token, " +
-      "then paste it here. Reason: " + (reason || "the automatic hand-off did not complete") + "</div>" +
-      "<input id='nspanel-lt' type='password' placeholder='Long-lived access token' " +
-      "style='width:100%;padding:8px;background:#0d1016;color:#e8eaec;border:1px solid #2a2f3a;border-radius:8px'>" +
-      "<button id='nspanel-lt-go' style='margin-top:8px;padding:8px 14px;background:#39c8e8;" +
-      "color:#06222b;border:0;border-radius:8px;font-weight:700;cursor:pointer'>Log in</button>" +
-      "<span id='nspanel-lt-status' style='margin-left:8px;opacity:.8'></span>";
-    document.getElementById("nspanel-lt-go").onclick = function () {
-      const tok = String(document.getElementById("nspanel-lt").value || "").trim();
-      const st = document.getElementById("nspanel-lt-status");
-      if (!tok) { st.textContent = "paste the token first"; return; }
-      st.textContent = "logging in…";
-      fetch("/nspanel_core/auth_session", {
-        method: "POST", credentials: "same-origin",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + tok },
-        body: "{}"
-      }).then(function (r) {
-        if (r.ok) {
-          st.textContent = "logged in — reloading…";
-          setTimeout(function () { location.reload(); }, 600);
-        } else {
-          st.textContent = "rejected (HTTP " + r.status + ") — check the token";
-        }
-      }).catch(function (e) { st.textContent = "failed: " + e; });
-    };
-  } catch (e) {}
-}
-
-function nspanelClientId() {
-  var base = "";
-  try {
-    var found = nspanelTokenStore();
-    if (found && found.tokens) base = found.tokens.hassUrl || "";
-  } catch (e) {}
-  base = base || location.origin;
-  return base.replace(/\/+$/, "") + "/";
-}
-
-// Authed fetch for native-fetch callers (navbar buttons etc.): attaches the
-// HA bearer token like htmx/jQuery paths do.
-async function nspanelFetchOnce(url, options) {
-  options = options || {};
-  var headers = Object.assign({}, options.headers || {});
-  try { await nspanelRefreshTokenIfNeeded(); } catch (err) {}
-  var tok = nspanelGetToken();
-  if (tok) headers["Authorization"] = "Bearer " + tok;
-  return fetch(url, Object.assign({}, options, { headers: headers }));
-}
-
-/* P282: a 401 (a stale token — the remote sessions rotate) forces the
- * refresh and retries ONCE before surfacing the failure. */
-async function nspanelFetch(url, options) {
-  var resp = await nspanelFetchOnce(url, options);
-  if (resp.status === 401) {
-    try { await nspanelRefreshTokenIfNeeded(true); } catch (e) {}
-    resp = await nspanelFetchOnce(url, options);
-  }
-  return resp;
-}
-
-async function nspanelRefreshTokenIfNeeded(force) {
-  var found = null;
-  try { found = nspanelTokenStore(); } catch (e) { return; }
-  if (!found || !found.tokens || !found.tokens.refresh_token) return;
-  var tok = found.tokens;
-  var expiresAt = tok.expires || 0;
-  if (!force && expiresAt - Date.now() > 120000) return; // still fresh
-  try {
-    var body = "grant_type=refresh_token&refresh_token=" + encodeURIComponent(tok.refresh_token) +
-               "&client_id=" + encodeURIComponent(nspanelClientId());
-    var resp = await fetch("/auth/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: body,
-    });
-    if (!resp.ok) return;
-    var fresh = await resp.json();
-    tok.access_token = fresh.access_token;
-    tok.expires_in = fresh.expires_in;
-    tok.expires = Date.now() + fresh.expires_in * 1000;
-    tok.token_type = "Bearer";
-    try { found.store.setItem("hassTokens", JSON.stringify(tok)); } catch (e) {}
-  } catch (e) { /* offline — keep the old token; calls will 401 visibly */ }
-}
-
-document.addEventListener("htmx:configRequest", function (e) {
-  var tok = nspanelGetToken();
-  if (tok) e.detail.headers["Authorization"] = "Bearer " + tok;
-});
-
-// Close any open modal dialogs (used by modal buttons across pages).
-function close_modals() {
-  document.querySelectorAll("dialog.modal[open], dialog[open]").forEach((d) => {
-    try { d.close(); } catch (e) {}
-  });
-  var modal = document.getElementById("modal");
-  if (modal) {
-    try { modal.close(); } catch (e) {}
-    modal.remove();
-  }
-  document.querySelectorAll(".modal-backdrop").forEach((b) => b.remove());
-}
-
-// jQuery XHR (entity pickers, legacy posts) carries the same bearer token.
-if (typeof $ !== "undefined" && $.ajaxSetup) {
-  $.ajaxSetup({
-    beforeSend: function (xhr, settings) {
-      if (settings.url && settings.url.indexOf("/nspanel_core/") === 0) {
-        var tok = nspanelGetToken();
-        if (tok) xhr.setRequestHeader("Authorization", "Bearer " + tok);
-      }
-    },
-  });
-}
-
-// Full-page forms can't set headers, so authed document forms are submitted
-// via fetch with the bearer token; the server redirects are followed here.
-document.addEventListener("submit", function (e) {
-  var form = e.target;
-  if (!form || !form.hasAttribute || !form.hasAttribute("data-authed")) return;
-  e.preventDefault();
-  (async function () {
-    try { await nspanelRefreshTokenIfNeeded(); } catch (err) {}
-    var tok = nspanelGetToken();
-    var headers = {};
-    if (tok) headers["Authorization"] = "Bearer " + tok;
-    fetch(form.action, { method: form.method || "POST", body: new FormData(form), headers: headers, redirect: "follow" })
-      .then(async function (resp) {
-      if (resp.ok) {
-        window.location.href = resp.url;
-      } else if (resp.status === 401) {
-        alert("Not authorized — please log in to Home Assistant first.");
-      } else {
-        var detail = "";
-        try { detail = (await resp.text()).slice(0, 300); } catch (e) {}
-        alert("Save failed (HTTP " + resp.status + ")" + (detail ? ": " + detail : ""));
-      }
-    })
-    .catch(function (err) { alert("Save failed: " + err); });
-  })();
-});
 
 function attach_cursor_change_events() {
   $(".cursor-grab")
@@ -500,11 +313,6 @@ try {
         ERROR_TOAST_SOURCE_WEB_INTERFACE,
       );
       try { nspanelRefreshTokenIfNeeded(); } catch (e) {}
-      /* P311: in the HA companion app the automatic token hand-off can
-       * fail silently — give the user the ONE-TIME login card instead of
-       * a dead end: a long-lived HA token pasted once sets the panel's
-       * own 24h session and the app works from then on. */
-      try { nspanelShowLoginCard(body); } catch (e) {}
       return;
     }
     try {
