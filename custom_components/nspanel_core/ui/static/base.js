@@ -140,6 +140,28 @@ document.addEventListener("DOMContentLoaded", function () { nspanelEnsureSession
  * the frontend exposes, and exchange it for the manager's 24h session
  * cookie. After that every pull, htmx request and STOMP connect carries the
  * session. */
+/* P311: the frontend's own hass — reachable SAME-ORIGIN through the iframe
+ * chain. Its fetchWithAuth/callApi run the app's external auth natively, so
+ * the app's token never needs to be extracted at all. */
+let _nspanelFrontendHassPromise = null;
+function nspanelFrontendHass() {
+  if (_nspanelFrontendHassPromise) return _nspanelFrontendHassPromise;
+  _nspanelFrontendHassPromise = new Promise(function (resolve) {
+    let w = window;
+    for (let hop = 0; hop < 4 && w; hop++) {
+      try {
+        if (w.document && w.document.querySelector) {
+          const ha = w.document.querySelector("home-assistant");
+          if (ha && ha.hass && ha.hass.auth) { resolve(ha.hass); return; }
+        }
+      } catch (e) {}
+      w = (w.parent && w.parent !== w) ? w.parent : null;
+    }
+    resolve(null);
+  });
+  return _nspanelFrontendHassPromise;
+}
+
 async function nspanelBootstrapFromFrontend() {
   if (nspanelGetToken()) return nspanelGetToken();
   let w = window;
@@ -214,6 +236,15 @@ async function nspanelFetch(url, options) {
   if (resp.status === 401) {
     try { await nspanelRefreshTokenIfNeeded(true); } catch (e) {}
     resp = await nspanelFetchOnce(url, options);
+  }
+  /* P311 (the HA companion app): when this page holds no token of its own,
+   * route the call through the frontend's hass — its fetchWithAuth runs the
+   * app's external auth natively. */
+  if (resp.status === 401 && !nspanelGetToken()) {
+    const fh = await nspanelFrontendHass();
+    if (fh && typeof fh.fetchWithAuth === "function") {
+      try { resp = await fh.fetchWithAuth(url, options); } catch (e) {}
+    }
   }
   return resp;
 }

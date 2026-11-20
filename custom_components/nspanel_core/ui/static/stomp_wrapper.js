@@ -122,8 +122,12 @@ function stomp_message_callback(message) {
 function stomp_reconnect_callback() {
   // No username or password required to connect to STOMP websocket. Set dummy values.
   // Refresh the token on every (re)connect — it may have rotated.
-  stomp_client.connectHeaders["access_token"] = nspanelStompToken();
-  stomp_client.connect("user", "pass", stomp_connected_callback, stomp_disconnected_callback, stomp_error_callback);
+  // P311: in the companion app the token may only be available through the
+  // frontend's hass — fetch it async, then connect.
+  nspanelStompTokenAsync(function (tok) {
+    try { stomp_client.connectHeaders["access_token"] = tok; } catch (e) {}
+    stomp_client.connect("user", "pass", stomp_connected_callback, stomp_disconnected_callback, stomp_error_callback);
+  });
 }
 
 function nspanelStompToken() {
@@ -134,6 +138,36 @@ function nspanelStompToken() {
     } catch (e) {}
   }
   return "";
+}
+
+/* P311 (the HA companion app): no local token — ask the frontend's own hass
+ * for one through the same-origin iframe chain, then hand it back via the
+ * callback. */
+function nspanelStompTokenAsync(cb) {
+  var t = nspanelStompToken();
+  if (t) { cb(t); return; }
+  if (typeof nspanelFrontendHass !== "function") { cb(""); return; }
+  nspanelFrontendHass().then(function (hass) {
+    try {
+      if (!hass || !hass.auth) { cb(""); return; }
+      var a = hass.auth;
+      var done = function (tok) {
+        try {
+          if (typeof tok === "string" && tok) { nspanelLiveToken = tok; cb(tok); return; }
+        } catch (e) {}
+        cb("");
+      };
+      if (typeof a.getAccessToken === "function") {
+        Promise.resolve(a.getAccessToken()).then(done, function () { cb(""); });
+      } else if (typeof a.refreshAccessToken === "function") {
+        Promise.resolve(a.refreshAccessToken()).then(function () {
+          done((a.data && a.data.access_token) || "");
+        }, function () { cb(""); });
+      } else {
+        done((a.data && a.data.access_token) || "");
+      }
+    } catch (e) { cb(""); }
+  });
 }
 
 // Setup base Stomp connection so that all other components can it use
@@ -168,6 +202,17 @@ stomp_client.onStompError = stomp_error_callback;
 stomp_client.beforeConnect = function () {
   // Re-read the token on EVERY (re)connect — the header captured at load
   // goes stale (30-min expiry) and retrying with it loops on ERROR forever.
+  // P311 (the companion app): with no local token, ask the frontend's hass
+  // (async) — stomp_js awaits the beforeConnect callback when it returns a
+  // promise, so the connect goes out with the fresh token.
+  if (typeof nspanelFrontendHass === "function" && !nspanelStompToken()) {
+    return new Promise(function (resolve) {
+      nspanelStompTokenAsync(function (tok) {
+        try { stomp_client.connectHeaders["access_token"] = tok; } catch (e) {}
+        resolve();
+      });
+    });
+  }
   try { stomp_client.connectHeaders["access_token"] = nspanelStompToken(); } catch (e) {}
 };
 stomp_client.stompVersions = new StompJs.Versions([]); // Set empty versions as to not set the "Sec-WebSocket-Protocol" header as that causes chrome to fail to connect.
