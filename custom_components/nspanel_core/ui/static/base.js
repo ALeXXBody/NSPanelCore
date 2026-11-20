@@ -113,108 +113,124 @@ function nspanelRecheckLogin() {
   } catch (e) {}
 }
 var _nspSessionToken = "";
-/* P287: exchange the (short-lived) HA access token for the manager's
- * long-lived session cookie once per token. The response sets an httponly
- * cookie that every PLAIN navigation carries — including the Integrations
- * page links, which send no Authorization header at all. */
-async function nspanelEnsureSession() {
-  try {
-    var tok = nspanelGetToken();
-    if (!tok || tok === _nspSessionToken) return;
-    _nspSessionToken = tok;
-    await nspanelFetch("/nspanel_core/auth_session", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: "{}"
-    });
-  } catch (e) {}
-}
-document.addEventListener("DOMContentLoaded", function () { nspanelEnsureSession(); });
+var _nspanelSessionEstablished = false;
 
-/* P311 (the HA companion app): the app's webview has NO stored session and
- * the app delivers its token through its own external-auth channel — the
- * panel shim never sees it. But our page is SAME-ORIGIN with the HA
- * frontend: reach the frontend's <home-assistant> through the iframe chain
- * (inner page -> shim -> frontend), take the live token from whatever shape
- * the frontend exposes, and exchange it for the manager's 24h session
- * cookie. After that every pull, htmx request and STOMP connect carries the
- * session. */
-/* P311: the frontend's own hass — reachable SAME-ORIGIN through the iframe
- * chain. Its fetchWithAuth/callApi run the app's external auth natively, so
- * the app's token never needs to be extracted at all. */
-let _nspanelFrontendHassPromise = null;
-function nspanelFrontendHass() {
-  if (_nspanelFrontendHassPromise) return _nspanelFrontendHassPromise;
-  _nspanelFrontendHassPromise = new Promise(function (resolve) {
-    let w = window;
-    for (let hop = 0; hop < 4 && w; hop++) {
-      try {
-        if (w.document && w.document.querySelector) {
-          const ha = w.document.querySelector("home-assistant");
-          if (ha && ha.hass && ha.hass.auth) { resolve(ha.hass); return; }
-        }
-      } catch (e) {}
-      w = (w.parent && w.parent !== w) ? w.parent : null;
-    }
-    resolve(null);
-  });
-  return _nspanelFrontendHassPromise;
-}
-
-async function nspanelBootstrapFromFrontend() {
-  if (nspanelGetToken()) return nspanelGetToken();
+/* P311: the HA companion app delivers auth via the frontend's own hass.
+ * Reach it through the same-origin iframe chain and either extract a token
+ * or use fetchWithAuth (the app-native mechanism) directly. */
+let _nspanelFrontendHassCache = undefined; // undefined=unknown, null=absent
+function nspanelFindFrontendHassSync() {
   let w = window;
-  for (let hop = 0; hop < 3 && w; hop++) {
+  for (let hop = 0; hop < 5 && w; hop++) {
     try {
       if (w.document && w.document.querySelector) {
         const ha = w.document.querySelector("home-assistant");
-        const a = ha && ha.hass && ha.hass.auth;
-        if (a) {
-          let tok = (a.data && a.data.access_token) ||
-                    (typeof a.accessToken === "string" ? a.accessToken : "") ||
-                    (a.tokens && a.tokens.access_token) || "";
-          if (!tok && typeof a.getAccessToken === "function") {
-            try { tok = await a.getAccessToken(); } catch (e) {}
-          }
-          if (tok && typeof tok === "string") {
-            nspanelLiveToken = tok;
-            await nspanelEnsureSession();
-            return tok;
-          }
-        }
+        if (ha && ha.hass && ha.hass.auth) return ha.hass;
       }
     } catch (e) {}
     w = (w.parent && w.parent !== w) ? w.parent : null;
   }
-  return "";
+  return null;
+}
+function nspanelFrontendHass() {
+  const found = nspanelFindFrontendHassSync();
+  if (found) { _nspanelFrontendHassCache = found; return Promise.resolve(found); }
+  if (_nspanelFrontendHassCache) return Promise.resolve(_nspanelFrontendHassCache);
+  return Promise.resolve(null);
+}
+
+async function nspanelExtractTokenFromHass(h) {
+  try {
+    const a = h && h.auth;
+    if (!a) return "";
+    let tok = (a.data && a.data.access_token) ||
+              (typeof a.accessToken === "string" ? a.accessToken : "") ||
+              (a.tokens && a.tokens.access_token) || "";
+    if (tok) return tok;
+    if (typeof a.getAccessToken === "function") {
+      try { tok = await a.getAccessToken(); } catch (e1) {}
+    }
+    if (!tok && typeof a.refreshAccessToken === "function") {
+      try { await a.refreshAccessToken(); } catch (e2) {}
+      tok = (a.data && a.data.access_token) ||
+            (typeof a.accessToken === "string" ? a.accessToken : "") ||
+            (a.tokens && a.tokens.access_token) || "";
+    }
+    return (typeof tok === "string" ? tok : "") || "";
+  } catch (e) { return ""; }
+}
+
+async function nspanelEnsureSession() {
+  try {
+    if (_nspanelSessionEstablished) return true;
+    const tok = nspanelGetToken();
+    if (tok) {
+      if (tok === _nspSessionToken) { _nspanelSessionEstablished = true; return true; }
+      _nspSessionToken = tok;
+      const resp = await fetch("/nspanel_core/auth_session", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + tok
+        },
+        body: "{}"
+      });
+      if (resp && resp.ok) { _nspanelSessionEstablished = true; return true; }
+    }
+    // No token string? Use the frontend's own auth to establish the session.
+    const fh = await nspanelFrontendHass();
+    if (fh && typeof fh.fetchWithAuth === "function") {
+      const resp = await fh.fetchWithAuth("/nspanel_core/auth_session", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      });
+      if (resp && resp.ok) { _nspanelSessionEstablished = true; return true; }
+    }
+    return false;
+  } catch (e) { return false; }
+}
+
+var _nspanelBootstrapDone = false;
+async function nspanelBootstrapFromFrontend(force) {
+  try {
+    if (!force && _nspanelBootstrapDone) return nspanelGetToken() || "session";
+    const fh = await nspanelFrontendHass();
+    if (!fh) {
+      // try direct extraction from chain even if hass.auth shape odd
+      return nspanelGetToken();
+    }
+    let tok = nspanelGetToken();
+    if (!tok) tok = await nspanelExtractTokenFromHass(fh);
+    if (tok) {
+      nspanelLiveToken = tok;
+      try { nspanelHideLoginBanner(); } catch (e1) {}
+    }
+    const ok = await nspanelEnsureSession();
+    if (ok || tok) { _nspanelBootstrapDone = true; return tok || "session"; }
+    return "";
+  } catch (e) { return ""; }
 }
 
 (function nspanelBootstrapRetry() {
-  let tries = 0, misses = 0;
-  const tick = function () {
+  let tries = 0;
+  const tick = async function () {
     tries++;
-    nspanelBootstrapFromFrontend().then(function (tok) {
-      if (tok) return;  // the session is set; the pulls proceed
-      // stop early: no HA frontend anywhere in the chain means this page
-      // was opened standalone — nothing to bootstrap from
-      let found = false, w = window;
-      for (let hop = 0; hop < 3 && w; hop++) {
-        try {
-          if (w.document && w.document.querySelector &&
-              w.document.querySelector("home-assistant")) { found = true; break; }
-        } catch (e) {}
-        w = (w.parent && w.parent !== w) ? w.parent : null;
+    try {
+      const got = await nspanelBootstrapFromFrontend(false);
+      if (got) {
+        try { htmx.trigger(document.body, "nspanel:auth-ready"); } catch (e1) {}
+        // also trigger the nspanels section if waiting
+        try { var sec = document.getElementById("nspanels_section"); if (sec) htmx.trigger(sec, "register_request"); } catch (e2) {}
       }
-      misses = found ? 0 : misses + 1;
-      if (misses >= 3 || tries >= 10) return;
-      setTimeout(tick, 1500);
-    }).catch(function () {
-      if (tries < 10) setTimeout(tick, 1500);
-    });
+      if (_nspanelBootstrapDone) return;
+    } catch (e) {}
+    if (tries < 40) setTimeout(tick, 1000);
   };
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", tick);
+    document.addEventListener("DOMContentLoaded", function () { tick(); });
   } else {
     tick();
   }
@@ -226,24 +242,21 @@ async function nspanelFetchOnce(url, options) {
   try { await nspanelRefreshTokenIfNeeded(); } catch (err) {}
   var tok = nspanelGetToken();
   if (tok) headers["Authorization"] = "Bearer " + tok;
-  return fetch(url, Object.assign({}, options, { headers: headers }));
+  return fetch(url, Object.assign({}, options, { headers: headers, credentials: options.credentials || "same-origin" }));
 }
 
-/* P282: a 401 (a stale token — the remote sessions rotate) forces the
- * refresh and retries ONCE before surfacing the failure. */
 async function nspanelFetch(url, options) {
   var resp = await nspanelFetchOnce(url, options);
-  if (resp.status === 401) {
+  if (resp && resp.status === 401) {
     try { await nspanelRefreshTokenIfNeeded(true); } catch (e) {}
+    try { await nspanelBootstrapFromFrontend(true); } catch (e2) {}
     resp = await nspanelFetchOnce(url, options);
   }
-  /* P311 (the HA companion app): when this page holds no token of its own,
-   * route the call through the frontend's hass — its fetchWithAuth runs the
-   * app's external auth natively. */
-  if (resp.status === 401 && !nspanelGetToken()) {
+  /* P311 (the HA companion app): route through the frontend's own auth. */
+  if (resp && resp.status === 401) {
     const fh = await nspanelFrontendHass();
     if (fh && typeof fh.fetchWithAuth === "function") {
-      try { resp = await fh.fetchWithAuth(url, options); } catch (e) {}
+      try { resp = await fh.fetchWithAuth(url, options); } catch (e3) {}
     }
   }
   return resp;
@@ -430,26 +443,51 @@ try {
   try { nspanelRefreshTokenIfNeeded(); } catch (e) {}
   setInterval(function () { try { nspanelRefreshTokenIfNeeded(); } catch (e) {} }, 60000);
 
-  // Something went wrong while sending/processing AJAX request via HTMX. Show error toast.
-  // The server usually answers errors as plain text/HTML (not JSON), so
-  // surface the HTTP status + body instead of dying in JSON.parse — the old
-  // code swallowed every real message behind a generic one.
+  // HTMX request failures. On 401 (common in the HA companion app while
+  // auth is still being established) attempt bootstrap/session recovery and
+  // retry once before surfacing an error.
+  var _nspanel401Recovering = false;
   document.addEventListener("htmx:responseError", (event) => {
     var xhr = event.detail.xhr;
     var status = xhr ? xhr.status : 0;
     var body = "";
     try { body = (xhr.responseText || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200); } catch (e) {}
     if (status === 401) {
+      var elt = event.detail.elt || event.detail.target;
+      try { if (elt) elt.__nspanel401Retry = (elt.__nspanel401Retry || 0) + 1; } catch (e0) {}
+      var retryCount = (elt && elt.__nspanel401Retry) || 1;
+      if (retryCount <= 3) {
+        (async function () {
+          try { await nspanelBootstrapFromFrontend(true); } catch (e1) {}
+          try { await nspanelEnsureSession(); } catch (e2) {}
+          try {
+            if (elt && elt.isConnected) {
+              // Re-issue the element's request when possible.
+              if (elt.getAttribute && (elt.getAttribute("hx-get") || elt.getAttribute("hx-post") || elt.getAttribute("hx-put") || elt.getAttribute("hx-delete"))) {
+                htmx.trigger(elt, "nspanel-retry");
+                htmx.trigger(elt, "load");
+                htmx.trigger(elt, "revealed");
+                htmx.trigger(elt, "register_request");
+              }
+            }
+            var sec = document.getElementById("nspanels_section");
+            if (sec) htmx.trigger(sec, "register_request");
+          } catch (e3) {}
+        })();
+        // Give recovery a moment; only show if it still isn't fixed.
+        if (!_nspanel401Recovering) {
+          _nspanel401Recovering = true;
+          setTimeout(function () { _nspanel401Recovering = false; }, 2500);
+        }
+        return;
+      }
       show_error_toast(
         0,
         "Not authorized (HTTP 401). Log out and back in to Home Assistant, reload this page, and try again." + (body ? " Server said: " + body : ""),
         ERROR_TOAST_SOURCE_WEB_INTERFACE,
       );
-      try { nspanelRefreshTokenIfNeeded(); } catch (e) {}
-      /* P311: in the HA companion app the automatic token hand-off can
-       * fail silently — give the user the ONE-TIME login card instead of
-       * a dead end: a long-lived HA token pasted once sets the panel's
-       * own 24h session and the app works from then on. */
+      try { nspanelRefreshTokenIfNeeded(true); } catch (e4) {}
+      try { nspanelBootstrapFromFrontend(true); } catch (e5) {}
       return;
     }
     try {

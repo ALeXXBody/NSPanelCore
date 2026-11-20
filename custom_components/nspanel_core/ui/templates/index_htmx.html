@@ -4,17 +4,18 @@
 
 <script src="/nspanel_core/static/index_htmx.js?version={{ static_ver }}"></script>
 <script>
-/* P311: the shell is public; the panel data arrives via the AUTHED htmx
- * pull once the login token is available (the HA app delivers it async).
- * Without a token the pull is deferred — htmx answers 401 otherwise. */
-(function waitForToken(i) {
-  var t = (typeof nspanelGetToken === "function") ? nspanelGetToken() : "";
-  if (typeof htmx === "undefined") { setTimeout(function(){waitForToken(i);},400); return; }
-  if (t || i >= 40) {
+/* P311: the shell is public; the panel data arrives via authed htmx.
+ * Wait for auth bootstrap/session when possible, but always trigger — the
+ * htmx 401 handler will retry after establishing auth in the HA app. */
+(function waitForAuth(i) {
+  if (typeof htmx === "undefined") { setTimeout(function(){waitForAuth(i);},300); return; }
+  var ready = false;
+  try { ready = !!(window._nspanelSessionEstablished || window._nspanelBootstrapDone || (typeof nspanelGetToken === "function" && nspanelGetToken())); } catch (e) {}
+  if (ready || i >= 10) {
     try { htmx.trigger(document.getElementById("nspanels_section"), "register_request"); } catch (e) {}
     return;
   }
-  setTimeout(function () { waitForToken(i + 1); }, 400);
+  setTimeout(function () { waitForAuth(i + 1); }, 300);
 })(0);
 </script>
 <link rel="stylesheet" type="text/css" href="/nspanel_core/static/index.css?version={{ static_ver }}">

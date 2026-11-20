@@ -11,33 +11,68 @@
 // localStorage/sessionStorage is empty, partitioned, or wiped by privacy
 // tools. Storage-based lookup in the UI remains as fallback.
 class NSPanelCorePanel extends HTMLElement {
+  _extractToken(h) {
+    try {
+      if (!h || !h.auth) return "";
+      const a = h.auth;
+      return (a.data && a.data.access_token) ||
+             (typeof a.accessToken === "string" ? a.accessToken : "") ||
+             (a.tokens && a.tokens.access_token) || "";
+    } catch (e) { return ""; }
+  }
+
+  async _refreshTokenFromHass(h) {
+    try {
+      const a = h && h.auth;
+      if (!a) return "";
+      let t = this._extractToken(h);
+      if (t) return t;
+      if (typeof a.getAccessToken === "function") {
+        try { t = await a.getAccessToken(); } catch (e1) {}
+      }
+      if (!t && typeof a.refreshAccessToken === "function") {
+        try { await a.refreshAccessToken(); } catch (e2) {}
+        t = (a.data && a.data.access_token) ||
+            (typeof a.accessToken === "string" ? a.accessToken : "") ||
+            (a.tokens && a.tokens.access_token) || "";
+      }
+      return (typeof t === "string" ? t : "") || "";
+    } catch (e) { return ""; }
+  }
+
+  _applyToken(t) {
+    if (!t || t === this._liveToken) return;
+    this._liveToken = t;
+    this._pushToken();
+    try {
+      document.cookie = "nspanel_token=" + encodeURIComponent(t) +
+        "; path=/; max-age=3600; SameSite=Strict";
+    } catch (e) {}
+    this._exchangeSession(t);
+    if (this._frame) {
+      const want = "/nspanel_core/ui?ha_token=" + encodeURIComponent(t);
+      try {
+        const cur = this._frame.src || "";
+        if (cur.indexOf("ha_token=") === -1 ||
+            decodeURIComponent((cur.split("ha_token=")[1] || "").split("&")[0]) !== t) {
+          this._frame.src = want;
+        }
+      } catch (e2) { this._frame.src = want; }
+    }
+  }
+
   set hass(h) {
     try {
       this._hassRef = h;  // P311: the poll re-reads the LIVE auth later
-      const t = h && h.auth && h.auth.data && h.auth.data.access_token;
-      if (t && t !== this._liveToken) {
-        this._liveToken = t;
-        this._pushToken();
-        /* P285 THE PROPER FIX: the session cookie — set by this same-origin
-         * shim, carried by EVERY navigation to the integration's pages
-         * (the sidebar, the Integrations links, new tabs), validated
-         * server-side against the HA auth store. */
-        document.cookie = "nspanel_token=" + encodeURIComponent(t) +
-          "; path=/; max-age=3600; SameSite=Strict";
-        // P287: exchange the short-lived HA token for the manager's 24h
-        // session cookie. The response sets an httponly cookie that EVERY
-        // navigation carries (sidebar, Integrations links, new tabs) —
-        // no 5-minute expiry, no referer tricks.
-        this._exchangeSession(t);
-        // P281: the gated pages verify the token from the URL — keep the
-        // iframe's credential current (one src refresh per token rotation)
-        if (this._frame) {
-          const want = "/nspanel_core/ui?ha_token=" + encodeURIComponent(t);
-          if (this._frame.src.indexOf("ha_token=") === -1 ||
-              decodeURIComponent(this._frame.src.split("ha_token=")[1] || "") !== t) {
-            this._frame.src = want;
-          }
-        }
+      const t = this._extractToken(h);
+      if (t) {
+        this._applyToken(t);
+      } else if (h && h.auth && !this._tokenFetchInFlight) {
+        this._tokenFetchInFlight = true;
+        this._refreshTokenFromHass(h).then((tok) => {
+          this._tokenFetchInFlight = false;
+          if (tok) this._applyToken(tok);
+        }).catch(() => { this._tokenFetchInFlight = false; });
       }
     } catch (e) {}
   }
@@ -66,18 +101,25 @@ class NSPanelCorePanel extends HTMLElement {
       try { this._pushToken(); } catch (e) {}
     });
     this.appendChild(iframe);
-    /* P311 (A-to-Z): the app delivers its token LATE — `set hass` may run
-     * before auth.data exists and is never re-fired. Poll the LIVE hass
-     * (the same one HA assigned us) and navigate the moment it lands. */
+    /* P311: the app delivers its token LATE. Keep reading the LIVE hass
+     * and try async refresh/getAccessToken until we have a token. The
+     * public shell still loads immediately and can self-authenticate. */
     this._pollStart = Date.now();
     this._tokenPoll = setInterval(() => {
       try {
-        const t = this._extractToken(this._hassRef || this._lastHass);
-        if (t && t !== this._liveToken) {
-          this._liveToken = t;
+        const h = this._hassRef;
+        const t = this._extractToken(h);
+        if (t) {
+          this._applyToken(t);
           clearInterval(this._tokenPoll);
-          this._exchangeSession(t);
-          this._frame.src = "/nspanel_core/ui?ha_token=" + encodeURIComponent(t);
+          return;
+        }
+        if (h && h.auth && !this._tokenFetchInFlight) {
+          this._tokenFetchInFlight = true;
+          this._refreshTokenFromHass(h).then((tok) => {
+            this._tokenFetchInFlight = false;
+            if (tok) this._applyToken(tok);
+          }).catch(() => { this._tokenFetchInFlight = false; });
         }
         if (Date.now() - this._pollStart > 120000) clearInterval(this._tokenPoll);
       } catch (e) {}

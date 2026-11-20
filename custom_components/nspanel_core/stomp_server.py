@@ -148,22 +148,43 @@ class StompServer:
             return False
         return True
 
-    def _check_auth(self, headers: dict[str, str]) -> bool:
-        """Validate the STOMP CONNECT access_token against HA auth.
-
-        Browser WebSocket handshakes cannot carry an Authorization header,
-        so the UI sends its HA access token as a CONNECT header (same-origin
-        localStorage). No token (or a bad one) = no connection.
-        """
+    async def _check_auth(self, headers: dict[str, str], request: web.Request | None = None) -> bool:
+        """Validate STOMP auth via HA access token (CONNECT header) or the
+        manager's 24h session cookie on the WS handshake request."""
         if self.hass is None:
             return True  # standalone/test use
         token = headers.get("access_token", "") or headers.get("access-token", "")
-        if not token:
-            return False
-        try:
-            return self.hass.auth.async_validate_access_token(token) is not None
-        except Exception:  # noqa: BLE001
-            return False
+        auth = getattr(self.hass, "auth", None)
+        if token and auth is not None:
+            try:
+                # HA: async_validate_access_token returns the refresh token or None
+                if auth.async_validate_access_token(token) is not None:
+                    return True
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                res = auth.async_validate_token(token)
+                if asyncio.iscoroutine(res):
+                    res = await res
+                if res:
+                    return True
+            except Exception:  # noqa: BLE001
+                pass
+        if request is not None:
+            try:
+                cookie = request.cookies.get("nspanel_session", "")
+                if cookie:
+                    # validate against the manager's session store
+                    hass = self.hass
+                    domain_data = hass.data.get("nspanel_core", {}) if hass else {}
+                    for manager in domain_data.values():
+                        sessions = getattr(getattr(getattr(manager, "config", None), "settings", None), "nspanel_sessions", None) or {}
+                        import time as _time
+                        if sessions.get(cookie, 0) > _time.time():
+                            return True
+            except Exception:  # noqa: BLE001
+                pass
+        return False
 
     def _topic(self, name: str) -> dict:
         t = self.topics.get(name)
@@ -234,6 +255,7 @@ class StompServer:
         ws = web.WebSocketResponse()
         await ws.prepare(request)
         conn = StompConnection(ws)
+        conn.request = request
         self.connections.add(conn)
         _LOGGER.info("STOMP client connected: %s", request.remote)
         try:
@@ -258,7 +280,7 @@ class StompServer:
             return
 
         if command == "CONNECT":
-            if not self._check_auth(headers):
+            if not await self._check_auth(headers, getattr(conn, "request", None)):
                 await conn.send("ERROR", {"message": "Not authorized"}, "Missing or invalid access_token")
                 await conn.ws.close()
                 return
