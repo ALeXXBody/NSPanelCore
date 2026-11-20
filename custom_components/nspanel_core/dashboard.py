@@ -756,33 +756,6 @@ def _screensaver_context(manager, panel) -> dict:
     }
 
 
-class EditPanelView(HomeAssistantView):
-    """The ORIGINAL panel settings page (edit_nspanel template)."""
-
-    url = f"{URL_BASE}/edit/{{panel_id}}"
-    name = "nspanel_core:edit"
-    requires_auth = False
-
-    async def get(self, request, **kwargs):
-        manager = _manager(request)
-        try:
-            panel_id = int(request.match_info["panel_id"])
-        except (KeyError, ValueError, TypeError):
-            html = _render("index_shell.html", page_title="Bad panel id", nspanels=[])
-            return web.Response(text=html, content_type="text/html")
-        panel = next((p for p in manager.panels() if p.id == panel_id), None)
-        if panel is None:
-            html = _render("index_shell.html", page_title="Panel not found", nspanels=[])
-            return web.Response(text=html, content_type="text/html")
-        # Context shaped like the Django view: panel_info wrapper + settings
-        ctx = _panel_settings_context(manager, panel)
-        ctx["page_title"] = f"{panel.name} — settings"
-        ctx["nspanels"] = _panels_context(manager)
-        ctx["moved_hidden"] = True  # P266: the moved sections live ONLY in the studio
-        html = _render("edit_nspanel.html", **ctx)
-        return web.Response(text=html, content_type="text/html")
-
-
 class DashboardPanelSettingsView(HomeAssistantView):
     """P263: the panel-settings fields, rendered for the Dashboard studio's
     Panel tab — the same device-level fields as the edit page."""
@@ -2149,6 +2122,10 @@ class EditRoomView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        # FULL AUDIT FIX: same shadowed-gate pattern as /edit — gate the page
+        if not await _nspanel_auth_ok(request):
+            return web.Response(status=401, text="Unauthorized")
+
         manager = _manager(request)
         try:
             room_id = int(request.match_info["room_id"])
