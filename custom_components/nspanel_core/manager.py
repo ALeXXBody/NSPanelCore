@@ -1079,12 +1079,14 @@ class NSPanelCoreManager:
                 "Panel requesting access",
                 f"NSPanel '{friendly}' ({mac}) wants to join. Accept or deny it on the NSPanels page.",
             )
-        elif not panel.accepted and not panel.denied:
-            # P311 discovery-accept: the user already accepted this panel at
-            # DISCOVERY time (single accept, per the P215 flow) — the
-            # provisioning push followed, the panel reboots into the broker
-            # and registers HERE; it becomes accepted on the spot, gets its
-            # register_accept below, and appears live. No second accept.
+        # P311 discovery-accept: the user already accepted this panel at
+        # DISCOVERY time (single accept, per the P215 flow) — the
+        # provisioning push followed, the panel reboots into the broker and
+        # registers HERE; it becomes accepted on the spot, gets its
+        # register_accept below, and appears live. No second accept.
+        # (Runs for a FRESHLY CREATED row too — the E2E chain test caught
+        # the pre-accept being skipped on first registration.)
+        if not panel.accepted and not panel.denied:
             if self.maybe_preaccept_hostname(panel, friendly):
                 _LOGGER.info(
                     "Panel %s (%s) pre-accepted at discovery — accepting now",
