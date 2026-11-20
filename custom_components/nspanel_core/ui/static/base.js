@@ -198,6 +198,51 @@ async function nspanelBootstrapFromFrontend() {
   }
 })();
 
+/* P311: the ONE-TIME manual login — a Home Assistant long-lived token
+ * pasted once sets the panel's 24h session; after that the app works with
+ * no further ceremony. Shown when the automatic hand-off fails. */
+function nspanelShowLoginCard(reason) {
+  try {
+    let card = document.getElementById("nspanel-login-card");
+    if (!card) {
+      card = document.createElement("div");
+      card.id = "nspanel-login-card";
+      card.style.cssText = "position:fixed;inset:auto 12px 12px 12px;z-index:99999;" +
+        "background:#141821;color:#c8cbce;border:1px solid #2a2f3a;border-radius:12px;" +
+        "padding:14px;font:13px system-ui,sans-serif;max-width:520px;margin:0 auto;";
+      document.body.appendChild(card);
+    }
+    card.innerHTML =
+      "<div style='font-weight:700;margin-bottom:6px'>NSPanel Core needs a one-time login</div>" +
+      "<div style='opacity:.8;margin-bottom:8px'>" +
+      "Home Assistant → your profile → Security → Long-lived access tokens → Create token, " +
+      "then paste it here. Reason: " + (reason || "the automatic hand-off did not complete") + "</div>" +
+      "<input id='nspanel-lt' type='password' placeholder='Long-lived access token' " +
+      "style='width:100%;padding:8px;background:#0d1016;color:#e8eaec;border:1px solid #2a2f3a;border-radius:8px'>" +
+      "<button id='nspanel-lt-go' style='margin-top:8px;padding:8px 14px;background:#39c8e8;" +
+      "color:#06222b;border:0;border-radius:8px;font-weight:700;cursor:pointer'>Log in</button>" +
+      "<span id='nspanel-lt-status' style='margin-left:8px;opacity:.8'></span>";
+    document.getElementById("nspanel-lt-go").onclick = function () {
+      const tok = String(document.getElementById("nspanel-lt").value || "").trim();
+      const st = document.getElementById("nspanel-lt-status");
+      if (!tok) { st.textContent = "paste the token first"; return; }
+      st.textContent = "logging in…";
+      fetch("/nspanel_core/auth_session", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + tok },
+        body: "{}"
+      }).then(function (r) {
+        if (r.ok) {
+          st.textContent = "logged in — reloading…";
+          setTimeout(function () { location.reload(); }, 600);
+        } else {
+          st.textContent = "rejected (HTTP " + r.status + ") — check the token";
+        }
+      }).catch(function (e) { st.textContent = "failed: " + e; });
+    };
+  } catch (e) {}
+}
+
 function nspanelClientId() {
   var base = "";
   try {
@@ -427,6 +472,11 @@ try {
         ERROR_TOAST_SOURCE_WEB_INTERFACE,
       );
       try { nspanelRefreshTokenIfNeeded(); } catch (e) {}
+      /* P311: in the HA companion app the automatic token hand-off can
+       * fail silently — give the user the ONE-TIME login card instead of
+       * a dead end: a long-lived HA token pasted once sets the panel's
+       * own 24h session and the app works from then on. */
+      try { nspanelShowLoginCard(body); } catch (e) {}
       return;
     }
     try {
