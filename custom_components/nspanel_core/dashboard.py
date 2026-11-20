@@ -441,39 +441,132 @@ class ProvisionPushView(HomeAssistantView):
         s = manager.config.settings
         if not s.panel_broker_host:
             return web.Response(text="First-run settings missing", status=409)
-        base = f"http://{panel.ip_address}" if panel.ip_address else ""
-        if not base:
+        if not panel.ip_address:
             return web.Response(text="Panel has no IP yet", status=409)
-        import json as _json
-        body = _json.dumps({
-            "mqtt_server": s.panel_broker_host,
-            "mqtt_port": s.panel_broker_port,
-            "mqtt_user": s.panel_broker_user,
-            "mqtt_pass": s.panel_broker_pass,
-        })
+        return await _push_broker_to_panel(
+            manager, f"http://{panel.ip_address}", panel.name
+        )
 
-        def _push():
-            import urllib.request
-            # FULL AUDIT FIX: the panel's CSRF guard (P279) only accepts
-            # requests whose Content-Type header is
-            # application/x-www-form-urlencoded (nsp_web_post_ok) — an
-            # application/json push is 403-rejected before the body is
-            # ever parsed (the body itself is format-agnostic: the firmware
-            # extracts mqtt_server/port/user/pass fields from the raw
-            # string). The manager's zero-typing provisioning could never
-            # succeed against the native firmware because of this header.
-            req = urllib.request.Request(
-                f"{base}/provision", data=body.encode(),
-                headers={"Content-Type": "application/x-www-form-urlencoded"})
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                return resp.read().decode("utf-8", "replace")
 
+def _broker_push_body(settings) -> bytes:
+    import json as _json
+    return _json.dumps({
+        "mqtt_server": settings.panel_broker_host,
+        "mqtt_port": settings.panel_broker_port,
+        "mqtt_user": settings.panel_broker_user,
+        "mqtt_pass": settings.panel_broker_pass,
+    }).encode()
+
+
+async def _push_broker_to_panel(manager, base: str, label: str):
+    """P216 push, shared by the per-panel and discovery-accept paths.
+
+    FULL AUDIT FIX: the panel's CSRF guard (P279, nsp_web_post_ok) requires
+    BOTH the Content-Type header application/x-www-form-urlencoded AND the
+    X-NSPanel header — an application/json push (and any push without the
+    X-NSPanel header) is 403-rejected before the body is ever parsed (the
+    body itself is format-agnostic: the firmware extracts
+    mqtt_server/port/user/pass fields from the raw string). The manager's
+    zero-typing provisioning could never succeed against the native
+    firmware because of these headers.
+    """
+    import urllib.request
+
+    body = _broker_push_body(manager.config.settings)
+
+    def _push():
+        req = urllib.request.Request(
+            f"{base}/provision", data=body,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-NSPanel": "1",
+            })
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.read().decode("utf-8", "replace")
+
+    try:
+        text = await manager.hass.async_add_executor_job(_push)
+    except Exception as err:  # noqa: BLE001
+        return web.Response(text=f"Provision push failed: {err}", status=502)
+    _LOGGER.info("Provisioned %s over HTTP: %s", label, text)
+    return web.Response(text="Provisioned — the panel is rebooting into the broker")
+
+
+class DiscoveredPanelsView(HomeAssistantView):
+    """P215/P216 DISCOVERY — the manager SEES panels without MQTT.
+
+    The designed flow (user's spec, ledger P215): a freshly flashed panel
+    asks for WiFi only, joins the network, and ADVERTISES itself (mDNS +
+    its status JSON). The manager finds it, the user accepts or declines,
+    and only THEN the MQTT settings are sent. This endpoint runs the
+    discovery: query the firmware's fixed mDNS advertisement
+    (NSPanelCore._http._tcp) and fetch each candidate's /status.json.
+    """
+
+    url = f"{URL_BASE}/api/discovered_panels"
+    name = "nspanel_core:api:discovered_panels"
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
+
+    @_gated
+    async def get(self, request, **kwargs):
+        manager = _manager(request)
         try:
-            text = await manager.hass.async_add_executor_job(_push)
+            panels = await manager.discover_panels()
         except Exception as err:  # noqa: BLE001
-            return web.Response(text=f"Provision push failed: {err}", status=502)
-        _LOGGER.info("Provisioned %s over HTTP: %s", panel.name, text)
-        return web.Response(text="Provisioned — the panel is rebooting into the broker")
+            return web.json_response({"panels": [], "error": str(err)}, status=200)
+        return web.json_response({"panels": panels})
+
+
+class DiscoveredPanelActionView(HomeAssistantView):
+    """Accept/decline a DISCOVERED panel (no config row exists yet).
+
+    accept: push the first-run broker credentials to the panel's
+    /provision, then remember the panel's hostname as pre-accepted — when
+    it registers over MQTT moments later it is accepted automatically and
+    appears live (single accept, per the user's flow). deny: remember the
+    hostname so the panel stops showing up in discovery.
+    """
+
+    url = f"{URL_BASE}/api/discovered_panel"
+    name = "nspanel_core:api:discovered_action"
+    requires_auth = False  # P295: @_gated below — never HA's ban middleware
+
+    @_gated
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        s = manager.config.settings
+        if not s.panel_broker_host:
+            return web.Response(text="First-run settings missing", status=409)
+        try:
+            form = await request.post()
+        except Exception:  # noqa: BLE001
+            return web.Response(text="Bad form", status=400)
+        action = str(form.get("action", "")).strip()
+        address = str(form.get("address", "")).strip()
+        hostname = str(form.get("hostname", "")).strip()
+        if action not in ("accept", "deny"):
+            return web.Response(text="Unknown action", status=400)
+        if (not address or "/" in address or "://" in address or "@" in address
+                or " " in address or "?" in address or "&" in address):
+            return web.Response(text="Bad address", status=400)
+        from .const import topic_safe
+        key = topic_safe(hostname) or topic_safe(address)
+        if action == "deny":
+            denied = list(getattr(s, "discovery_denied", []) or [])
+            if key and key not in denied:
+                denied.append(key)
+            s.discovery_denied = denied[-50:]
+            await manager.async_save()
+            return web.Response(text=f"{key} will no longer appear in discovery")
+        resp = await _push_broker_to_panel(manager, f"http://{address}", hostname or address)
+        if resp.status != 200:
+            return resp
+        pre = list(getattr(s, "pre_accepted_hostnames", []) or [])
+        if key and key not in pre:
+            pre.append(key)
+        s.pre_accepted_hostnames = pre[-50:]
+        await manager.async_save()
+        return resp
 
 
 class MainPageView(HomeAssistantView):

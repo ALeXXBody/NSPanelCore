@@ -13,6 +13,7 @@ Ports the external behavior of the C++ MQTT bridge onto HA's event bus:
 from __future__ import annotations
 
 import base64
+import asyncio
 import json
 import logging
 import os
@@ -1030,6 +1031,17 @@ class NSPanelCoreManager:
                 "Panel requesting access",
                 f"NSPanel '{friendly}' ({mac}) wants to join. Accept or deny it on the NSPanels page.",
             )
+        elif not panel.accepted and not panel.denied:
+            # P311 discovery-accept: the user already accepted this panel at
+            # DISCOVERY time (single accept, per the P215 flow) — the
+            # provisioning push followed, the panel reboots into the broker
+            # and registers HERE; it becomes accepted on the spot, gets its
+            # register_accept below, and appears live. No second accept.
+            if self.maybe_preaccept_hostname(panel, friendly):
+                _LOGGER.info(
+                    "Panel %s (%s) pre-accepted at discovery — accepting now",
+                    friendly, mac,
+                )
 
         # Status reflects reality, not the event: a re-register from a known
         # panel (every reboot) must re-assert its real state. The old code
@@ -1884,6 +1896,86 @@ class NSPanelCoreManager:
 
     def is_ignored_mac(self, mac: str) -> bool:
         return topic_safe(mac) in self.config.settings.ignored_macs
+
+    # ------------------------------------------------------------------
+    # P215/P216 discovery — SEE panels that have no MQTT credentials yet
+    # ------------------------------------------------------------------
+
+    _MDNS_INSTANCE = "NSPanelCore._http._tcp.local."  # wifi.cpp advertisement
+    _MDNS_TYPE = "_http._tcp.local."
+
+    async def discover_panels(self, zc=None, browse_seconds: float = 2.5) -> list[dict]:
+        """Find unprovisioned panels on the LAN: the freshly flashed panel
+        joins WiFi and ADVERTISES itself (mDNS `NSPanelCore` + /status.json);
+        the manager queries the advertisement and reads each candidate's
+        status. No MQTT involved — a panel without broker credentials can
+        still be SEEN, accepted, and then provisioned (the user's flow).
+        Declined hostnames are filtered out."""
+        if zc is None:
+            try:
+                from homeassistant.components.zeroconf import async_get_async_instance
+                zc = await async_get_async_instance(self.hass)
+            except Exception:  # noqa: BLE001 — zeroconf not available: no discovery
+                return []
+        candidates = []
+        try:
+            info = await zc.async_get_service_info(self._MDNS_TYPE, self._MDNS_INSTANCE, browse_seconds * 1000)
+        except Exception:  # noqa: BLE001
+            info = None
+        if info is not None:
+            for addr in info.parsed_addresses():
+                if addr and addr not in candidates:
+                    candidates.append(addr)
+        if not candidates:
+            return []
+        from .const import topic_safe
+        declined = {topic_safe(h) for h in (getattr(self.config.settings, "discovery_denied", []) or [])}
+        known_hostnames = {topic_safe(p.wifi_hostname or p.name) for p in self.config.panels}
+
+        async def _fetch(addr: str) -> dict | None:
+            def _get():
+                import urllib.request
+                with urllib.request.urlopen(f"http://{addr}/status.json", timeout=4) as resp:
+                    import json as _json
+                    return _json.loads(resp.read().decode("utf-8", "replace"))
+            try:
+                data = await self.hass.async_add_executor_job(_get)
+            except Exception:  # noqa: BLE001 — one dead candidate must not kill the scan
+                _LOGGER.debug("Discovery fetch failed for %s", addr, exc_info=True)
+                return None
+            if not isinstance(data, dict):
+                return None
+            hostname = str(data.get("hostname") or "")
+            key = topic_safe(hostname)
+            if key in declined or key in known_hostnames:
+                return None
+            return {
+                "address": addr,
+                "hostname": hostname,
+                "version": str(data.get("version") or ""),
+                "mqtt": str(data.get("mqtt") or ""),
+                "warnings": str(data.get("warnings") or ""),
+            }
+
+        results = await asyncio.gather(*[_fetch(a) for a in candidates])
+        return [r for r in results if r]
+
+    def maybe_preaccept_hostname(self, panel, friendly_name: str) -> bool:
+        """The discovery-accept contract: a hostname accepted at DISCOVERY
+        time accepts the panel automatically when it registers over MQTT."""
+        from .const import topic_safe
+        pre = getattr(self.config.settings, "pre_accepted_hostnames", []) or []
+        if not pre:
+            return False
+        key = topic_safe(friendly_name) or topic_safe(panel.wifi_hostname or "")
+        if not key or key not in {topic_safe(h) for h in pre}:
+            return False
+        panel.accepted = True
+        panel.denied = False
+        self.config.settings.pre_accepted_hostnames = [
+            h for h in pre if topic_safe(h) != key
+        ]
+        return True
 
     def export_state(self) -> dict:
         data = self.config.to_dict()

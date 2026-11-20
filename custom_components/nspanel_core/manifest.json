@@ -6,7 +6,8 @@
   ],
   "config_flow": true,
   "dependencies": [
-    "mqtt"
+    "mqtt",
+    "zeroconf"
   ],
   "documentation": "https://github.com/ALeXXBody/NSPanelCore",
   "integration_type": "hub",

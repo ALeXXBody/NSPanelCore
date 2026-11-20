@@ -33,4 +33,88 @@
 <div>
     {% include 'index_htmx_nspanels_section.html' %}
 </div>
+<div class="mt-4 p-3 rounded-md bg-base-100 shadow">
+  <details id="nsp_discovery_box">
+    <summary class="text-sm opacity-80 cursor-pointer">New panel? Search the network for unprovisioned panels</summary>
+    <div class="mt-2">
+      <div class="flex items-center gap-2">
+        <button id="nsp_disc_btn" class="btn btn-sm btn-primary">Search the network</button>
+        <span id="nsp_disc_status" class="text-sm opacity-80"></span>
+      </div>
+      <div id="nsp_disc_results" class="mt-2"></div>
+    </div>
+  </details>
+</div>
+<script>
+function nspanelDiscoveredRow(p) {
+  var div = document.createElement("div");
+  div.className = "flex flex-wrap items-center gap-2 py-1 border-b border-base-300";
+  var label = document.createElement("span");
+  label.className = "text-sm";
+  label.textContent = (p.hostname || "(unnamed panel)") + " — " + p.address +
+    " · fw " + (p.version || "?") + " · MQTT " + (p.mqtt || "?");
+  div.appendChild(label);
+  var acc = document.createElement("button");
+  acc.className = "btn btn-sm btn-success";
+  acc.textContent = "Accept";
+  acc.onclick = function () { nspanelDiscoveredAction("accept", p, acc); };
+  var den = document.createElement("button");
+  den.className = "btn btn-sm btn-ghost";
+  den.textContent = "Decline";
+  den.onclick = function () { nspanelDiscoveredAction("deny", p, den); };
+  div.appendChild(acc); div.appendChild(den);
+  return div;
+}
+function nspanelDiscoveredAction(action, p, btn) {
+  var st = document.getElementById("nsp_disc_status");
+  if (btn) btn.disabled = true;
+  if (st) st.textContent = (action === "accept" ? "Sending MQTT settings to " : "Declining ") + (p.hostname || p.address) + " …";
+  nspanelFetch("/nspanel_core/api/discovered_panel", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "action=" + action + "&address=" + encodeURIComponent(p.address) + "&hostname=" + encodeURIComponent(p.hostname || ""),
+  }).then(function (r) { return r.text().then(function (t) { return [r.ok, t]; }); }).then(function (res) {
+    if (st) st.textContent = res[1] || (res[0] ? "Done." : "Failed.");
+    if (res[0] && action === "accept") {
+      // the panel saves, reboots into the broker and registers — refresh
+      try { var sec = document.getElementById("nspanels_section"); if (sec) htmx.trigger(sec, "register_request"); } catch (e) {}
+      setTimeout(function () {
+        try { var s2 = document.getElementById("nspanels_section"); if (s2) htmx.trigger(s2, "register_request"); } catch (e) {}
+      }, 20000);
+    } else {
+      nspanelRunDiscovery();
+    }
+  }).catch(function (e) {
+    if (st) st.textContent = "Failed: " + e;
+    if (btn) btn.disabled = false;
+  });
+}
+function nspanelRunDiscovery() {
+  var btn = document.getElementById("nsp_disc_btn");
+  var st = document.getElementById("nsp_disc_status");
+  var box = document.getElementById("nsp_disc_results");
+  if (btn) btn.disabled = true;
+  if (st) st.textContent = "Searching the network …";
+  if (box) box.innerHTML = "";
+  nspanelFetch("/nspanel_core/api/discovered_panels", { credentials: "same-origin" })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (btn) btn.disabled = false;
+      if (st) st.textContent = (d.panels && d.panels.length) ? d.panels.length + " panel(s) found:" : "No unprovisioned panels found.";
+      if (box) {
+        box.innerHTML = "";
+        (d.panels || []).forEach(function (p) { box.appendChild(nspanelDiscoveredRow(p)); });
+      }
+    })
+    .catch(function (e) {
+      if (btn) btn.disabled = false;
+      if (st) st.textContent = "Search failed: " + e;
+    });
+}
+(function () {
+  var b = document.getElementById("nsp_disc_btn");
+  if (b) b.addEventListener("click", nspanelRunDiscovery);
+})();
+</script>
 {% endblock %}

@@ -319,6 +319,12 @@ class GlobalSettings:
     panel_broker_user: str = ""
     panel_broker_pass: str = ""
     first_run_done: bool = False
+    # P311 discovery flow (P215/P216 design): hostnames accepted/declined at
+    # DISCOVERY time (the panel has no config row yet). pre_accepted: when
+    # the panel registers over MQTT it is accepted automatically. denied:
+    # filtered out of discovery results.
+    pre_accepted_hostnames: list = field(default_factory=list)
+    discovery_denied: list = field(default_factory=list)
     theme: str = "nspmwip"
     firmware_manifest_url: str = "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/manifest.json"
     firmware_auto_check_hours: int = 24
