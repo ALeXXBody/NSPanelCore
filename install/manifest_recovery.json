@@ -1,15 +1,27 @@
 {
-  "name": "NSPanel Core — P310 RECOVERY: fw v0.1.4 (setup form works, keeps NVS)",
-  "version": "0.1.4-recovery",
+  "name": "NSPanel Core \u2014 P310 RECOVERY: fw v0.1.5 (button modes, keeps NVS)",
+  "version": "0.1.5-recovery",
   "new_install_prompt_erase": false,
   "builds": [
     {
       "chipFamily": "ESP32",
       "parts": [
-        { "path": "bootloader_native.bin", "offset": 4096 },
-        { "path": "partitions_native.bin", "offset": 32768 },
-        { "path": "ota_data_initial.bin", "offset": 57344 },
-        { "path": "native_014_recovery.bin", "offset": 65536 }
+        {
+          "path": "bootloader_native.bin",
+          "offset": 4096
+        },
+        {
+          "path": "partitions_native.bin",
+          "offset": 32768
+        },
+        {
+          "path": "ota_data_initial.bin",
+          "offset": 57344
+        },
+        {
+          "path": "native_015_recovery.bin",
+          "offset": 65536
+        }
       ]
     }
   ]
