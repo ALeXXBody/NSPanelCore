@@ -548,10 +548,12 @@ function addEntityItem(entity_id) {
   if (slot === -1) { setStatus('All ' + SLOTS.length + ' positions are taken in this page', true); return; }
   targetSlot = null;
   var ent = entities.find(function (e) { return e.entity_id === entity_id; }) || {};
+  // P312: a label is display text — truncate to the panel's 24-char
+  // standard so a long friendly_name can never fail the save
   design.items.push({
     id: 'item' + Date.now(), page: selectedPage, slot: slot,
     widget: widgetFromEntity(entity_id), entity_id: entity_id,
-    label: entityLabel(ent) || entity_id
+    label: ((entityLabel(ent) || entity_id) + '').slice(0, 24)
   });
   renderItems(); renderPreview();
   setStatus('Added ' + (entityLabel(ent) || entity_id) + ' to ' + selectedPage, false);
@@ -587,7 +589,7 @@ function renderItems() {
     return '<tr' + (sel ? ' style="outline:1px solid rgba(57,200,232,.4)"' : '') + '>' +
       '<td><select class="select is-small" style="background:#141821;color:#e8eaec;max-width:13rem" onchange="setItemEntity(' + i + ', this.value)">' + entityOpts(it.widget, it.entity_id) + '</select></td>' +
       '<td><select class="select is-small" style="background:#141821;color:#e8eaec" onchange="onWidgetChange(' + i + ', this.value)">' + widgetOpts(it.widget) + '</select></td>' +
-      '<td><input class="input is-small" maxlength="24" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + esc(it.label) + '" onchange="design.items[' + i + '].label=this.value;renderPreview()"></td>' +
+      '<td><input class="input is-small" maxlength="24" style="background:#141821;color:#e8eaec;border-color:#2a2f3a" value="' + esc(it.label) + '" onchange="design.items[' + i + '].label=this.value.slice(0,24);renderPreview()"></td>' +
       '<td><button class="button is-small is-danger" onclick="removeItem(\'' + it.id + '\')">✕</button></td>' +
       '</tr>';
   }).join('');

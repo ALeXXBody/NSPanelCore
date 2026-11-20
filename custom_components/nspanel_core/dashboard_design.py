@@ -73,7 +73,7 @@ class DashItem:
         if not 0 <= self.slot <= 5:
             raise DesignError("slot must be 0-5 (6 tiles per page)")
         if len(self.label) > 24:
-            raise DesignError("label too long (max 24 chars)")
+            self.label = self.label[:24]  # a label never fails the save
 
     def to_dict(self) -> dict:
         return {

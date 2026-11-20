@@ -123,3 +123,42 @@ def test_coming_soon_placeholder_removed():
     src = (REPO / "custom_components/nspanel_core/dashboard.py").read_text()
     assert "PlaceholderPageView" not in src
     assert "ComingSoonView" in src  # the catch-all remains
+
+
+def test_long_entity_label_truncates_never_fails_the_save():
+    """P312 studio analysis: an entity's friendly_name can exceed the
+    panel's 24-char label standard — the save must TRUNCATE the label,
+    never fail (the user's 'changes are not saving' was one long name
+    failing the whole design)."""
+    from nspanel_core.dashboard_design import PanelDesign
+    design = {"design": {"mac": "e465b849a100",
+        "pages": [{"name": "dash_kitchen", "title": "Kitchen",
+                   "background": "bg_plain", "background_image": ""}],
+        "items": [{"id": "item1737412345678", "page": "dash_kitchen", "slot": 0,
+                   "widget": "light", "entity_id": "light.kitchen_ceiling_main_light",
+                   "label": "Kitchen Ceiling Main Light Group"}],
+        "screensaver_page": "dash_kitchen"}}
+    mgr = _mgr()
+    mgr.dash = MagicMock()
+    mgr.dash.async_save_design = AsyncMock(side_effect=lambda d: d.validate())
+    with patch.object(D, "_manager", return_value=mgr):
+        with patch.object(D, "_nspanel_auth_ok", AsyncMock(return_value=True)):
+            class _B:
+                async def json(self):
+                    return design
+            resp = _run(D.DashboardSaveView().post(_B()))
+    assert resp.status == 200, resp.text
+    saved = mgr.dash.async_save_design.await_args.args[0]
+    assert saved.items[0].label == "Kitchen Ceiling Main Lig"[:24] or \
+           len(saved.items[0].label) <= 24
+
+
+def test_studio_page_waits_for_auth_and_renders_gallery():
+    """The studio's boot waits for the established session (or an immediate
+    no-frontend verdict), and re-renders the gallery once auth lands — the
+    <img> URLs embed the credential at render time."""
+    html = (REPO / "custom_components/nspanel_core/ui/templates/dashboard.html").read_text()
+    assert "function studioBoot()" in html
+    assert "_nspanelBootstrapDone" in html
+    assert "setTimeout(loadGallery, 800)" in html
+    assert "nspanelFrontendHass" in html  # the no-frontend early boot
