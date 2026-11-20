@@ -445,8 +445,9 @@ try {
 
   // HTMX request failures. On 401 (common in the HA companion app while
   // auth is still being established) attempt bootstrap/session recovery and
-  // retry once before surfacing an error.
-  var _nspanel401Recovering = false;
+  // retry before surfacing an error. Retries are throttled to avoid storms.
+  var _nspanel401ToastShown = false;
+  var _nspanel401GlobalRecovery = null;
   document.addEventListener("htmx:responseError", (event) => {
     var xhr = event.detail.xhr;
     var status = xhr ? xhr.status : 0;
@@ -454,42 +455,54 @@ try {
     try { body = (xhr.responseText || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200); } catch (e) {}
     if (status === 401) {
       var elt = event.detail.elt || event.detail.target;
-      try { if (elt) elt.__nspanel401Retry = (elt.__nspanel401Retry || 0) + 1; } catch (e0) {}
-      var retryCount = (elt && elt.__nspanel401Retry) || 1;
-      if (retryCount <= 3) {
-        (async function () {
-          try { await nspanelBootstrapFromFrontend(true); } catch (e1) {}
-          try { await nspanelEnsureSession(); } catch (e2) {}
+      var now = Date.now();
+      try {
+        if (!elt) elt = document.body;
+        elt.__nspanel401Count = (elt.__nspanel401Count || 0) + 1;
+        if (elt.__nspanel401RetryAt && (now - elt.__nspanel401RetryAt) < 2500) {
+          return; // a retry was just scheduled for this element
+        }
+      } catch (e0) {}
+      var count = (elt && elt.__nspanel401Count) || 1;
+      if (count <= 4) {
+        try { if (elt) elt.__nspanel401RetryAt = now; } catch (e1) {}
+        if (!_nspanel401GlobalRecovery) {
+          _nspanel401GlobalRecovery = (async function () {
+            try { await nspanelBootstrapFromFrontend(true); } catch (e2) {}
+            try { await nspanelEnsureSession(); } catch (e3) {}
+          })().finally(function () {
+            setTimeout(function () { _nspanel401GlobalRecovery = null; }, 1500);
+          });
+        }
+        setTimeout(function () {
           try {
-            if (elt && elt.isConnected) {
-              // Re-issue the element's request when possible.
-              if (elt.getAttribute && (elt.getAttribute("hx-get") || elt.getAttribute("hx-post") || elt.getAttribute("hx-put") || elt.getAttribute("hx-delete"))) {
-                htmx.trigger(elt, "nspanel-retry");
-                htmx.trigger(elt, "load");
-                htmx.trigger(elt, "revealed");
-                htmx.trigger(elt, "register_request");
-              }
+            if (elt && elt.isConnected && elt.getAttribute && (elt.getAttribute("hx-get") || elt.getAttribute("hx-post") || elt.getAttribute("hx-put") || elt.getAttribute("hx-delete"))) {
+              htmx.trigger(elt, "register_request");
+              htmx.trigger(elt, "load");
+              return;
             }
+          } catch (e4) {}
+          try {
             var sec = document.getElementById("nspanels_section");
             if (sec) htmx.trigger(sec, "register_request");
-          } catch (e3) {}
-        })();
-        // Give recovery a moment; only show if it still isn't fixed.
-        if (!_nspanel401Recovering) {
-          _nspanel401Recovering = true;
-          setTimeout(function () { _nspanel401Recovering = false; }, 2500);
-        }
+          } catch (e5) {}
+        }, 700);
         return;
       }
-      show_error_toast(
-        0,
-        "Not authorized (HTTP 401). Log out and back in to Home Assistant, reload this page, and try again." + (body ? " Server said: " + body : ""),
-        ERROR_TOAST_SOURCE_WEB_INTERFACE,
-      );
-      try { nspanelRefreshTokenIfNeeded(true); } catch (e4) {}
-      try { nspanelBootstrapFromFrontend(true); } catch (e5) {}
+      if (!_nspanel401ToastShown) {
+        _nspanel401ToastShown = true;
+        show_error_toast(
+          0,
+          "Not authorized (HTTP 401). Log out and back in to Home Assistant, reload this page, and try again." + (body ? " Server said: " + body : ""),
+          ERROR_TOAST_SOURCE_WEB_INTERFACE,
+        );
+      }
+      try { nspanelRefreshTokenIfNeeded(true); } catch (e6) {}
+      try { nspanelBootstrapFromFrontend(true); } catch (e7) {}
       return;
     }
+    // Successful non-401 path elsewhere will not clear this automatically,
+    // but avoid spamming repeated 401 toasts during one broken session.
     try {
       const obj = JSON.parse(xhr.response);
       if (obj && obj.status == "error") {
