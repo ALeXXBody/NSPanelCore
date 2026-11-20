@@ -151,6 +151,13 @@ class NSPanelCoreManager:
         self._weather_unsubs: list = []
         self._ota_md5: dict[str, str] | None = None
         self._ota_overlay: dict[str, str] = {}
+        # P311 continuous discovery (P215 design): the manager SEES panels
+        # automatically — a background mDNS browser keeps this cache live;
+        # the NSPanels page reads it without any user action. Accept/decline
+        # stays a user decision; seeing is not.
+        self._discovered_panels: dict[str, dict] = {}   # ip -> status dict
+        self._discovered_name_ips: dict[str, set] = {}  # service name -> ips
+        self._discovery_browser = None
         self._ota_active_version: str = ""
         self._firmware_unsubs: list = []
         self._firmware_notified_version: str = ""
@@ -248,6 +255,9 @@ class NSPanelCoreManager:
         self._restore_firmware_overlay()
         await self.refresh_ota_cache()
         self._reschedule_firmware_check()
+        # P311: start the continuous discovery browser — unprovisioned panels
+        # become visible automatically, no user action required.
+        self.hass.async_create_task(self._start_discovery_browser())
         # P132: run one firmware check shortly after startup so a fresh HA
         # boot can never keep serving files older than the manifest.
         from homeassistant.helpers.event import async_call_later
@@ -292,6 +302,14 @@ class NSPanelCoreManager:
             except Exception:  # noqa: BLE001
                 pass
             self._save_timer = None
+        if self._discovery_browser is not None:
+            try:
+                self._discovery_browser.cancel()
+            except Exception:  # noqa: BLE001
+                pass
+            self._discovery_browser = None
+        self._discovered_panels = {}
+        self._discovered_name_ips = {}
 
     @staticmethod
     def validate_settings(user_input: dict, current: dict | None = None) -> tuple[dict, dict[str, str]]:
@@ -1901,8 +1919,118 @@ class NSPanelCoreManager:
     # P215/P216 discovery — SEE panels that have no MQTT credentials yet
     # ------------------------------------------------------------------
 
+    _MDNS_INSTANCE_PREFIX = "nspanelcore"
     _MDNS_INSTANCE = "NSPanelCore._http._tcp.local."  # wifi.cpp advertisement
     _MDNS_TYPE = "_http._tcp.local."
+
+    async def _start_discovery_browser(self) -> None:
+        """Continuous mDNS browser: the freshly flashed panel advertises
+        itself the moment it joins WiFi; this keeps the discovered cache
+        live so the manager sees it WITHOUT any user action."""
+        try:
+            from homeassistant.components.zeroconf import async_get_instance
+            zc = await async_get_instance(self.hass)
+        except Exception:  # noqa: BLE001 — zeroconf not available: no discovery
+            _LOGGER.warning("Zeroconf unavailable — panel discovery disabled")
+            return
+        from zeroconf import ServiceBrowser
+
+        manager = self
+
+        class _Listener:
+            """mDNS events land in the browser thread — everything touching
+            hass state is scheduled onto the event loop."""
+
+            def add_service(self, zc_, type_, name):
+                manager._schedule_discovery_lookup(type_, name)
+
+            def update_service(self, zc_, type_, name):
+                manager._schedule_discovery_lookup(type_, name)
+
+            def remove_service(self, zc_, type_, name):
+                manager.hass.loop.call_soon_threadsafe(
+                    manager.hass.async_create_task,
+                    manager._drop_discovered_service(name),
+                )
+
+        self._discovery_browser = await self.hass.async_add_executor_job(
+            ServiceBrowser, zc, self._MDNS_TYPE, _Listener()
+        )
+        _LOGGER.info("Panel discovery browser running on %s", self._MDNS_TYPE)
+
+    def _schedule_discovery_lookup(self, type_: str, name: str) -> None:
+        if not name.lower().startswith(self._MDNS_INSTANCE_PREFIX):
+            return
+        self.hass.loop.call_soon_threadsafe(
+            self.hass.async_create_task, self._adopt_discovered_service(name)
+        )
+
+    async def _adopt_discovered_service(self, name: str) -> None:
+        try:
+            from homeassistant.components.zeroconf import async_get_instance
+            zc = await async_get_instance(self.hass)
+        except Exception:  # noqa: BLE001
+            return
+        info = await self.hass.async_add_executor_job(
+            zc.get_service_info, self._MDNS_TYPE, name, 2500
+        )
+        if info is None:
+            return
+        addresses = [a for a in info.parsed_addresses() if a]
+        self._discovered_name_ips[name] = set(addresses)
+        for addr in addresses:
+            if addr in self._discovered_panels:
+                continue
+            status = await self._fetch_panel_status(addr)
+            if status is not None:
+                self._discovered_panels[addr] = status
+                _LOGGER.info(
+                    "Discovered panel %s at %s (fw %s, MQTT %s)",
+                    status.get("hostname"), addr, status.get("version"), status.get("mqtt"),
+                )
+
+    async def _drop_discovered_service(self, name: str) -> None:
+        for addr in self._discovered_name_ips.pop(name, set()):
+            self._discovered_panels.pop(addr, None)
+
+    async def _fetch_panel_status(self, addr: str) -> dict | None:
+        def _get():
+            import urllib.request
+            with urllib.request.urlopen(f"http://{addr}/status.json", timeout=4) as resp:
+                import json as _json
+                return _json.loads(resp.read().decode("utf-8", "replace"))
+        try:
+            data = await self.hass.async_add_executor_job(_get)
+        except Exception:  # noqa: BLE001 — one dead candidate must not kill discovery
+            return None
+        if not isinstance(data, dict):
+            return None
+        return {
+            "address": addr,
+            "hostname": str(data.get("hostname") or ""),
+            "version": str(data.get("version") or ""),
+            "mqtt": str(data.get("mqtt") or ""),
+            "warnings": str(data.get("warnings") or ""),
+        }
+
+    async def discover_snapshot(self) -> list[dict]:
+        """The live discovery list for the UI: the browser's cache, filtered
+        by declined hostnames and already-known panels. If the cache is
+        empty (just-started race), fall back to one on-demand scan."""
+        if not self._discovered_panels:
+            found = await self.discover_panels()
+            for p in found:
+                self._discovered_panels[p["address"]] = p
+        from .const import topic_safe
+        declined = {topic_safe(h) for h in (getattr(self.config.settings, "discovery_denied", []) or [])}
+        known = {topic_safe(p.wifi_hostname or p.name) for p in self.config.panels}
+        out = []
+        for status in list(self._discovered_panels.values()):
+            key = topic_safe(status.get("hostname") or "")
+            if key and (key in declined or key in known):
+                continue
+            out.append(status)
+        return out
 
     async def discover_panels(self, zc=None, browse_seconds: float = 2.5) -> list[dict]:
         """Find unprovisioned panels on the LAN: the freshly flashed panel
@@ -1928,34 +2056,8 @@ class NSPanelCoreManager:
                     candidates.append(addr)
         if not candidates:
             return []
-        from .const import topic_safe
-        declined = {topic_safe(h) for h in (getattr(self.config.settings, "discovery_denied", []) or [])}
-        known_hostnames = {topic_safe(p.wifi_hostname or p.name) for p in self.config.panels}
-
         async def _fetch(addr: str) -> dict | None:
-            def _get():
-                import urllib.request
-                with urllib.request.urlopen(f"http://{addr}/status.json", timeout=4) as resp:
-                    import json as _json
-                    return _json.loads(resp.read().decode("utf-8", "replace"))
-            try:
-                data = await self.hass.async_add_executor_job(_get)
-            except Exception:  # noqa: BLE001 — one dead candidate must not kill the scan
-                _LOGGER.debug("Discovery fetch failed for %s", addr, exc_info=True)
-                return None
-            if not isinstance(data, dict):
-                return None
-            hostname = str(data.get("hostname") or "")
-            key = topic_safe(hostname)
-            if key in declined or key in known_hostnames:
-                return None
-            return {
-                "address": addr,
-                "hostname": hostname,
-                "version": str(data.get("version") or ""),
-                "mqtt": str(data.get("mqtt") or ""),
-                "warnings": str(data.get("warnings") or ""),
-            }
+            return await self._fetch_panel_status(addr)
 
         results = await asyncio.gather(*[_fetch(a) for a in candidates])
         return [r for r in results if r]

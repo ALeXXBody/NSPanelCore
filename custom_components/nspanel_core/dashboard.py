@@ -511,7 +511,7 @@ class DiscoveredPanelsView(HomeAssistantView):
     async def get(self, request, **kwargs):
         manager = _manager(request)
         try:
-            panels = await manager.discover_panels()
+            panels = await manager.discover_snapshot()
         except Exception as err:  # noqa: BLE001
             return web.json_response({"panels": [], "error": str(err)}, status=200)
         return web.json_response({"panels": panels})

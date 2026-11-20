@@ -82,7 +82,7 @@ async def test_discovered_panels_requires_credential():
 
 async def test_discovered_panels_returns_manager_results():
     mgr = _mgr()
-    mgr.discover_panels = AsyncMock(return_value=[
+    mgr.discover_snapshot = AsyncMock(return_value=[
         {"address": "192.168.50.23", "hostname": "KitchenPanrl",
          "version": "0.1.17", "mqtt": "not configured", "warnings": ""},
     ])
@@ -183,6 +183,103 @@ def test_maybe_preaccept_ignores_unknown_hostname():
 
 # ------------------------------------------------------ push header contract
 
+@pytest.mark.asyncio
+async def test_snapshot_uses_browser_cache_automatically():
+    """DISCOVERY IS AUTOMATIC: the background mDNS browser keeps the cache;
+    the UI reads it with zero user actions. The endpoint must return the
+    cached panel (and never require a manual search)."""
+    mgr = _mgr()
+    mgr.discover_snapshot = AsyncMock(return_value=[
+        {"address": "192.168.50.23", "hostname": "KitchenPanrl",
+         "version": "0.1.17", "mqtt": "not configured", "warnings": ""},
+    ])
+    with patch.object(D, "_manager", return_value=mgr):
+        with patch.object(D, "_nspanel_auth_ok", AsyncMock(return_value=True)):
+            resp = await D.DiscoveredPanelsView().get(_req())
+    import json
+    body = json.loads(resp.text)
+    assert body["panels"][0]["hostname"] == "KitchenPanrl"
+
+
+@pytest.mark.asyncio
+async def test_snapshot_falls_back_to_one_scan_when_cache_empty():
+    """Just-started race: the browser hasn't populated yet — the snapshot
+    runs one on-demand scan and merges, so the first page load still shows
+    the panel."""
+    mgr = _mgr()
+    mgr._discovered_panels = {}
+    mgr._fetch_panel_status = AsyncMock(side_effect=lambda addr: None)
+
+    async def fake_scan():
+        mgr._discovered_panels["192.168.50.23"] = {
+            "address": "192.168.50.23", "hostname": "KitchenPanrl",
+            "version": "0.1.17", "mqtt": "not configured", "warnings": ""}
+        return [mgr._discovered_panels["192.168.50.23"]]
+
+    mgr.discover_panels = fake_scan  # MagicMock self: the instance attr wins
+    panels = await M.NSPanelCoreManager.discover_snapshot(mgr)
+    assert any(p["hostname"] == "KitchenPanrl" for p in panels)
+    assert "192.168.50.23" in mgr._discovered_panels  # merged into the cache
+
+
+@pytest.mark.asyncio
+async def test_snapshot_filters_declined_and_known():
+    mgr = _mgr()
+    mgr.config.settings.discovery_denied = ["SomePanel"]
+    mgr.config.panels = [
+        PanelConfig(id=1, mac="aabbccddeeff", name="KnownPanel", wifi_hostname="KnownPanel")
+    ]
+    mgr._discovered_panels = {
+        "1": {"address": "1", "hostname": "FreshPanel", "version": "0.1.4", "mqtt": "not configured", "warnings": ""},
+        "2": {"address": "2", "hostname": "SomePanel", "version": "0.1.4", "mqtt": "not configured", "warnings": ""},
+        "3": {"address": "3", "hostname": "KnownPanel", "version": "0.1.4", "mqtt": "disconnected", "warnings": ""},
+    }
+    async def fake_scan():
+        return []
+
+    mgr.discover_panels = fake_scan  # cache is populated: the scan must not run
+    panels = await M.NSPanelCoreManager.discover_snapshot(mgr)
+    hosts = [p["hostname"] for p in panels]
+    assert "FreshPanel" in hosts
+    assert "SomePanel" not in hosts    # declined
+    assert "KnownPanel" not in hosts   # already in the manager
+
+
+@pytest.mark.asyncio
+async def test_discovery_browser_lifecycle_starts_and_stops():
+    """The browser starts with the manager and is cancelled on stop — no
+    leaked threads between restarts."""
+    import asyncio as _aio
+
+    mgr = _mgr()
+
+    class _FakeBrowser:
+        def __init__(self):
+            self.cancelled = False
+
+        def cancel(self):
+            self.cancelled = True
+
+    started = {}
+
+    async def fake_start():
+        mgr._discovery_browser = _FakeBrowser()
+        started["ok"] = True
+
+    M.NSPanelCoreManager._start_discovery_browser = fake_start
+    try:
+        await M.NSPanelCoreManager._start_discovery_browser()
+        assert started.get("ok")
+        browser = mgr._discovery_browser
+        await M.NSPanelCoreManager.async_stop(mgr)
+        assert browser.cancelled is True
+        assert mgr._discovery_browser is None
+    finally:
+        del M.NSPanelCoreManager._start_discovery_browser
+
+
+# ------------------------------------------------------ push header contract
+
 
 async def test_push_carries_panel_guard_headers():
     """The panel's CSRF guard needs BOTH the form content type and the
@@ -237,12 +334,14 @@ async def test_discover_filters_declined_and_known_hostnames():
             return _FakeInfo()
 
     statuses = {
-        "192.168.50.23": {"hostname": "FreshPanel", "version": "0.1.4", "mqtt": "not configured", "warnings": ""},
-        "192.168.50.99": {"hostname": "SomePanel", "version": "0.1.4", "mqtt": "not configured", "warnings": ""},
+        "192.168.50.23": {"address": "192.168.50.23", "hostname": "FreshPanel", "version": "0.1.4", "mqtt": "not configured", "warnings": ""},
+        "192.168.50.99": {"address": "192.168.50.99", "hostname": "SomePanel", "version": "0.1.4", "mqtt": "not configured", "warnings": ""},
     }
 
-    mgr.hass.async_add_executor_job = AsyncMock(
-        side_effect=lambda fn, *a, **k: fn(*a, **k))
+    async def fake_status(addr):
+        return statuses.get(addr)
+
+    mgr._fetch_panel_status = fake_status  # MagicMock self: instance attr wins
 
     import urllib.request
 
@@ -268,6 +367,15 @@ async def test_discover_filters_declined_and_known_hostnames():
     with patch("urllib.request.urlopen", fake_urlopen):
         panels = await M.NSPanelCoreManager.discover_panels(mgr, zc=_FakeZC())
     addrs = [p["address"] for p in panels]
-    assert "192.168.50.23" in addrs          # fresh panel: listed
-    assert "192.168.50.99" not in addrs      # declined hostname: filtered
-    assert all(p["hostname"] != "KnownPanel" for p in panels)  # known: filtered
+    assert "192.168.50.23" in addrs          # fresh panel: found
+    assert "192.168.50.99" in addrs          # the raw scan reports everything
+    # the UI-facing SNAPSHOT is what filters declined/known:
+    async def no_scan():
+        return []
+    mgr.discover_panels = no_scan
+    mgr._discovered_panels = {p["address"]: p for p in panels}
+    snapshot = await M.NSPanelCoreManager.discover_snapshot(mgr)
+    snap_hosts = [p["hostname"] for p in snapshot]
+    assert "FreshPanel" in snap_hosts
+    assert "SomePanel" not in snap_hosts     # declined
+    assert "KnownPanel" not in snap_hosts    # already in the manager

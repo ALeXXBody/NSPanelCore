@@ -33,18 +33,7 @@
 <div>
     {% include 'index_htmx_nspanels_section.html' %}
 </div>
-<div class="mt-4 p-3 rounded-md bg-base-100 shadow">
-  <details id="nsp_discovery_box">
-    <summary class="text-sm opacity-80 cursor-pointer">New panel? Search the network for unprovisioned panels</summary>
-    <div class="mt-2">
-      <div class="flex items-center gap-2">
-        <button id="nsp_disc_btn" class="btn btn-sm btn-primary">Search the network</button>
-        <span id="nsp_disc_status" class="text-sm opacity-80"></span>
-      </div>
-      <div id="nsp_disc_results" class="mt-2"></div>
-    </div>
-  </details>
-</div>
+<div class="mt-4" id="nsp_discovery_box"></div>
 <script>
 function nspanelDiscoveredRow(p) {
   var div = document.createElement("div");
@@ -65,56 +54,62 @@ function nspanelDiscoveredRow(p) {
   div.appendChild(acc); div.appendChild(den);
   return div;
 }
+/* P311: DISCOVERY IS AUTOMATIC — the manager's background browser keeps the
+ * live list; this box renders itself only when unprovisioned panels are
+ * found. Accept/decline stays the user's decision; seeing is not. */
+var _nsp_disc_timer = null;
 function nspanelDiscoveredAction(action, p, btn) {
-  var st = document.getElementById("nsp_disc_status");
   if (btn) btn.disabled = true;
-  if (st) st.textContent = (action === "accept" ? "Sending MQTT settings to " : "Declining ") + (p.hostname || p.address) + " …";
   nspanelFetch("/nspanel_core/api/discovered_panel", {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: "action=" + action + "&address=" + encodeURIComponent(p.address) + "&hostname=" + encodeURIComponent(p.hostname || ""),
   }).then(function (r) { return r.text().then(function (t) { return [r.ok, t]; }); }).then(function (res) {
-    if (st) st.textContent = res[1] || (res[0] ? "Done." : "Failed.");
-    if (res[0] && action === "accept") {
+    if (!res[0]) { if (btn) { btn.disabled = false; btn.title = res[1] || "failed"; } return; }
+    if (action === "accept") {
       // the panel saves, reboots into the broker and registers — refresh
       try { var sec = document.getElementById("nspanels_section"); if (sec) htmx.trigger(sec, "register_request"); } catch (e) {}
       setTimeout(function () {
         try { var s2 = document.getElementById("nspanels_section"); if (s2) htmx.trigger(s2, "register_request"); } catch (e) {}
+        nspanelRefreshDiscovery();
       }, 20000);
     } else {
-      nspanelRunDiscovery();
+      nspanelRefreshDiscovery();
     }
-  }).catch(function (e) {
-    if (st) st.textContent = "Failed: " + e;
-    if (btn) btn.disabled = false;
-  });
+  }).catch(function () { if (btn) btn.disabled = false; });
 }
-function nspanelRunDiscovery() {
-  var btn = document.getElementById("nsp_disc_btn");
-  var st = document.getElementById("nsp_disc_status");
-  var box = document.getElementById("nsp_disc_results");
-  if (btn) btn.disabled = true;
-  if (st) st.textContent = "Searching the network …";
-  if (box) box.innerHTML = "";
+function nspanelRefreshDiscovery() {
   nspanelFetch("/nspanel_core/api/discovered_panels", { credentials: "same-origin" })
     .then(function (r) { return r.json(); })
     .then(function (d) {
-      if (btn) btn.disabled = false;
-      if (st) st.textContent = (d.panels && d.panels.length) ? d.panels.length + " panel(s) found:" : "No unprovisioned panels found.";
-      if (box) {
-        box.innerHTML = "";
-        (d.panels || []).forEach(function (p) { box.appendChild(nspanelDiscoveredRow(p)); });
-      }
+      var box = document.getElementById("nsp_discovery_box");
+      if (!box) return;
+      var panels = d.panels || [];
+      if (!panels.length) { box.innerHTML = ""; return; }
+      var card = document.createElement("div");
+      card.className = "p-3 rounded-md bg-base-100 shadow";
+      var title = document.createElement("div");
+      title.className = "text-sm font-medium mb-1";
+      title.textContent = "New NSPanel" + (panels.length > 1 ? "s" : "") + " found on the network:";
+      card.appendChild(title);
+      panels.forEach(function (p) { card.appendChild(nspanelDiscoveredRow(p)); });
+      box.innerHTML = "";
+      box.appendChild(card);
     })
-    .catch(function (e) {
-      if (btn) btn.disabled = false;
-      if (st) st.textContent = "Search failed: " + e;
-    });
+    .catch(function () {});
 }
 (function () {
-  var b = document.getElementById("nsp_disc_btn");
-  if (b) b.addEventListener("click", nspanelRunDiscovery);
+  var boot = function () {
+    nspanelRefreshDiscovery();
+    if (_nsp_disc_timer) clearInterval(_nsp_disc_timer);
+    _nsp_disc_timer = setInterval(nspanelRefreshDiscovery, 20000);
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
 })();
 </script>
 {% endblock %}
