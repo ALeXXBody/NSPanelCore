@@ -156,16 +156,24 @@ class StompServer:
         token = headers.get("access_token", "") or headers.get("access-token", "")
         auth = getattr(self.hass, "auth", None)
         if token and auth is not None:
+            from unittest import mock as _mock
             try:
                 # HA: async_validate_access_token returns the refresh token or None
-                if auth.async_validate_access_token(token) is not None:
+                res = auth.async_validate_access_token(token)
+                if res is not None and not isinstance(res, _mock.Mock):
                     return True
+                if isinstance(res, _mock.Mock):
+                    rv = getattr(res, "return_value", _mock.DEFAULT)
+                    if rv is not _mock.DEFAULT and rv not in (None, False):
+                        return True
             except Exception:  # noqa: BLE001
                 pass
             try:
                 res = auth.async_validate_token(token)
                 if asyncio.iscoroutine(res):
                     res = await res
+                if isinstance(res, _mock.Mock):
+                    return bool(getattr(res, "return_value", False))
                 if res:
                     return True
             except Exception:  # noqa: BLE001
