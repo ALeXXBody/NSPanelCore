@@ -715,38 +715,6 @@ class PanelActionView(HomeAssistantView):
         return web.Response(text=html, content_type="text/html")
 
 
-class PlaceholderPageView(HomeAssistantView):
-    """Pages still being ported — served with the original shell so the app
-    never falls back to the HA frontend (which caused the 'doubled page')."""
-
-    url = f"{URL_BASE}/coming-soon"
-    name = "nspanel_core:placeholder"
-    requires_auth = False
-
-    async def get(self, request, **kwargs):
-        manager = _manager(request)
-        page = request.path.rsplit("/", 1)[-1]
-        titles = {
-            "rooms": "Rooms",
-            "relay_groups": "Relay/Light groups",
-            "global_scenes": "Global scenes",
-            "weather": "Weather & Time",
-            "denied": "Denied devices",
-            "general": "Settings — General",
-            "weather_and_time": "Weather & Time",
-            "denied_nspanels": "Denied NSPanels",
-            "settings": "Settings",
-            "manager_settings": "Manager settings",
-        }
-        html = _render(
-            "index_shell.html",
-            request=request,
-            page_title=titles.get(page, page),
-            nspanels=_panels_context(manager),
-        )
-        return web.Response(text=html, content_type="text/html")
-
-
 class EditPanelView(HomeAssistantView):
     """The ORIGINAL panel settings page (edit_nspanel template)."""
 
@@ -755,6 +723,10 @@ class EditPanelView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request, **kwargs):
+        # FULL AUDIT FIX: the earlier un-gated duplicate of this view was
+        # shadowing the P311 gated one (two class defs, Python keeps the
+        # last) — the page leaked panel settings unauthenticated (proven
+        # live: /edit/{id} without any credential returned the full page).
         if not await _nspanel_auth_ok(request):
             return web.Response(status=401, text="Unauthorized")
 
@@ -765,6 +737,16 @@ class EditPanelView(HomeAssistantView):
             html = _render("index_shell.html", page_title="Bad panel id", nspanels=[])
             return web.Response(text=html, content_type="text/html")
         panel = next((p for p in manager.panels() if p.id == panel_id), None)
+        if panel is None:
+            html = _render("index_shell.html", page_title="Panel not found", nspanels=[])
+            return web.Response(text=html, content_type="text/html")
+        # Context shaped like the Django view: panel_info wrapper + settings
+        ctx = _panel_settings_context(manager, panel)
+        ctx["page_title"] = f"{panel.name} — settings"
+        ctx["nspanels"] = _panels_context(manager)
+        ctx["moved_hidden"] = True  # P266: the moved sections live ONLY in the studio
+        html = _render("edit_nspanel.html", **ctx)
+        return web.Response(text=html, content_type="text/html")
 def _panel_settings_context(manager, panel) -> dict:
     """The context for the panel-settings fields (shared by the edit page
     and the Dashboard studio's Panel tab — the elements live once)."""
@@ -1286,7 +1268,9 @@ class AllowIgnoredMacView(HomeAssistantView):
         if not manager.allow_mac(mac):
             return web.Response(text="MAC was not ignored", status=404)
         await manager.async_save()
-        return _redirect_back(request, f"{URL_BASE}/denied_nspanels")
+        # CONNECTION AUDIT: /denied_nspanels has no view — the denied tab
+        # lives at /settings?tab=denied (P236).
+        return _redirect_back(request, f"{URL_BASE}/settings?tab=denied")
 
 
 class SettingsView(HomeAssistantView):
@@ -2895,7 +2879,6 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         AllowIgnoredMacView,
         SettingsView,
         ManagerSettingsView,
-        PlaceholderPageView,
         RestartView,
         ThemeView,
         ReorderRoomsView,
