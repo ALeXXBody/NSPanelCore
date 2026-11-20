@@ -149,6 +149,12 @@ async function nspanelBootstrapFromFrontend() {
         const ha = w.document.querySelector("home-assistant");
         const a = ha && ha.hass && ha.hass.auth;
         if (a) {
+          /* P311: the app delivers its token on request — the frontend's
+           * own refresh call makes the companion app hand the fresh token
+           * over NOW (externalAuthSetToken fills auth.data). */
+          if (typeof a.refreshAccessToken === "function") {
+            try { await a.refreshAccessToken(); } catch (e) {}
+          }
           let tok = (a.data && a.data.access_token) ||
                     (typeof a.accessToken === "string" ? a.accessToken : "") ||
                     (a.tokens && a.tokens.access_token) || "";
@@ -158,14 +164,36 @@ async function nspanelBootstrapFromFrontend() {
           if (tok && typeof tok === "string") {
             nspanelLiveToken = tok;
             await nspanelEnsureSession();
+            try { nspanelBootStatus("login received from the app — loading…"); } catch (e) {}
             return tok;
           }
+          try { nspanelBootStatus("the app login state was reached, but delivered no token"); } catch (e) {}
+        } else {
+          try { nspanelBootStatus("hop " + hop + ": no login state in this frame"); } catch (e) {}
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      try { nspanelBootStatus("hop " + hop + ": " + (e && e.message || e)); } catch (e2) {}
+    }
     w = (w.parent && w.parent !== w) ? w.parent : null;
   }
+  try { nspanelBootStatus("no Home Assistant login state reachable"); } catch (e) {}
   return "";
+}
+
+function nspanelBootStatus(text) {
+  try {
+    let el = document.getElementById("nspanel-boot-status");
+    if (!el && document.body) {
+      el = document.createElement("div");
+      el.id = "nspanel-boot-status";
+      el.style.cssText = "position:fixed;inset:auto 10px 10px 10px;z-index:99998;" +
+        "background:#141821;color:#8b93a1;border:1px solid #2a2f3a;border-radius:8px;" +
+        "padding:6px 10px;font:11px system-ui,sans-serif;text-align:center";
+      document.body.appendChild(el);
+    }
+    if (el) el.textContent = "NSPanel Core: " + text;
+  } catch (e) {}
 }
 
 (function nspanelBootstrapRetry() {
