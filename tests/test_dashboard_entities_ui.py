@@ -122,7 +122,13 @@ def test_studio_json_behavior_through_node():
 # ------------------------------------------------------------ the entities
 
 def test_entities_load_on_page_init_independent_of_the_design():
-    assert HTML.rstrip().endswith("loadEntities();  // P292: import HA entities on load, independent of any design\n</script>\n{% endblock %}")
+    # P312: the boot waits (bounded) for the established session before the
+    # first pulls — the pre-auth 401s emptied the studio (pictures, panel
+    # list, first saves).
+    assert "function studioBoot()" in HTML
+    assert "autoSelectPanelStart();" in HTML
+    assert "loadEntities();  // P292" in HTML
+    assert "_nspanelBootstrapDone" in HTML
     load = _FNS["loadEntities"]
     assert "nspanelFetch('/nspanel_core/dashboard_entities'" in load
     assert ".then(studioJson)" in load

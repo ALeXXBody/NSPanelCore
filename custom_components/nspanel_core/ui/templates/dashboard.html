@@ -1290,13 +1290,68 @@ function populatePanels(list) {
   }
 }
 /* P311: the studio shell is public — the panel list arrives from the AUTHED
- * endpoint after the page's JS runs (the HA app delivers its token async). */
-(function autoSelectPanel() {
+ * endpoint after the page's JS runs (the HA app delivers its token async).
+ * P312 ANALYSIS: the FIRST pulls (panel list, design, gallery) fired before
+ * the auth bootstrap landed — they 401'd silently: pictures empty, the
+ * panel selector empty, and the first saves/uploads failing (the same
+ * failure class fixed for the main page's discovery). Wait (bounded) for
+ * the established session, then boot; the gallery's <img> URLs embed the
+ * token at render, so re-render after auth lands. */
+var _nspStudioBooted = false;
+function studioBoot() {
+  if (_nspStudioBooted) return;
+  _nspStudioBooted = true;
+  autoSelectPanelStart();
+  loadEntities();  // P292: import HA entities on load, independent of any design
+  // P312 ANALYSIS: the gallery's <img> URLs embed the credential AT RENDER
+  // TIME — if auth lands after the first render, the thumbs 401'd forever.
+  // Re-render the gallery (and the live preview's photo) once auth is up.
+  if (typeof loadGallery === "function") setTimeout(loadGallery, 800);
+}
+(function studioAuthWait() {
+  var tries = 0;
+  var wait = function () {
+    tries++;
+    var authed = false;
+    var frontend = null;
+    try {
+      authed = !!(window._nspanelBootstrapDone || window._nspanelSessionEstablished ||
+                  (typeof nspanelGetToken === "function" && nspanelGetToken()));
+      // P312: a page opened DIRECTLY (no same-origin frontend anywhere in
+      // the chain) can never gain a credential — waiting 30 s would leave
+      // the studio blank the whole time. Boot immediately; the gated pulls
+      // 401 visibly (login banner), same as every other page.
+      if (typeof nspanelFrontendHass === "function") {
+        nspanelFrontendHass().then(function (fh) {
+          frontend = fh;
+          proceed();
+        });
+        return;
+      }
+    } catch (e) {}
+    proceed();
+    function proceed() {
+      if (authed) { studioBoot(); return; }
+      // P312: no same-origin frontend anywhere = the page was opened
+      // directly — no credential can ever arrive; boot NOW (the gated
+      // pulls 401 visibly, the login banner says so, same as the main page)
+      if (frontend === null) { studioBoot(); return; }
+      if (tries >= 60) { studioBoot(); return; }
+      setTimeout(wait, 500);
+    }
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", wait);
+  } else {
+    wait();
+  }
+})();
+
+function autoSelectPanelStart() {
   nspanelFetch('/nspanel_core/dashboard_panels', { credentials: 'same-origin' })
     .then(studioJson)
     .then(function (j) { populatePanels(j.panels || []); })
     .catch(function (e) { setStatus('Failed to load panels: ' + e, true); });
-})();
-loadEntities();  // P292: import HA entities on load, independent of any design
+}
 </script>
 {% endblock %}

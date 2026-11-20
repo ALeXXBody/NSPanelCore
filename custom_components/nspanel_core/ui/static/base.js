@@ -176,7 +176,7 @@ async function nspanelEnsureSession() {
         },
         body: "{}"
       });
-      if (resp && resp.ok) { _nspanelSessionEstablished = true; return true; }
+      if (resp && resp.ok) { _nspanelSessionEstablished = true; try { window._nspanelSessionEstablished = true; } catch (e1) {} return true; }
     }
     // No token string? Use the frontend's own auth to establish the session.
     const fh = await nspanelFrontendHass();
@@ -187,13 +187,14 @@ async function nspanelEnsureSession() {
         headers: { "Content-Type": "application/json" },
         body: "{}"
       });
-      if (resp && resp.ok) { _nspanelSessionEstablished = true; return true; }
+      if (resp && resp.ok) { _nspanelSessionEstablished = true; try { window._nspanelSessionEstablished = true; } catch (e1) {} return true; }
     }
     return false;
   } catch (e) { return false; }
 }
 
 var _nspanelBootstrapDone = false;
+try { window._nspanelBootstrapDone = false; window._nspanelSessionEstablished = false; } catch (e) {}
 async function nspanelBootstrapFromFrontend(force) {
   try {
     if (!force && _nspanelBootstrapDone) return nspanelGetToken() || "session";

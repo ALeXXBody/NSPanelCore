@@ -83,6 +83,10 @@ const tick = function () { return new Promise(function (r) { setTimeout(r, 0); }
 
 (async function () {
   for (var i = 0; i < 5; i++) await tick();        // loadDesign + loadEntities
+  // P312: the studio boot waits for auth or a no-frontend verdict — give
+  // the bounded wait its rounds (2 x 0ms ticks is not enough for the
+  // promise chain; advance a few real-ish ticks)
+  for (var i = 0; i < 5; i++) await tick();
   w.setTab('design');
   var designTab = w.document.querySelector('.studio-tab.active').dataset.tab;
   w.setTab('screensaver');
