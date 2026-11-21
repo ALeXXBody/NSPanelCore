@@ -1,28 +1,28 @@
 {
-  "name": "NSPanel Core \u2014 P310 RECOVERY: fw v0.1.8 (current)",
-  "version": "0.1.8-recovery",
-  "new_install_prompt_erase": false,
-  "builds": [
-    {
-      "chipFamily": "ESP32",
-      "parts": [
+    "name": "NSPanel Core \u2014 P310 RECOVERY: fw v0.1.10 (current)",
+    "version": "0.1.10-recovery",
+    "new_install_prompt_erase": false,
+    "builds": [
         {
-          "path": "bootloader_native.bin",
-          "offset": 4096
-        },
-        {
-          "path": "partitions_native.bin",
-          "offset": 32768
-        },
-        {
-          "path": "ota_data_initial.bin",
-          "offset": 57344
-        },
-        {
-          "path": "native_018_recovery.bin",
-          "offset": 65536
+            "chipFamily": "ESP32",
+            "parts": [
+                {
+                    "path": "bootloader_native.bin",
+                    "offset": 4096
+                },
+                {
+                    "path": "partitions_native.bin",
+                    "offset": 32768
+                },
+                {
+                    "path": "ota_data_initial.bin",
+                    "offset": 57344
+                },
+                {
+                    "path": "native_0110_recovery.bin",
+                    "offset": 65536
+                }
+            ]
         }
-      ]
-    }
-  ]
+    ]
 }
