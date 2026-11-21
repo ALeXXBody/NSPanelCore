@@ -12,6 +12,9 @@ import pathlib
 import sys
 
 VENDORED_DIR = pathlib.Path(__file__).resolve().parent / "nxwright"
+# P312: the Nextion Editor 1.68.2 runtime firmware the compiler requires —
+# vendored too (no download, no consent prompt, no installed Editor needed)
+VENDORED_FW_DIR = pathlib.Path(__file__).resolve().parent / "nxwright_firmware"
 
 
 def ensure_toolchain() -> None:

@@ -214,7 +214,12 @@ def test_send_toolchain_is_vendored_and_compiles():
     assert "sys.executable" in src and "VENDORED_DIR" in src, \
         "compile_tft must invoke the vendored toolchain, not the PATH"
 
-    # a REAL compile: generate the source, run the vendored compiler
+    # the Nextion runtime firmware is vendored too (no download/Editor)
+    fw = REPO / "custom_components/nspanel_core/nxwright_firmware/firmware/1.68.2"
+    assert fw.is_dir() and (fw / "input.bin").is_file(), "vendored firmware missing"
+
+    # a REAL compile: the cache is FORCED to the vendored dir (the test env
+    # has no user cache and no Nextion Editor — exactly the user's HA)
     from nspanel_core import hmi_generate as hg
     from nspanel_core.dashboard_design import PanelDesign
     design = PanelDesign.from_dict({

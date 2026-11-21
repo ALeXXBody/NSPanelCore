@@ -262,7 +262,7 @@ def compile_tft(workdir: str, out_path: str) -> str:
     "No such file or directory: 'nxwright'"). Invoked via the same
     interpreter with the vendored package first on sys.path.
     """
-    from .hmi_tool import ensure_toolchain, VENDORED_DIR
+    from .hmi_tool import ensure_toolchain, VENDORED_DIR, VENDORED_FW_DIR
 
     ensure_toolchain()
     src = os.path.join(workdir, "hmi")
@@ -270,6 +270,9 @@ def compile_tft(workdir: str, out_path: str) -> str:
         os.unlink(out_path)
     env = dict(os.environ)
     env["PYTHONPATH"] = str(VENDORED_DIR.parent) + os.pathsep + env.get("PYTHONPATH", "")
+    # P312: the Nextion Editor's runtime firmware is vendored too — the
+    # compile needs it (the cache points there; no download consent needed)
+    env["NXWRIGHT_CACHE"] = str(VENDORED_FW_DIR)
     proc = subprocess.run(
         [sys.executable, "-m", "nxwright", "compile", "--overwrite", src, out_path],
         capture_output=True,
