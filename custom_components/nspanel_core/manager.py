@@ -1751,6 +1751,19 @@ class NSPanelCoreManager:
         # compare" — a fresh panel (or one running the pre-0.1.4 firmware,
         # which never recorded the field) must still get the display image.
         if tft_cooled and tft_md5 and (not report.get("md5_tft_file") or report["md5_tft_file"] != tft_md5):
+            # P312: a panel whose display is not answering CANNOT take the
+            # stream — triggering it wedged the user's panel (the delivery's
+            # stall watchdog restarts it, the restart drops it off the
+            # network, the next register triggers again: a crash loop).
+            warnings = self._last_telemetry.get(panel.mac, {}).get("warnings", [])
+            warn_text = " ".join(
+                str(w.get("text", "")) if isinstance(w, dict) else str(w)
+                for w in warnings)
+            if "no response from the display" in warn_text.lower():
+                _LOGGER.warning(
+                    "TFT update for panel %s — NOT triggering: the display is "
+                    "not responding (fix the display first)", panel.name)
+                return
             if not self.config.settings.auto_tft_updates:
                 _LOGGER.info(
                     "TFT update available for panel %s — NOT triggering automatically "

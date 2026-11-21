@@ -223,3 +223,49 @@ def test_send_allowed_when_the_display_answers():
     result = _run(run())
     assert result.get("ok") is True, result
     os.unlink(_tmp.name)
+
+
+def test_ota_trigger_skipped_when_the_display_is_not_responding():
+    """P312 (the user's crash loop): an empty TFT md5 triggered a tft_update
+    on EVERY register — the panel downloaded, streamed to the dead display,
+    the stall watchdog restarted it, and the next register triggered again.
+    The trigger must SKIP a panel whose display is not answering."""
+    import json
+    mgr = MagicMock()
+    mgr.config.settings.auto_tft_updates = True
+    mgr.ota_md5 = MagicMock(side_effect=lambda kind, name: {
+        ("tft", "gui.tft"): "b2b6a2e3e53ab56405d2202d51c98a29",
+    }.get((kind, name), ""))
+    mgr._ota_md5 = {"tft/gui.tft": "x"}
+    mgr.dash = None
+    mgr._last_telemetry = {"e465b849a100": {"warnings": [
+        {"level": "warning", "text": "No response from the display."}]}}
+    panel = PanelConfig(id=7, mac="e465b849a100", name="KitchenPanel", accepted=True)
+    published = []
+
+    async def _publish(topic, payload, retain=False):
+        published.append(payload)
+
+    mgr._publish = _publish
+    _run(M.NSPanelCoreManager._maybe_trigger_firmware_ota(mgr, panel, {"md5_tft_file": ""}))
+    assert not any('"tft_update"' in p for p in published), published
+
+
+def test_ota_trigger_still_fires_when_the_display_answers():
+    mgr = MagicMock()
+    mgr.config.settings.auto_tft_updates = True
+    mgr.ota_md5 = MagicMock(side_effect=lambda kind, name: {
+        ("tft", "gui.tft"): "b2b6a2e3e53ab56405d2202d51c98a29",
+    }.get((kind, name), ""))
+    mgr._ota_md5 = {"tft/gui.tft": "x"}
+    mgr.dash = None
+    mgr._last_telemetry = {"e465b849a100": {"warnings": []}}
+    panel = PanelConfig(id=7, mac="e465b849a100", name="KitchenPanel", accepted=True)
+    published = []
+
+    async def _publish(topic, payload, retain=False):
+        published.append(payload)
+
+    mgr._publish = _publish
+    _run(M.NSPanelCoreManager._maybe_trigger_firmware_ota(mgr, panel, {"md5_tft_file": ""}))
+    assert any('"tft_update"' in p for p in published), published
