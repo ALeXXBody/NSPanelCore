@@ -25,10 +25,12 @@ static void nsp_mqtt_connected(void *handler_args, esp_event_base_t base,
                                int32_t event_id, void *event_data) {
     if (s_mqtt == nullptr) return;
     s_mqtt_up = true;  // P184: the web UI status shows the real link state
+    nsp_mqtt_publish_log("stage: mqtt connected");
     // Subscribe to the command topic (hostname verbatim) + manager command
     std::string cmd = topic_panel_cmd(s_hostname);
     esp_mqtt_client_subscribe(s_mqtt, cmd.c_str(), 1);
     esp_mqtt_client_subscribe(s_mqtt, TOPIC_MANAGER_COMMAND, 0);
+    nsp_mqtt_publish_log("stage: subscribed");
     // Screensaver clock topics (the manager publishes them every 60 s)
     esp_mqtt_client_subscribe(s_mqtt, "nspanel/status/time", 0);
     esp_mqtt_client_subscribe(s_mqtt, "nspanel/status/date", 0);
@@ -234,6 +236,11 @@ void nsp_mqtt_handle_command(const std::string &payload) {
         /* register_accept with a broken payload: fall through, nothing matches */
     }
     if (!nsp_json_command(payload, cmd_field)) return;
+    {
+        char l[96];
+        snprintf(l, sizeof(l), "stage: command=%s", cmd_field.c_str());
+        nsp_mqtt_publish_log(l);
+    }
     if (cmd_field == CMD_REBOOT) {
         esp_restart();
     } else if (cmd_field == CMD_FIRMWARE_UPDATE) {

@@ -1,37 +1,37 @@
 {
- "version": "0.1.8",
- "notes": "Native firmware 0.1.8 \u2014 the same diagnostic + guards as 0.1.7 (boot reset-reason visible on the panel web UI; TFT updates refused while the display is not responding), re-versioned to clear the poisoned md5 record from the interrupted 0.1.7 flash.",
- "files": {
-  "firmware/sonoff/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.8/native-firmware-0.1.8.bin",
-   "md5": "192258f0083763caeaf2e6161aef759f"
-  },
-  "firmware/sonoff/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.8/data_file.bin",
-   "md5": "74d7ce6e39754a9bec2ae3a075620c49"
-  },
-  "firmware/custom/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.8/native-firmware-0.1.8.bin",
-   "md5": "192258f0083763caeaf2e6161aef759f"
-  },
-  "firmware/custom/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.8/data_file.bin",
-   "md5": "74d7ce6e39754a9bec2ae3a075620c49"
-  },
-  "tft/gui.tft": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/custom_components/nspanel_core/tft/gui.tft",
-   "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
-  },
-  "tft/gui_us.tft": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/custom_components/nspanel_core/tft/gui_us.tft",
-   "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
-  }
- },
- "changes": {
-  "bug_fixes": [
-   "0.1.7/0.1.8: the boot reset reason is visible on the panel's web UI after every boot; TFT updates are refused while the display is not responding."
-  ],
-  "features": [],
-  "breaking": []
- }
+    "version": "0.1.9",
+    "notes": "Native firmware 0.1.9 \u2014 display-dead suspension: all display writes no-op and the touch task parks while the display is not answering (ends the TASK_WDT reset loop on a silent display), with a bounded re-probe every 30 s for self-revival; boot/MQTT/command stage instrumentation on the panel web log.",
+    "files": {
+        "firmware/sonoff/firmware.bin": {
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.9/native-firmware-0.1.9.bin",
+            "md5": "d1387ab6bf88e99c83b9e0eb8f4a076c"
+        },
+        "firmware/sonoff/data_file.bin": {
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.9/data_file.bin",
+            "md5": "74d7ce6e39754a9bec2ae3a075620c49"
+        },
+        "firmware/custom/firmware.bin": {
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.9/native-firmware-0.1.9.bin",
+            "md5": "d1387ab6bf88e99c83b9e0eb8f4a076c"
+        },
+        "firmware/custom/data_file.bin": {
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.9/data_file.bin",
+            "md5": "74d7ce6e39754a9bec2ae3a075620c49"
+        },
+        "tft/gui.tft": {
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/custom_components/nspanel_core/tft/gui.tft",
+            "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
+        },
+        "tft/gui_us.tft": {
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/custom_components/nspanel_core/tft/gui_us.tft",
+            "md5": "b2b6a2e3e53ab56405d2202d51c98a29"
+        }
+    },
+    "changes": {
+        "bug_fixes": [
+            "0.1.7/0.1.8: the boot reset reason is visible on the panel's web UI after every boot; TFT updates are refused while the display is not responding."
+        ],
+        "features": [],
+        "breaking": []
+    }
 }

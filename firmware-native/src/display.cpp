@@ -62,6 +62,10 @@ void nsp_display_send(const char *data, size_t len) {  // P210: shared with the 
 
 void nsp_display_send_command(const char *cmd) {
     if (s_display_raw_mode) return;  // P279 HIGH fix: the TFT upload owns the wire
+    /* P312: display-dead suspension — writing into a silent display only
+     * piles up hung tasks (the TASK_WDT boot loop). Commands are dropped
+     * until the display answers again; the periodic re-handshake revives. */
+    if (!s_display_ready) return;
     size_t len = strlen(cmd);
     taskENTER_CRITICAL(&s_display_cmd_mux);
     uart_write_bytes(DISPLAY_UART, cmd, len);
@@ -145,6 +149,18 @@ static void nsp_display_after_handshake(void) {
 
 /* Manual recovery: power-cycle + handshake. ONLY from the "display_restart"
  * command, never at boot (stable power assumed). */
+/* P312: bounded display reprobe — one drain + one handshake attempt, no
+ * power cycle, no raw mode. Called from the housekeeping loop while the
+ * display is dead; revives the panel automatically when the hardware
+ * answers again. */
+bool nsp_display_reprobe(void) {
+    if (s_display_ready || s_display_raw_mode) return s_display_ready;
+    nsp_display_drain(300);
+    s_display_ready = false;
+    bool ok = nsp_display_handshake(1);
+    return ok;
+}
+
 bool nsp_display_restart(void) {
     /* P208#5: raw mode during the power-cycle + re-handshake. */
     s_display_raw_mode = true;
@@ -264,6 +280,12 @@ void nsp_display_touch_task(void *) {
     static uint8_t resid[16];
     static size_t resid_len = 0;
     for (;;) {
+        /* P312: display-dead suspension — parked while the display is not
+         * answering (nothing to decode; the revival clears the flag). */
+        if (!s_display_ready) {
+            vTaskDelay(pdMS_TO_TICKS(3000));
+            continue;
+        }
         int n = uart_read_bytes(DISPLAY_UART, buf, sizeof(buf) - resid_len, pdMS_TO_TICKS(200));
         if (n > 0 && resid_len) {
             memmove(buf + resid_len, buf, n);

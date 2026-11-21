@@ -7,7 +7,7 @@
 
 #include <string>
 
-#define FW_VERSION "0.1.8"
+#define FW_VERSION "0.1.9"
 
 /* Publish topics (built from wifi_hostname, VERBATIM — no sanitization) */
 inline std::string topic_status_report(const std::string &hostname) {

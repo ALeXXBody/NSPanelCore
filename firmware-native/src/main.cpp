@@ -23,6 +23,7 @@ extern int nsp_wifi_rssi(void);
 extern std::string nsp_wifi_ip(void);
 extern void nsp_mqtt_start(const std::string &hostname);
 extern void nsp_mqtt_send_register(void);
+extern bool nsp_display_reprobe(void);  // P312
 extern void nsp_web_log(const std::string &line);
 extern void nsp_mqtt_publish_log(const char *msg);
 extern void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
@@ -48,6 +49,7 @@ static std::string s_mac;
 static int64_t s_last_register_us = 0;
 static int64_t s_last_otacheck_us = 0;
 static int64_t s_last_report_us = 0;
+static int64_t s_last_revive_us = 0;
 
 void nsp_setup_ap_start(void);  // declared at FILE scope — inside the
                                // extern "C" app_main it would get C linkage
@@ -77,7 +79,7 @@ float nsp_temperature() {
 
 
 static void nsp_boot_log_line(const char *line) {
-    extern void nsp_web_log(const std::string &line);
+extern void nsp_web_log(const std::string &line);
     extern void nsp_mqtt_publish_log(const char *msg);
     nsp_web_log(std::string(line));
     nsp_mqtt_publish_log(line);
@@ -117,6 +119,13 @@ extern "C" void app_main(void) {
     ESP_ERROR_CHECK(nvs_flash_init());  // factory NVS holds config
     printf("[app] nvs ok; loading config\n");
     nsp_config_load();
+    {
+        char l[96];
+        snprintf(l, sizeof(l), "stage: config loaded (wifi=%s)", 
+                 g_cfg.wifi_ssid.empty() ? "unset" : "set");
+    extern void nsp_web_log(const std::string &line);
+        nsp_web_log(std::string(l));
+    }
     printf("[app] config loaded: hostname=%s mqtt=%s manager=%s\n",
            g_cfg.wifi_hostname.c_str(),
            g_cfg.mqtt_server.empty() ? "<unset>" : g_cfg.mqtt_server.c_str(),
@@ -163,8 +172,22 @@ extern "C" void app_main(void) {
                 nsp_ota_start();
                 s_last_otacheck_us = now;
             }
+            // P312: periodic display revival — while the display is dead,
+            // retry its handshake every 30 s; the moment it answers, the
+            // panel resumes full display operation by itself.
+            if (now - s_last_revive_us > (int64_t)STATUS_REPORT_PERIOD_MS * 1000) {
+                nsp_display_reprobe();
+                s_last_revive_us = now;
+            }
             // Status report every 30s, version included
             if (now - s_last_report_us > (int64_t)STATUS_REPORT_PERIOD_MS * 1000) {
+                {
+                    char l[64];
+                    snprintf(l, sizeof(l), "stage: 30s report (uptime %lld s)",
+                             (long long)(now / 1000000LL));
+                extern void nsp_web_log(const std::string &line);
+                    nsp_web_log(std::string(l));
+                }
                 uint32_t heap = esp_get_minimum_free_heap_size();
                 /* P279 LOW fix: the percentage double-counted the free heap
                  * and went negative past 320 KB free. */
