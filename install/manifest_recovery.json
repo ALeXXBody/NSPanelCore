@@ -1,6 +1,6 @@
 {
-  "name": "NSPanel Core \u2014 P310 RECOVERY: fw v0.1.7 (boot-reset-reason diagnostic + display guard)",
-  "version": "0.1.7-recovery",
+  "name": "NSPanel Core \u2014 P310 RECOVERY: fw v0.1.8 (current)",
+  "version": "0.1.8-recovery",
   "new_install_prompt_erase": false,
   "builds": [
     {
@@ -19,7 +19,7 @@
           "offset": 57344
         },
         {
-          "path": "native_017_recovery.bin",
+          "path": "native_018_recovery.bin",
           "offset": 65536
         }
       ]
