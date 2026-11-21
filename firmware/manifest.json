@@ -1,21 +1,21 @@
 {
- "version": "0.1.6",
- "notes": "Native firmware 0.1.6 \u2014 SAFETY: a TFT update is REFUSED when the panel's display is not responding (the delivery wedged the panel and dropped it off the network). Retry the Send after the display answers.",
+ "version": "0.1.7",
+ "notes": "Native firmware 0.1.7 \u2014 DIAGNOSTIC: the boot reset reason is now published to the panel's own web UI and the manager's log topic at every boot (the crash-loop cause becomes visible without serial). Includes 0.1.6's guard: TFT updates are refused while the display is not responding.",
  "files": {
   "firmware/sonoff/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/native-firmware-0.1.6.bin",
-   "md5": "3d276ea27c1b9ac1cb760ba2adf7a72a"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/native-firmware-0.1.7.bin",
+   "md5": "bcfe92c0892758699e0a3a07b10a099c"
   },
   "firmware/sonoff/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "firmware/custom/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/native-firmware-0.1.6.bin",
-   "md5": "3d276ea27c1b9ac1cb760ba2adf7a72a"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/native-firmware-0.1.7.bin",
+   "md5": "bcfe92c0892758699e0a3a07b10a099c"
   },
   "firmware/custom/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "tft/gui.tft": {

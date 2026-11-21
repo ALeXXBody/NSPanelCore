@@ -23,6 +23,8 @@ extern int nsp_wifi_rssi(void);
 extern std::string nsp_wifi_ip(void);
 extern void nsp_mqtt_start(const std::string &hostname);
 extern void nsp_mqtt_send_register(void);
+extern void nsp_web_log(const std::string &line);
+extern void nsp_mqtt_publish_log(const char *msg);
 extern void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
                                            int heap_pct, float temperature,
                                            const std::string &warnings);
@@ -74,6 +76,13 @@ float nsp_temperature() {
 }
 
 
+static void nsp_boot_log_line(const char *line) {
+    extern void nsp_web_log(const std::string &line);
+    extern void nsp_mqtt_publish_log(const char *msg);
+    nsp_web_log(std::string(line));
+    nsp_mqtt_publish_log(line);
+}
+
 extern "C" void app_main(void) {
     /* P310: the console must tell the whole boot story — who started us, what
      * we completed, and what the PREVIOUS reset was (POWERON = power rail,
@@ -95,6 +104,15 @@ extern "C" void app_main(void) {
             default: name = "OTHER"; break;
         }
         printf("[app] boot: fw " FW_VERSION " — previous reset: %s (%d)\n", name, cause);
+        /* P312: the reset reason must be VISIBLE where the user can read it —
+         * the panel's own web UI and the manager's log topic. The serial
+         * console is rarely attached; the web UI always is. The crash-loop
+         * diagnosis (the user's panel) was blind without this. */
+        {
+            char l[96];
+            snprintf(l, sizeof(l), "boot: fw " FW_VERSION " — previous reset: %s (%d)", name, cause);
+            nsp_boot_log_line(l);
+        }
     }
     ESP_ERROR_CHECK(nvs_flash_init());  // factory NVS holds config
     printf("[app] nvs ok; loading config\n");
