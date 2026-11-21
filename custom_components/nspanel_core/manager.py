@@ -1354,6 +1354,12 @@ class NSPanelCoreManager:
                 "state": state,
                 "progress": data.get("progress", 0),
             }
+            # P312: keep the panel's own warnings in the last-telemetry store —
+            # the Send path reads them to refuse a TFT delivery toward a
+            # display that is not answering (that delivery wedged the panel).
+            if warnings or ip or temperature is not None:
+                last = self._last_telemetry.setdefault(panel.mac, {})
+                last["warnings"] = warnings
             # P135: every status report carries the running version — the
             # displayed version may never go stale again.
             reported_version = str(data.get("version") or "").strip()

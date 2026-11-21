@@ -239,6 +239,20 @@ void nsp_mqtt_handle_command(const std::string &payload) {
     } else if (cmd_field == CMD_FIRMWARE_UPDATE) {
         nsp_ota_start();
     } else if (cmd_field == CMD_TFT_UPDATE) {
+        /* P312: a display that is not answering cannot take a TFT stream —
+         * starting it wedged the panel (the delivery's stall watchdog
+         * restarts it, and the config-load failure on that restart dropped
+         * it into the setup AP: the user's dead panel after Send). Refuse
+         * cleanly: log it, stay alive, the send can be retried the moment
+         * the display answers. */
+        extern const char *nsp_display_warning(void);
+        const char *warn = nsp_display_warning();
+        if (warn && warn[0]) {
+            char l[160];
+            snprintf(l, sizeof(l), "TFT update refused: %s Restart the display from the panel web UI first.", warn);
+            nsp_mqtt_publish_log(l);
+            return;
+        }
         extern void nsp_tft_start(void);  // P210: real OTA TFT delivery
         nsp_tft_start();
     } else if (cmd_field == "dash") {

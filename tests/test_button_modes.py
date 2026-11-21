@@ -6,7 +6,9 @@ JSON config), and the press event rides nspanel/<hostname>/button."""
 from __future__ import annotations
 
 import asyncio
+import tempfile
 import json
+import os
 import pathlib
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -15,6 +17,7 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "custom_components"))
 
 from nspanel_core import manager as M  # noqa: E402
+from nspanel_core.dashboard_manager import DashboardService  # noqa: E402
 from nspanel_core.models import PanelConfig  # noqa: E402
 from nspanel_core.const import TOPIC_PANEL_BUTTON  # noqa: E402
 
@@ -29,11 +32,16 @@ def _mgr(panel: PanelConfig):
     mgr.hass = MagicMock()
     mgr.hass.services = MagicMock()
     mgr.hass.services.async_call = AsyncMock()
+    mgr._panel_cmd_topic = lambda p, s: f"nspanel/{p.wifi_hostname or p.name}/{s}"
+    mgr._register_accept_reply = lambda pnl: json.dumps({"command": "register_accept"})
+    mgr._publish = AsyncMock()
+    mgr._publish_panel_status = AsyncMock()
+    mgr._maybe_trigger_firmware_ota_cooled = AsyncMock()
     return mgr
 
 
 def _panel(**kw):
-    base = dict(id=7, mac="e465b849a100", name="KitchenPanel",
+    base = dict(id=7, mac="e465b849a100", name="KitchenPanel", accepted=True,
                 button1_mode=1, button1_detached_entity="switch.coffee")
     base.update(kw)
     return PanelConfig(**base)
@@ -160,3 +168,58 @@ def test_send_panel_config_delivers_button_config():
     assert d["button1_mqtt_payload"] == "ON"
     assert d["button2_mqtt_topic"] == "home/btn2"
     assert d["button2_mqtt_payload"] == "OFF"
+
+
+def test_send_refused_when_the_display_is_not_responding():
+    """P312 HARD LESSON (the user's dead panel): a TFT delivery toward a
+    display that is not answering wedges the panel (the stall watchdog
+    restarts it; the restart dropped it off the network). The Send must
+    refuse with the action that fixes it instead of killing the panel."""
+    panel = _panel(button1_mode=0, button2_mode=0)
+    mgr = _mgr(panel)
+    mgr._panel_by_mac = lambda mac: next(
+        (p for p in mgr.config.panels if p.mac == mac), None)
+    mgr._last_telemetry = {
+        "e465b849a100": {"warnings": [
+            {"level": "warning", "text": "No response from the display."}]},
+    }
+    mgr.dash._designs = {panel.mac: MagicMock()}
+    mgr.dash._serving = None
+    mgr.dash.manager = mgr  # self.manager resolves through the dash mock
+
+    async def run():
+        return await DashboardService.async_send_to_panel(
+            mgr.dash, panel.mac)
+
+    result = _run(run())
+    assert "display is not responding" in result.get("error", ""), result
+    assert mgr._serving in (None, {}) or not mgr.dash._serving, \
+        "the serving slot must stay free — nothing was sent"
+
+
+def test_send_allowed_when_the_display_answers():
+    panel = _panel(button1_mode=0)
+    mgr = _mgr(panel)
+    mgr._panel_by_mac = lambda mac: next(
+        (p for p in mgr.config.panels if p.mac == mac), None)
+    mgr._last_telemetry = {"e465b849a100": {"warnings": []}}
+    mgr.dash._designs = {panel.mac: MagicMock()}
+    mgr.dash._serving = None
+    svc = mgr.dash
+    svc.manager = mgr  # self.manager._publish resolves through the chain
+    _tmp = tempfile.NamedTemporaryFile(delete=False)
+    _tmp.write(b"x" * 1000)
+    _tmp.close()
+    svc.async_generate = AsyncMock(return_value=(_tmp.name, "m", {}, []))
+    svc._maps = {}
+    svc._page_ids = {}
+    svc._delivered = {}
+    svc._cmd_topic = lambda mac: f"nspanel/{panel.name}/command"
+    svc._save = AsyncMock()
+
+    async def run():
+        return await DashboardService.async_send_to_panel(mgr.dash, panel.mac)
+
+    result = _run(run())
+    assert result.get("ok") is True, result
+    os.unlink(_tmp.name)

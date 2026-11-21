@@ -1,21 +1,21 @@
 {
- "version": "0.1.5",
- "notes": "Native firmware 0.1.5 \u2014 the physical button modes are implemented: DIRECT toggles the relay on-panel, DETACHED reports the press to the manager (which routes it to the bound Home Assistant entity), CUSTOM_MQTT publishes the button's configured topic/payload, FOLLOW toggles and reports. The button configuration is delivered to the panel by the manager (set_button_config).",
+ "version": "0.1.6",
+ "notes": "Native firmware 0.1.6 \u2014 SAFETY: a TFT update is REFUSED when the panel's display is not responding (the delivery wedged the panel and dropped it off the network). Retry the Send after the display answers.",
  "files": {
   "firmware/sonoff/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/native-firmware-0.1.5.bin",
-   "md5": "71c77ab228e482aed9679309bd95b4a0"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/native-firmware-0.1.6.bin",
+   "md5": "3d276ea27c1b9ac1cb760ba2adf7a72a"
   },
   "firmware/sonoff/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "firmware/custom/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/native-firmware-0.1.5.bin",
-   "md5": "71c77ab228e482aed9679309bd95b4a0"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/native-firmware-0.1.6.bin",
+   "md5": "3d276ea27c1b9ac1cb760ba2adf7a72a"
   },
   "firmware/custom/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.5/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.6/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "tft/gui.tft": {

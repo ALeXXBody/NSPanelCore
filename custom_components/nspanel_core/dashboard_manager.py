@@ -179,6 +179,19 @@ class DashboardService:
         panel = self.manager._panel_by_mac(mac)
         if panel is None or not panel.accepted:
             return {"error": "panel not found or not accepted"}
+        # P312: a panel whose display is not answering CANNOT take a TFT
+        # stream — the delivery wedges it (the stall watchdog restarts it,
+        # and the restart dropped the user's panel off the network). Refuse
+        # with the action that fixes it instead of killing the panel.
+        telemetry = self.manager._last_telemetry.get(mac, {}) or {}
+        warning = " ".join(
+            str(w.get("text", "")) if isinstance(w, dict) else str(w)
+            for w in telemetry.get("warnings", []))
+        if "no response from the display" in warning.lower():
+            return {"error":
+                    "the panel's display is not responding — on the panel's "
+                    "web UI press Display restart (or reseat the display "
+                    "ribbon), then Send again"}
         # P279 MEDIUM fix: reserve the slot BEFORE the await — two concurrent
         # sends both passed the check and both published tft_update
         self._serving = {"mac": mac, "path": "", "md5": "", "ts": 0, "reserving": True}
