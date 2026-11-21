@@ -141,6 +141,14 @@ class DashboardService:
         return None
 
     def serving_info(self) -> dict:
+        # P312: the slot EXPIRES after 10 minutes (the download window) —
+        # an expired slot must not be reported as an in-progress send, or
+        # every later send is refused with "already in progress" forever
+        # (the user's Send wedged after one delivery that never completed).
+        if self._serving:
+            import time as _t
+            if _t.time() - self._serving.get("ts", 0) > 600:
+                self._serving = None
         return dict(self._serving) if self._serving else {}
 
     def stored_tft_path(self, mac: str) -> str | None:
