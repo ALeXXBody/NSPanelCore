@@ -5,13 +5,9 @@
       <h2 class="font-medium text-2xl">Settings</h2>
       <a href="https://github.com/ALeXXBody/NSPanelCore/tree/main/docs" target="_blank" class="btn btn-outline btn-info">Help</a>
     </div>
-    {% include 'components/alert.html' %}
     <div class="mt-2">
       <div class="p-4 bg-base-100 rounded-box shadow-lg w-full">
         <span class="block mb-2 text-xl">NSPanel Core settings</span>
-
-        {% include 'components/alert.html' %}
-
         <!-- Manager address -->
         <div class="my-2">
             <label for="manager_address" class="block mb-1 text-sm font-medium">Manager address</label>
@@ -459,7 +455,6 @@
 
         {% if mqtt_password.strip %}
         <div class="mb-2 border-2 border-dashed border-info rounded-box p-2">
-            {% include 'components/alert.html' %}
             <div class="mt-2 flex items-center justify-start w-full">
                 <input type="checkbox" class="checkbox checkbox-accent mr-2 w-4 h-4" id="clear_mqtt_password" name="clear_mqtt_password">
                 <label for="clear_mqtt_password" class="text-sm font-medium">
@@ -477,7 +472,6 @@
           <span class="block mb-2 text-xl">Home Assistant API</span>
 
           {% if is_home_assistant_addon %}
-          {% include 'components/alert.html' %}
           {% endif %}
 
 
@@ -507,7 +501,6 @@
 
           {% if home_assistant_token.strip and not is_home_assistant_addon %}
           <div class="mb-2 border-2 border-dashed border-info rounded-box p-2">
-              {% include 'components/alert.html' %}
               <div class="mt-2 flex items-center justify-start w-full">
                   <input type="checkbox" class="checkbox checkbox-accent mr-2 w-4 h-4" id="clear_home_assistant_token" name="clear_home_assistant_token">
                   <label for="clear_home_assistant_token" class="text-sm font-medium">

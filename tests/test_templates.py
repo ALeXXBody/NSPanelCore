@@ -147,7 +147,7 @@ def test_settings_page_has_tabs():
 
 
 def test_settings_renders_with_auto_tft():
-    out = ENV.get_template("settings_general.html").render(
+    out = ENV.get_template("_tab_general.html").render(
         _base(
             default_nspanel_type="sonoff",
             auto_tft_updates=True,
@@ -180,11 +180,13 @@ def test_settings_renders_with_auto_tft():
         )
     )
     assert "Auto-install on register" in out
-    assert "modal_confirm" in out  # modals.html included, not the empty stub
+    # P312: the tab partial is the LIVE content — the modal_confirm dialog
+    # comes from base.html's modals include, not the tab itself
+    assert "save_settings" in out  # the form posts the real save route
 
 
 def test_weather_renders_stored_values():
-    out = ENV.get_template("weather_and_time.html").render(
+    out = ENV.get_template("_tab_weather.html").render(
         _base(
             location_latitude="51.5",
             location_longitude="-0.1",

@@ -162,3 +162,38 @@ def test_studio_page_waits_for_auth_and_renders_gallery():
     assert "_nspanelBootstrapDone" in html
     assert "setTimeout(loadGallery, 800)" in html
     assert "nspanelFrontendHass" in html  # the no-frontend early boot
+
+
+def test_settings_page_renders_zero_empty_alerts():
+    """P312 (user: 'a lot of circled ! signs with no text'): the alert slots
+    were the old add-on's server-warning slots — never fed in the new
+    integration. The component renders NOTHING without a text, and the dead
+    includes are out of the settings tabs."""
+    import jinja2
+    from nspanel_core import dashboard as D
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(D.TEMPLATES_DIR)),
+                             undefined=jinja2.ChainableUndefined)
+    out = env.get_template("settings.html").render(
+        request=type("R", (), {"path": "/nspanel_core/settings"})(),
+        active_tab="general", nspanels=[], ignored=[],
+        manager_address="x", manager_port=8123,
+        panel_broker_host="", panel_broker_port=1883, panel_broker_user="",
+        panel_broker_pass_placeholder="", rooms=[], themes={}, theme="",
+    )
+    assert 'role="alert"' not in out, "empty alert boxes are back on the settings page"
+    # the error TOAST template is separate (JS-driven, hidden until a real
+    # runtime error) — only the static empty alert slots were the problem
+
+
+def test_alert_component_still_works_with_a_real_message():
+    import jinja2
+    from nspanel_core import dashboard as D
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(D.TEMPLATES_DIR)),
+                             undefined=jinja2.ChainableUndefined)
+    # no text -> nothing (the fix)
+    assert env.get_template("components/alert.html").render() == ""
+    # a real message -> the alert renders with the text
+    out = env.get_template("components/alert.html").render(
+        level="warning", style="my-style", text="Broker unreachable")
+    assert "Broker unreachable" in out
+    assert "alert-warning" in out
