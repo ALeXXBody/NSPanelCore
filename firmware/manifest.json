@@ -1,21 +1,21 @@
 {
- "version": "0.1.7",
- "notes": "Native firmware 0.1.7 \u2014 DIAGNOSTIC: the boot reset reason is now published to the panel's own web UI and the manager's log topic at every boot (the crash-loop cause becomes visible without serial). Includes 0.1.6's guard: TFT updates are refused while the display is not responding.",
+ "version": "0.1.8",
+ "notes": "Native firmware 0.1.8 \u2014 the same diagnostic + guards as 0.1.7 (boot reset-reason visible on the panel web UI; TFT updates refused while the display is not responding), re-versioned to clear the poisoned md5 record from the interrupted 0.1.7 flash.",
  "files": {
   "firmware/sonoff/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/native-firmware-0.1.7.bin",
-   "md5": "bcfe92c0892758699e0a3a07b10a099c"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.8/native-firmware-0.1.8.bin",
+   "md5": "192258f0083763caeaf2e6161aef759f"
   },
   "firmware/sonoff/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.8/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "firmware/custom/firmware.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/native-firmware-0.1.7.bin",
-   "md5": "bcfe92c0892758699e0a3a07b10a099c"
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.8/native-firmware-0.1.8.bin",
+   "md5": "192258f0083763caeaf2e6161aef759f"
   },
   "firmware/custom/data_file.bin": {
-   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.7/data_file.bin",
+   "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.8/data_file.bin",
    "md5": "74d7ce6e39754a9bec2ae3a075620c49"
   },
   "tft/gui.tft": {
@@ -29,9 +29,7 @@
  },
  "changes": {
   "bug_fixes": [
-   "The physical button modes are IMPLEMENTED on the panel \u2014 previously every press toggled the relay regardless of the configured mode.",
-   "DETACHED/FOLLOW presses are reported to the manager; CUSTOM_MQTT publishes the configured topic/payload.",
-   "The button configuration is delivered by the manager (set_button_config) \u2014 the old JSON config was never consumed by the firmware."
+   "0.1.7/0.1.8: the boot reset reason is visible on the panel's web UI after every boot; TFT updates are refused while the display is not responding."
   ],
   "features": [],
   "breaking": []
