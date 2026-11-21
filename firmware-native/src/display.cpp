@@ -35,6 +35,7 @@ static volatile bool s_display_ready = false;
 static volatile bool s_display_raw_mode = false;  // P208#5: touch/UART ownership
 static char s_warnings[64] = "";
 void nsp_display_set_raw_mode(bool on);  // P208#5: defined below
+extern void nsp_mqtt_publish_log(const char *line);  // P160: file scope only
 void nsp_display_show_screensaver(void);  // P211: defined below (file scope, P160 rule)
 void nsp_display_relay(int relay, bool state);  // P211
 extern "C" void nsp_relay_toggle_pub(int relay);  // P210
@@ -49,6 +50,14 @@ const char *nsp_display_warning(void) {
     return s_display_ready ? "" : "No response from the display.";
 }
 
+/* P316: display diagnostics — the RX byte counter counts EVERY byte that
+ * arrives from the display UART (silence = electrical fault; garbage =
+ * wrong baud; a valid reply = alive). Exposed on the panel web status. */
+static volatile uint32_t s_display_rx_bytes = 0;
+uint32_t nsp_display_rx_bytes(void) { return s_display_rx_bytes; }
+static void nsp_rx_count(int n) { if (n > 0) s_display_rx_bytes += (uint32_t)n; }
+void nsp_display_baud_scan(void);  // P316: defined below
+
 /* P279 MEDIUM fix (F11): the display writes are UNSYNCHRONIZED between the
  * MQTT task and the touch task (the swipe's dp=, the page nav, the clock) —
  * interleaved mid-command bytes garbled the wire. One mutex serializes
@@ -60,12 +69,11 @@ void nsp_display_send(const char *data, size_t len) {  // P210: shared with the 
     uart_write_bytes(DISPLAY_UART, data, len);
 }
 
-void nsp_display_send_command(const char *cmd) {
-    if (s_display_raw_mode) return;  // P279 HIGH fix: the TFT upload owns the wire
-    /* P312: display-dead suspension — writing into a silent display only
-     * piles up hung tasks (the TASK_WDT boot loop). Commands are dropped
-     * until the display answers again; the periodic re-handshake revives. */
-    if (!s_display_ready) return;
+/* P316: the UNGATED send — used by the handshake only. Readiness is the
+ * handshake's OUTPUT; gating its own send on the state it establishes
+ * (raw mode at init, not-ready afterwards) made the panel transmit
+ * NOTHING since P279 batch 3 — the "dead" display was never dead. */
+static void nsp_display_send_now(const char *cmd) {
     size_t len = strlen(cmd);
     taskENTER_CRITICAL(&s_display_cmd_mux);
     uart_write_bytes(DISPLAY_UART, cmd, len);
@@ -73,11 +81,20 @@ void nsp_display_send_command(const char *cmd) {
     taskEXIT_CRITICAL(&s_display_cmd_mux);
 }
 
+void nsp_display_send_command(const char *cmd) {
+    if (s_display_raw_mode) return;  // P279 HIGH fix: the TFT upload owns the wire
+    /* P312: display-dead suspension — commands are dropped until the
+     * display answers again; the handshake/revival path uses send_now. */
+    if (!s_display_ready) return;
+    nsp_display_send_now(cmd);
+}
+
 void nsp_display_drain(int ms) {  // P210: shared
     uint8_t buf[64];
     int64_t start = esp_timer_get_time();
     while (esp_timer_get_time() - start < (int64_t)ms * 1000) {
         int n = uart_read_bytes(DISPLAY_UART, buf, sizeof(buf), pdMS_TO_TICKS(25));
+        nsp_rx_count(n);
         (void)n;
     }
 }
@@ -86,10 +103,11 @@ void nsp_display_drain(int ms) {  // P210: shared
 static bool nsp_display_handshake(int attempts) {
     for (int i = 0; i < attempts; i++) {
         uart_flush_input(DISPLAY_UART);
-        nsp_display_send_command("connect");
+        nsp_display_send_now("connect");  // P316: the ungated path
         vTaskDelay(pdMS_TO_TICKS(1000));
         uint8_t buf[128];
         int n = uart_read_bytes(DISPLAY_UART, buf, sizeof(buf), pdMS_TO_TICKS(1000));
+        nsp_rx_count(n);
         if (n > 3) {  // any non-trivial reply proves the link
             s_display_ready = true;
             s_warnings[0] = '\0';
@@ -158,7 +176,45 @@ bool nsp_display_reprobe(void) {
     nsp_display_drain(300);
     s_display_ready = false;
     bool ok = nsp_display_handshake(1);
+    if (ok) nsp_display_after_handshake();  // P316: revive = take over the screen
     return ok;
+}
+
+/* P316: the baud scan — interrupted TFT uploads (whmi-wris) switch the
+ * Nextion's UART speed; a crash after that leaves it at a baud we never
+ * probe (the handshake is fixed at 115200). Scan the realistic baud set:
+ * a reply at ANY baud revives the panel; total silence at all of them is
+ * the electrical verdict (ribbon / display). Runs while the touch task is
+ * parked (not ready) — we own the wire. */
+void nsp_display_baud_scan(void) {
+    if (s_display_ready) return;
+    if (s_display_raw_mode) return;  // someone else owns the wire
+    static const int bauds[] = {115200, 9600, 38400, 57600, 230400, 921600};
+    char l[80];
+    s_display_raw_mode = true;  // the scan owns the wire end to end
+    for (unsigned i = 0; i < sizeof(bauds) / sizeof(bauds[0]); i++) {
+        uart_set_baudrate(DISPLAY_UART, bauds[i]);
+        uart_flush_input(DISPLAY_UART);
+        uart_write_bytes(DISPLAY_UART, "connect", 7);
+        uart_write_bytes(DISPLAY_UART, END_SEQ, 3);
+        vTaskDelay(pdMS_TO_TICKS(300));
+        uint8_t buf[128];
+        int n = uart_read_bytes(DISPLAY_UART, buf, sizeof(buf), pdMS_TO_TICKS(400));
+        nsp_rx_count(n);
+        snprintf(l, sizeof(l), "diag: baud %d -> %d bytes%s", bauds[i], n,
+                 n > 3 ? " REPLY!" : "");
+        nsp_mqtt_publish_log(l);
+        if (n > 3) {  // the display answers HERE — revive at this baud
+            s_display_ready = true;
+            s_warnings[0] = '\0';
+            s_display_raw_mode = false;
+            nsp_display_after_handshake();
+            return;
+        }
+    }
+    uart_set_baudrate(DISPLAY_UART, DISPLAY_BAUD);  // back to the default
+    s_display_raw_mode = false;
+    nsp_mqtt_publish_log("diag: no reply at any baud");
 }
 
 bool nsp_display_restart(void) {
@@ -180,8 +236,13 @@ bool nsp_display_restart(void) {
     if (ok) {
         s_display_ready = true;
         nsp_display_after_handshake();
+        return true;
     }
-    return ok;
+    /* P316: the restart failed at the default baud — scan the rest before
+     * declaring the display dead (an interrupted TFT upload may have left
+     * the Nextion at another speed). */
+    nsp_display_baud_scan();
+    return s_display_ready;
 }
 
 /* TFT stream to the display with the baked-in offset guard (P104/P177). */
@@ -287,6 +348,7 @@ void nsp_display_touch_task(void *) {
             continue;
         }
         int n = uart_read_bytes(DISPLAY_UART, buf, sizeof(buf) - resid_len, pdMS_TO_TICKS(200));
+        nsp_rx_count(n);
         if (n > 0 && resid_len) {
             memmove(buf + resid_len, buf, n);
             memcpy(buf, resid, resid_len);
@@ -430,7 +492,9 @@ void nsp_display_power(int state) {
 
 /* P211b: exports for the TFT uploader (ota.cpp) — single access point. */
 int nsp_display_read(uint8_t *buf, int len, int timeout_ms) {
-    return uart_read_bytes(DISPLAY_UART, buf, (size_t)len, pdMS_TO_TICKS(timeout_ms));
+    int n = uart_read_bytes(DISPLAY_UART, buf, (size_t)len, pdMS_TO_TICKS(timeout_ms));
+    nsp_rx_count(n);
+    return n;
 }
 bool nsp_display_handshake_pub(int attempts) {
     return nsp_display_handshake(attempts);

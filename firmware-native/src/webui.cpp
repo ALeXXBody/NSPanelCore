@@ -169,28 +169,24 @@ static esp_err_t on_post_action(httpd_req_t *req) {
     const char *msg = "unknown action";
     switch (action) {
     case 1:
-        nsp_web_log("webui: reboot requested");
-        nsp_mqtt_publish_log("webui: reboot requested");
+        nsp_mqtt_publish_log("webui: reboot requested");  // P315: writes both channels
         msg = "Rebooting…";
         httpd_resp_send(req, msg, strlen(msg));
         vTaskDelay(pdMS_TO_TICKS(800));
         esp_restart();
         return ESP_OK;
     case 2:
-        nsp_web_log("webui: firmware update requested");
-        nsp_mqtt_publish_log("webui: firmware update requested");
+        nsp_mqtt_publish_log("webui: firmware update requested");  // P315: writes both channels
         nsp_ota_start();
         msg = "OTA started — watch the status page";
         break;
     case 3:
-        nsp_web_log("webui: display restart requested");
-        nsp_mqtt_publish_log("webui: display restart requested");
+        nsp_mqtt_publish_log("webui: display restart requested");  // P315: writes both channels
         msg = nsp_display_restart() ? "Display reconnected"
                                     : "Display still not responding";
         break;
     case 4:
-        nsp_web_log("webui: FACTORY RESET requested");
-        nsp_mqtt_publish_log("webui: FACTORY RESET requested");
+        nsp_mqtt_publish_log("webui: FACTORY RESET requested");  // P315: writes both channels
         nsp_factory_reset();
         msg = "Config erased — restarting into the setup AP";
         httpd_resp_send(req, msg, strlen(msg));

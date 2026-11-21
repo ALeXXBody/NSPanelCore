@@ -79,10 +79,7 @@ float nsp_temperature() {
 
 
 static void nsp_boot_log_line(const char *line) {
-extern void nsp_web_log(const std::string &line);
-    extern void nsp_mqtt_publish_log(const char *msg);
-    nsp_web_log(std::string(line));
-    nsp_mqtt_publish_log(line);
+    nsp_mqtt_publish_log(line);  // P315: writes the web buffer AND MQTT — one line
 }
 
 extern "C" void app_main(void) {
@@ -123,7 +120,6 @@ extern "C" void app_main(void) {
         char l[96];
         snprintf(l, sizeof(l), "stage: config loaded (wifi=%s)", 
                  g_cfg.wifi_ssid.empty() ? "unset" : "set");
-    extern void nsp_web_log(const std::string &line);
         nsp_web_log(std::string(l));
     }
     printf("[app] config loaded: hostname=%s mqtt=%s manager=%s\n",
@@ -185,7 +181,6 @@ extern "C" void app_main(void) {
                     char l[64];
                     snprintf(l, sizeof(l), "stage: 30s report (uptime %lld s)",
                              (long long)(now / 1000000LL));
-                extern void nsp_web_log(const std::string &line);
                     nsp_web_log(std::string(l));
                 }
                 uint32_t heap = esp_get_minimum_free_heap_size();
