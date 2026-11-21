@@ -197,3 +197,38 @@ def test_alert_component_still_works_with_a_real_message():
         level="warning", style="my-style", text="Broker unreachable")
     assert "Broker unreachable" in out
     assert "alert-warning" in out
+
+
+def test_send_toolchain_is_vendored_and_compiles():
+    """P312 (user: "Send failed: No such file or directory: 'nxwright'"):
+    the manager runs inside the HA environment where no global nxwright
+    exists, and nxwright is NOT on PyPI — the toolchain is vendored inside
+    the integration and compiles through sys.executable + the vendored
+    path. A REAL compile of the bundled kit, in this venv which has no
+    nxwright installed."""
+    import os, sys, tempfile
+    vendored = REPO / "custom_components/nspanel_core/nxwright"
+    assert vendored.is_dir(), "the vendored nxwright toolchain is missing"
+    assert (vendored / "cli.py").is_file() and (vendored / "__main__.py").is_file()
+    src = (REPO / "custom_components/nspanel_core/hmi_generate.py").read_text()
+    assert "sys.executable" in src and "VENDORED_DIR" in src, \
+        "compile_tft must invoke the vendored toolchain, not the PATH"
+
+    # a REAL compile: generate the source, run the vendored compiler
+    from nspanel_core import hmi_generate as hg
+    from nspanel_core.dashboard_design import PanelDesign
+    design = PanelDesign.from_dict({
+        "mac": "e465b849a100",
+        "pages": [{"name": "dash_kitchen", "title": "Kitchen",
+                   "background": "bg_plain", "background_image": ""}],
+        "items": [{"id": "item_test", "page": "dash_kitchen", "slot": 0,
+                   "widget": "light", "entity_id": "light.ceiling",
+                   "label": "Ceiling"}],
+        "screensaver_page": "dash_kitchen",
+    })
+    design.validate()
+    wd = tempfile.mkdtemp(prefix="nspvendored")
+    hg.generate_source(design, str(REPO / "custom_components/nspanel_core/hmi_kit"), wd)
+    tft = hg.compile_tft(wd, os.path.join(wd, "panel.tft"))
+    assert os.path.isfile(tft) and os.path.getsize(tft) > 500000, \
+        "the vendored compile produced no real TFT"

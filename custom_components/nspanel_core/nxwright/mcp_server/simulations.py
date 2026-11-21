@@ -1,0 +1,110 @@
+"""What the MCP server's tools drive: a simulation of an app, whichever
+kind it is. Each kind gives the same actions and the same looks, so that one
+set of tools serves them all (server.py).
+
+An action changes what the screen does, as a press or an instruction from
+the serial line does; it returns once the simulation has handled it. A look
+reads what the screen shows, and changes nothing. Points and boxes are in
+the page's pixels, from its top left corner.
+"""
+from abc import ABC, abstractmethod
+from pathlib import Path
+
+
+class DrivenSimulation(ABC):
+    """A simulation of the app of `source_folder` that the tools drive.
+    `where` says where it runs: "headless", in the server's own process, or
+    "vscode", in a VS Code window."""
+
+    where: str
+
+    def __init__(self, source_folder: Path):
+        self.source_folder = source_folder
+        # The number of the log's last line the tools gave the agent, so that
+        # a send answers with only what came after it.
+        self.log_given = 0
+
+    # Actions.
+
+    @abstractmethod
+    def press(self, x: int, y: int):
+        """Presses the screen at the page's pixel (x, y), and holds it."""
+
+    @abstractmethod
+    def move(self, x: int, y: int):
+        """Moves the press held to the page's pixel (x, y)."""
+
+    @abstractmethod
+    def release(self):
+        """Releases the press held."""
+
+    @abstractmethod
+    def wait(self, milliseconds: int):
+        """Lets `milliseconds` pass, the app's timers running meanwhile."""
+
+    @abstractmethod
+    def send(self, instruction: str):
+        """Runs `instruction` as if it came on the serial line."""
+
+    @abstractmethod
+    def set_input(self, pin: int, level: int):
+        """Sets the level, 0 or 1, of the GPIO input `pin`, 0 to 7."""
+
+    @abstractmethod
+    def set_inputs(self, levels: dict):
+        """Sets the levels of several GPIO inputs at the same moment,
+        `levels` as {pin: level}: every level changes before any bound pin's
+        event runs (Simulation.set_inputs)."""
+
+    @abstractmethod
+    def start_again(self):
+        """Starts the app again, as a screen switched off and on."""
+
+    @abstractmethod
+    def start_generator(self, settings: dict) -> int:
+        """Starts a signal generator with `settings`, a generator as a
+        settings file gives it (testing/signal_generators.py), beside those
+        running. Returns its number. Its points arrive as time passes.
+        Raises NxwrightError for settings that cannot be used."""
+
+    @abstractmethod
+    def stop_generator(self, number: int):
+        """Stops the signal generator `number`. Raises NxwrightError when it
+        does not run."""
+
+    @abstractmethod
+    def stop(self):
+        """Ends the simulation."""
+
+    # Looks.
+
+    @abstractmethod
+    def screen(self, picture: bool = True) -> dict:
+        """Returns what the screen shows: "text", its text layout
+        (testing/screen_text.py); "page", the name of the page shown; and,
+        when `picture`, "png", the bytes of a PNG picture of it. All three
+        describe the same screen."""
+
+    @abstractmethod
+    def components(self) -> list:
+        """Returns the components of the page shown, the page first, each
+        a dict of `name`, `type`, `x`, `y`, `w`, `h`, and `shown`."""
+
+    @abstractmethod
+    def values(self, names: list = None) -> dict:
+        """Returns {name: value} for `names`, or for every name, as the code
+        of the page shown names them, such as "t0.txt" or "sys0"; a
+        component's name alone, such as "t0", gives each of its attributes.
+        Raises NxwrightError for a name that code does not know."""
+
+    @abstractmethod
+    def generators(self) -> list:
+        """Returns the running signal generators, in the order they
+        started. Each is a dict of its `number` and its `settings`, in the
+        form a settings file uses."""
+
+    @abstractmethod
+    def log(self, after: int = 0) -> list:
+        """Returns the log's lines after line number `after`, each a dict of
+        `number`, counted from 1 since the simulation started, `time`, the
+        app's, in milliseconds, and `line`."""

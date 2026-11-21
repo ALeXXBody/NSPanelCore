@@ -1,0 +1,1261 @@
+"""Answers a code editor speaking the Language Server Protocol, through pygls.
+
+pygls carries the protocol: the messages and their framing; initialize,
+shutdown, and exit; the files open in the editor, and their changes; the
+editor's units of a column, which it agrees with the editor; and the
+routing of each request to its answer. The server answers:
+  - the notifications textDocument/didOpen, didChange, and didClose, and
+    workspace/didChangeWatchedFiles, by which the editor tells of changes on
+    disk. Once changes pause, the server checks what they may affect, one
+    step at a time, and sends textDocument/publishDiagnostics after each
+    page it has checked. Between two steps it reads the messages that
+    arrived, and a change among them starts the check again
+    (live_checks.py). A step starts only once the server has handled no
+    message for a moment, so that the messages waiting behind a long
+    answer are read first.
+  - the notification workspace/didChangeConfiguration, by which the editor
+    tells of its settings. The settings under `nxwright.checks` turn on the
+    check of an action: `rename`, `addComponent`, or `paste`. While an
+    action's check is on, the server builds the folder before and after
+    that action, and refuses one that would break the build. Every check is
+    off until the editor sends a setting that turns it on.
+  - textDocument/definition, with the places defining the name at a
+    position (source/definitions.py), and textDocument/references, with
+    the places using it (source/references.py).
+  - textDocument/documentSymbol, with a file's outline, and
+    workspace/symbol, with the names found across the source folders of
+    the open files (symbols.py).
+  - textDocument/hover (hovers.py), textDocument/completion, and
+    textDocument/signatureHelp (completion.py).
+  - textDocument/formatting, which formats a .nx file (source/formatting.py),
+    and textDocument/rename (rename.py).
+  - nxwright's own requests, each named nxwright/ and a word, for what
+    nxwright adds to the editor: a page's measures against the build's
+    limits, the Editor code a .nx file compiles to, the page preview, the
+    properties panel and the page's editing, the Fonts panel, the font and
+    media viewers, the panel switching to nxlang, and the side bar's
+    sections.
+    NxwrightServer.__init__'s table lists them, each with the method
+    answering it, whose docstring says what it answers.
+A request refused, as a rename that would break the build, gets the
+protocol's "request failed" error, whose message the editor shows; one before
+initialize, "server not initialized"; one for anything else, "method not
+found". An unexpected error in answering a request gets "internal error",
+its trace going to standard error, which editors show in their log; one in a
+notification, pygls shows in the editor.
+
+nxwright's own code counts a line's columns in Python's characters. The
+server takes and gives them in the editor's units, UTF-16 unless the editor
+offers another.
+
+Each request reads the source folder afresh, with its open files as the
+editor has them and the others from disk (file_texts.py). The server therefore
+always sees a change made outside the editor, such as an extract. It does keep
+two things between requests:
+  - the numbers that stand for resources, for inlay hints and code actions,
+    until a file they came from changes. Finding them again compiles pages,
+    which would hold up the check after every key typed. While a change
+    waits to be checked, a request is therefore answered from the numbers
+    kept, and the server finds them again in steps once the pages are
+    checked (resource_number_cache.py).
+  - each page's measures and files, as the last check found them, to
+    answer nxwright/limits (live_checks.py).
+"""
+import asyncio
+from pathlib import Path
+import time
+
+import attrs
+from lsprotocol import types
+from lsprotocol.converters import get_converter
+from pygls.exceptions import JsonRpcException, JsonRpcServerNotInitialized
+from pygls.lsp.server import LanguageServer
+from pygls.protocol import LanguageServerProtocol
+
+from nxwright import NxwrightError, installed_version
+
+from nxwright.language_server.completion import completions, signature
+from nxwright.source.definitions import definitions
+from nxwright.language_server.file_texts import FileTexts, path_of, uri_of
+from nxwright.source.folder_index import FolderIndex, Place, find_source_folder
+from nxwright.language_server.font_panel import (FontPanelAnswers, font_file_details,
+                                                 font_file_sample, requested_font_file,
+                                                 typeface_sample)
+from nxwright.language_server.font_panel import add as add_font_to_folder
+from nxwright.language_server.hovers import hover
+from nxwright.language_server.live_checks import LiveChecks
+from nxwright.language_server.media_viewer import media_frames
+from nxwright.language_server.picture_view import svg_picture_view
+from nxwright.language_server.nxlang_switch import nxlang_switch
+from nxwright.language_server.page_editing import (component_events, default_event,
+                                                   key_binding, locked_objects, object_events,
+                                                   properties, what_locks_events)
+from nxwright.source.page_edits import attribute_edits, page_lock_edits
+from nxwright.language_server.page_components import (add_component, clear_events,
+                                                       component_types, copy_components,
+                                                       delete_components, group_components,
+                                                       lock_components, paste_components,
+                                                       paste_parts, place_components,
+                                                       reorder_components)
+from nxwright.testing.preview import Previews, page_of_file
+from nxwright.language_server.quick_fixes import quick_fix
+from nxwright.language_server.resource_number_cache import ResourceNumberCache
+from nxwright.source.references import references
+from nxwright.language_server.symbols import file_symbols, folder_symbols
+from nxwright.language_server.rename import rename
+from nxwright.source.formatting import format_folder
+from nxwright.source.page_source import page_header_of_text, page_toml_path
+from nxwright.project.device_settings import DEFAULT_ENCODING, ENCODINGS, DeviceSettings
+from nxwright.project.screen_copy import ROTATIONS
+from nxwright.project.screen_models import MODELS, model_named
+from nxwright.language.nxlang_samples import MORE_FEATURES, panel_sections
+from nxwright.language.resource_names import LISTS, NOUNS
+from nxwright.source.resource_numbers import (PAGE, PAGE_FILE_SUFFIX, as_name, number_files,
+                                              page_number_as_name, placed_numbers,
+                                              placed_page_numbers)
+from nxwright.source.source_folder import (LANGUAGES, NXLANG, SOURCE_FORMAT, add_page, app_name,
+                                           new_source_folder, parse_app, read_app,
+                                           read_folder_source)
+from nxwright.source.keyboard_adding import add_keyboard, chinese_keyboard_fonts
+from nxwright.source.emulator_adding import add_emulator
+from nxwright.source.mcu_table import emulator_file
+from nxwright.source.upgrade import folder_format
+
+# How long changes must pause, in seconds, before the server checks them.
+CHECK_PAUSE = 0.5
+# How long the server waits, in seconds, between two steps of a check, so
+# that pygls reads a message that arrived during the previous step. pygls's
+# event loop does one piece of work at a time, and reading one message
+# takes three of them. If the next step ran as the loop's very next piece
+# of work, only one of those three would be done before it.
+STEP_GAP = 0.01
+# The error for a request that would change a locked page. %s is the page's name.
+LOCKED_PAGE = "%s is locked. Unlock it from the page preview or the Pages section."
+# The error when an event without code is opened on a locked component, or
+# on any object of a locked page. %s is the name of the locked component or page.
+LOCKED_EVENT = "cannot create event, %s is locked"
+# The start of the names of nxwright's own requests.
+_OWN = "nxwright/"
+# Turns the protocol's objects, such as a problem a request gives, back into data.
+_CONVERTER = get_converter()
+
+
+class RequestFailed(JsonRpcException):
+    """A request refused for a reason the editor shows, as a rename that
+    would break the build."""
+    CODE = types.LSPErrorCodes.RequestFailed
+
+
+@attrs.define
+class _OwnRequest:
+    """One of nxwright's own requests, its params kept as JSON gives them,
+    dicts and lists, which its answers read. pygls would read those of a
+    request it has no type for into objects of its own."""
+    id: int | str
+    method: str
+    jsonrpc: str
+    params: dict = attrs.field(factory=dict)
+
+
+class _Protocol(LanguageServerProtocol):
+    """pygls's protocol, reading nxwright's own requests, those the server
+    registers, as _OwnRequest; its own notifications, such as
+    nxwright/checked, it sends as pygls sends any."""
+
+    def get_message_type(self, method: str):
+        if method.startswith(_OWN) and method in self.fm.features:
+            return _OwnRequest
+        return super().get_message_type(method)
+
+
+class NxwrightServer(LanguageServer):
+    """The language server: pygls's, with nxwright's answers. `shut_down` is
+    True once the editor has asked it to shut down, as the protocol asks
+    before it exits."""
+
+    def __init__(self):
+        super().__init__("nxwright", installed_version(), protocol_cls=_Protocol)
+        self._texts = FileTexts(lambda: self.workspace)
+        self._checks = LiveChecks(self._texts, self, self._units)
+        self._previews = Previews()
+        self._font_panel = FontPanelAnswers()
+        self._resource_numbers = ResourceNumberCache(self._texts)
+        self._initialized = False
+        self.shut_down = False
+        # The timer that runs the checks' next step. It waits CHECK_PAUSE
+        # before a check starts, and STEP_GAP between two steps of a check.
+        self._next_step = None
+        # When the server last finished handling a message, on time.monotonic's clock.
+        self._last_handled = 0.0
+        # The actions that are checked against the build: any of "rename",
+        # "addComponent", and "paste". The editor's settings turn each check
+        # on (_on_settings_change).
+        self._checked = frozenset()
+
+        self._follows(types.INITIALIZE, self._on_initialize)
+        self._follows(types.SHUTDOWN, self._on_shutdown)
+        for notification in (types.TEXT_DOCUMENT_DID_OPEN, types.TEXT_DOCUMENT_DID_CHANGE,
+                             types.TEXT_DOCUMENT_DID_CLOSE):
+            self._follows(notification, self._on_document_change)
+        self._follows(types.WORKSPACE_DID_CHANGE_WATCHED_FILES, self._on_files_change)
+        self._follows(types.WORKSPACE_DID_CHANGE_CONFIGURATION, self._on_settings_change)
+
+        self._answers(types.TEXT_DOCUMENT_DEFINITION, self._definition)
+        self._answers(types.TEXT_DOCUMENT_REFERENCES, self._references)
+        self._answers(types.TEXT_DOCUMENT_DOCUMENT_SYMBOL, self._document_symbols)
+        self._answers(types.WORKSPACE_SYMBOL, self._workspace_symbols)
+        self._answers(types.TEXT_DOCUMENT_HOVER, self._hover)
+        self._answers(types.TEXT_DOCUMENT_COMPLETION, self._completion,
+                      types.CompletionOptions(trigger_characters=[".", '"']))
+        self._answers(types.TEXT_DOCUMENT_SIGNATURE_HELP, self._signature_help,
+                      types.SignatureHelpOptions(trigger_characters=["(", ","]))
+        self._answers(types.TEXT_DOCUMENT_FORMATTING, self._formatting)
+        self._answers(types.TEXT_DOCUMENT_RENAME, self._rename)
+        self._answers(types.TEXT_DOCUMENT_CODE_ACTION, self._code_actions,
+                      types.CodeActionOptions(code_action_kinds=[
+                          types.CodeActionKind.QuickFix, types.CodeActionKind.RefactorRewrite,
+                          types.CodeActionKind.Source]))
+        self._answers(types.TEXT_DOCUMENT_INLAY_HINT, self._inlay_hints,
+                      types.InlayHintOptions())
+        for method, answer in {"limits": self._limits,
+                               "editorCode": self._editor_code,
+                               "pageDrawing": self._page_drawing,
+                               "pageObjects": self._page_objects,
+                               "componentProperties": self._component_properties,
+                               "setAttributes": self._set_attributes,
+                               "defaultEvent": self._default_event,
+                               "componentEvents": self._component_events,
+                               "keyBinding": self._key_binding,
+                               "addKeyboard": self._add_keyboard,
+                               "chineseKeyboardFonts": self._chinese_keyboard_fonts,
+                               "componentTypes": self._component_types,
+                               "addComponent": self._add_component,
+                               "deleteComponents": self._delete_components,
+                               "clearEvents": self._clear_events,
+                               "copyComponents": self._copy_components,
+                               "pasteComponents": self._paste_components,
+                               "pasteParts": self._paste_parts,
+                               "placeComponents": self._place_components,
+                               "reorderComponents": self._reorder_components,
+                               "lockComponents": self._lock_components,
+                               "lockPage": self._lock_page,
+                               "pageLocks": self._page_locks,
+                               "pageEvents": self._page_events,
+                               "resourceNumbersAsNames": self._resource_numbers_as_names,
+                               "groupComponents": self._group_components,
+                               "fonts": self._fonts,
+                               "typefaces": self._typefaces,
+                               "fontSample": self._font_sample,
+                               "fontFile": self._font_file,
+                               "mediaFrames": self._media_frames,
+                               "svgPicture": self._svg_picture,
+                               "nxlangSamples": self._nxlang_samples,
+                               "nxlangMoreFeatures": self._nxlang_more_features,
+                               "nxlangSwitch": self._nxlang_switch,
+                               "addFont": self._add_font,
+                               "project": self._project,
+                               "addPage": self._add_page,
+                               "addEmulator": self._add_emulator,
+                               "newFolderChoices": self._new_folder_choices,
+                               "newSourceFolder": self._new_source_folder}.items():
+            self._answers(_OWN + method, answer)
+
+    def checks_waiting(self) -> bool:
+        """True when a change waits to be checked, a check has steps left,
+        or the numbers that stand for resources are to be found again."""
+        return self._checks.waiting() or self._resource_numbers.waiting()
+
+    def run_checks(self):
+        """Does all the work that waits after a change, without stopping
+        between steps. It checks the changes and sends their findings, and
+        finds again the numbers that stand for resources where they are out
+        of date."""
+        while self.run_check_step():
+            pass
+
+    def run_check_step(self) -> bool:
+        """Runs the next step of the work that follows a change, and sends
+        what that step found. Returns whether more steps wait. The steps of
+        the check come first, until its pages are checked (LiveChecks.step).
+        Next come the steps that find again the numbers that stand for
+        resources, because the inlay hints wait for them
+        (ResourceNumberCache.step). The check's other steps come last."""
+        if self._resource_numbers.waiting() and not self._checks.pages_waiting():
+            if self._resource_numbers.step():
+                self._ask_for_the_hints_again()
+        else:
+            self._checks.step()
+        return self.checks_waiting()
+
+    def _ask_for_the_hints_again(self):
+        """Tells the editor to request its inlay hints again, if the editor
+        said at initialize that it supports workspace/inlayHint/refresh."""
+        workspace = self.client_capabilities.workspace
+        if workspace and workspace.inlay_hint and workspace.inlay_hint.refresh_support:
+            self.workspace_inlay_hint_refresh(None)
+
+    def _follows(self, method: str, follow):
+        """Registers `follow(params)` to run on the message `method`, after
+        what pygls does with it: a notification, or initialize and shutdown,
+        which pygls answers. pygls takes plain functions, on which it notes
+        what it registers."""
+        def following(params):
+            try:
+                follow(params)
+            finally:
+                self._last_handled = time.monotonic()
+        self.feature(method)(following)
+
+    def _answers(self, method: str, answer, options=None):
+        """Registers `answer(params)` as the server's answer to the request
+        `method`, refusing it before initialize, and with the protocol's
+        "request failed" when it raises NxwrightError."""
+        def answering(params):
+            if not self._initialized:
+                raise JsonRpcServerNotInitialized()
+            try:
+                return answer(params)
+            except NxwrightError as error:
+                raise RequestFailed(str(error)) from None
+            finally:
+                self._last_handled = time.monotonic()
+        self.feature(method, options)(answering)
+
+    def _on_initialize(self, params):
+        self._initialized = True
+
+    def _on_shutdown(self, params):
+        self.shut_down = True
+
+    def _on_document_change(self, params):
+        # The file on disk may differ from the text the editor had, as when closed.
+        self._mark(params.text_document.uri)
+
+    def _on_settings_change(self, params):
+        """Records the actions whose check the editor's settings turn on.
+        The settings come as {"nxwright": {"checks": {action: true or
+        false}}}. Settings of any other form turn every check off."""
+        settings = params.settings if isinstance(params.settings, dict) else {}
+        section = settings.get("nxwright")
+        checks = section.get("checks") if isinstance(section, dict) else None
+        self._checked = frozenset(action for action, on in checks.items() if on is True) \
+            if isinstance(checks, dict) else frozenset()
+
+    def _on_files_change(self, params):
+        for change in params.changes:
+            self._mark(change.uri)
+
+    def _mark(self, uri: str):
+        """Notes a change of the file `uri`, when it belongs to a source folder,
+        to be checked once changes pause."""
+        path = path_of(uri)
+        root = find_source_folder(path, self._texts.read) if path else None
+        if root is not None:
+            self._checks.mark(root, path.relative_to(root).as_posix())
+            # The numbers being found again were for the text before this change.
+            self._resource_numbers.stop()
+            self._check_after_pause()
+
+    def _check_after_pause(self):
+        """Starts the checks once changes have paused for CHECK_PAUSE
+        seconds. Each change starts that wait again. A change that arrives
+        during a check also cancels the timer of that check's next step,
+        because LiveChecks.mark has stopped the check. The checks run on
+        pygls's event loop, between messages. Without a running event loop,
+        such as in a test that gives the server one message at a time, the
+        checks stay waiting until run_checks or run_check_step is called."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        if self._next_step is not None:
+            self._next_step.cancel()
+        self._next_step = loop.call_later(CHECK_PAUSE, self._step_on_the_loop)
+
+    def _step_on_the_loop(self):
+        """Runs one step of the checks, then leaves pygls's event loop free
+        for STEP_GAP seconds before the next one, so that the server reads
+        the messages that arrived meanwhile.
+
+        A step is put off until no message has been handled for STEP_GAP
+        seconds. While the server makes a long answer, the loop is busy, so
+        the step's timer can run out with messages still unread behind that
+        answer. Putting the step off lets the server read those messages
+        first, and a change among them starts the pause again."""
+        loop = asyncio.get_running_loop()
+        quiet = time.monotonic() - self._last_handled
+        if quiet < STEP_GAP:
+            self._next_step = loop.call_later(STEP_GAP - quiet, self._step_on_the_loop)
+            return
+        self._next_step = None
+        if self.run_check_step():
+            self._next_step = loop.call_later(STEP_GAP, self._step_on_the_loop)
+
+    def _units(self, text: str) -> int:
+        """Returns the editor's units in `text`, as the part of a line before
+        a column."""
+        return self.workspace.position_codec.client_num_units(text)
+
+    def _folder(self, uri: str):
+        """Returns (FolderIndex, path within the folder) of the file `uri`, or
+        None outside a source folder."""
+        found = self._root_and_path(uri)
+        if found is None:
+            return None
+        root, path = found
+        return FolderIndex(root, self._texts.read), path
+
+    def _root_and_path(self, uri: str):
+        """Returns (the source folder's root, path within the folder) of the
+        file `uri`, or None outside a source folder."""
+        path = path_of(uri)
+        root = find_source_folder(path, self._texts.read) if path else None
+        if root is None:
+            return None
+        return root, path.relative_to(root).as_posix()
+
+    def _folder_of(self, params: dict):
+        """Returns (FolderIndex, path within the folder) of the file of one of
+        nxwright's own requests, or None outside a source folder."""
+        return self._folder(params["textDocument"]["uri"])
+
+    def _position(self, params):
+        """Returns (FolderIndex, path, line, Python column) of a request's
+        position, or None outside a source folder or past the file's end."""
+        found = self._folder(params.text_document.uri)
+        if found is None:
+            return None
+        index, path = found
+        lines = index.lines(path)
+        if lines is None or params.position.line >= len(lines):
+            return None
+        position = self.workspace.position_codec.position_from_client_units(
+            lines, params.position)
+        return index, path, position.line, position.character
+
+    def _definition(self, params):
+        """Returns the protocol's Locations of the definitions of the name at
+        the request's position."""
+        position = self._position(params)
+        if position is None:
+            return None
+        return [self._location(position[0], place) for place in definitions(*position)]
+
+    def _references(self, params):
+        """Returns the protocol's Locations of the places using the name at
+        the request's position."""
+        position = self._position(params)
+        if position is None:
+            return None
+        return [self._location(position[0], place)
+                for place in references(*position, params.context.include_declaration)]
+
+    def _document_symbols(self, params):
+        """Returns the protocol's DocumentSymbols of the file's outline."""
+        found = self._folder(params.text_document.uri)
+        if found is None:
+            return None
+        index, path = found
+        return [self._document_symbol(index, symbol) for symbol in file_symbols(index, path)]
+
+    def _workspace_symbols(self, params) -> list:
+        """Returns the protocol's SymbolInformation of the names holding the
+        query, from the source folders of the open files."""
+        roots = {find_source_folder(path, self._texts.read)
+                 for path in self._texts.open_paths()} - {None}
+        found = []
+        for root in sorted(roots):
+            index = FolderIndex(root, self._texts.read)
+            for symbol, container in folder_symbols(index, params.query):
+                found.append({"name": symbol.name, "kind": symbol.kind,
+                              "location": self._location(index, symbol.place),
+                              "containerName": container})
+        return found
+
+    def _hover(self, params):
+        """Returns the protocol's Hover for the name at the request's position, or None."""
+        position = self._position(params)
+        text = hover(*position) if position else None
+        return {"contents": {"kind": "markdown", "value": text}} if text else None
+
+    def _completion(self, params) -> list:
+        """Returns the protocol's CompletionItems for the request's position."""
+        position = self._position(params)
+        if position is None:
+            return []
+        return [self._completion_item(position[0], item) for item in completions(*position)]
+
+    def _signature_help(self, params):
+        """Returns the protocol's SignatureHelp for the call holding the
+        request's position, or None."""
+        position = self._position(params)
+        found = signature(*position) if position else None
+        if found is None:
+            return None
+        return {"signatures": [{"label": found.label,
+                                "parameters": [{"label": parameter}
+                                               for parameter in found.parameters]}],
+                "activeSignature": 0, "activeParameter": found.active}
+
+    def _formatting(self, params):
+        """Returns the protocol's TextEdits formatting the request's .nx file:
+        one replacing its whole text, or none when its layout is right.
+        Raises NxwrightError when formatting is refused."""
+        found = self._folder(params.text_document.uri)
+        if found is None or not found[1].endswith(".nx"):
+            return []
+        index, path = found
+        changed = format_folder(self._texts.folder_reader(index.root), only=[path])
+        if path not in changed:
+            return []
+        lines = index.lines(path)
+        end = {"line": len(lines) - 1, "character": self._units(lines[-1])}
+        return [{"range": {"start": {"line": 0, "character": 0}, "end": end},
+                 "newText": changed[path]}]
+
+    def _rename(self, params):
+        """Returns the protocol's WorkspaceEdit renaming the name at the
+        request's position. Raises NxwrightError when the rename is refused."""
+        position = self._position(params)
+        if position is None:
+            raise NxwrightError("only names of a source folder can be renamed")
+        index = position[0]
+        renamed = rename(*position, params.new_name, self._texts.folder_reader(index.root),
+                         lambda path: (index.root / path).is_file(),
+                         checked="rename" in self._checked)
+        edits = {file: [{"range": self._range(index, place), "newText": new_text}
+                        for place, new_text in file_edits]
+                 for file, file_edits in renamed["edits"].items()}
+        if not renamed["moves"]:
+            return {"changes": {uri_of(index.root / file): file_edits
+                                for file, file_edits in edits.items()}}
+        # The page's files are renamed first, so the edits after them use the new paths.
+        moved = dict(renamed["moves"])
+        return {"documentChanges": [{"kind": "rename", "oldUri": uri_of(index.root / old),
+                                     "newUri": uri_of(index.root / new)}
+                                    for old, new in renamed["moves"]]
+                + [{"textDocument": {"uri": uri_of(index.root / moved.get(file, file)),
+                                     "version": None},
+                    "edits": file_edits} for file, file_edits in edits.items()]}
+
+    def _code_actions(self, params):
+        """Returns the protocol's CodeActions for the request. Each of the
+        request's problems that carries a quick fix gets an action that fixes
+        it (quick_fixes.py), worked out from the folder's files, with the open
+        ones as the editor has them. The actions of _number_actions come
+        after them."""
+        found = self._root_and_path(params.text_document.uri)
+        if found is None:
+            return []
+        root, path = found
+        problems = [problem for problem in params.context.diagnostics
+                    if problem.source == "nxwright" and isinstance(problem.data, dict)]
+        # The editor asks each time the cursor moves, so the folder's names
+        # are read only for a request that has a problem to fix.
+        index = FolderIndex(root, self._texts.read) if problems else None
+        read = self._texts.folder_reader(root)
+        actions = []
+        for problem in problems:
+            made = quick_fix(index, read, path, problem.range.start.line, problem.data)
+            if made is not None:
+                title, edits, preferred = made
+                actions.append({"title": title, "kind": types.CodeActionKind.QuickFix.value,
+                                "diagnostics": [_CONVERTER.unstructure(problem)],
+                                "isPreferred": preferred,
+                                "edit": self._workspace_edit(index, edits)})
+        return actions + self._number_actions(params)
+
+    def _numbers_of(self, uri: str):
+        """Returns (FolderIndex, path, the folder's source, the file's
+        PlacedNumbers) for a .nx file or a page file, or None for any other
+        file or when the folder cannot be read.
+
+        The numbers come from the cache (resource_number_cache.py), which
+        finds them again when a file they came from has changed. While a
+        change waits to be checked, the cache does not find any numbers. If a
+        file changed since the numbers were found, the cache then returns only
+        those on lines that did not change, and the first of the four is a
+        CurrentLines, which gives only the files' lines."""
+        found = self._root_and_path(uri)
+        if found is None or not found[1].endswith((".nx", PAGE_FILE_SUFFIX)):
+            return None
+        root, path = found
+        # While a change waits to be checked, finding the numbers again
+        # would hold up the check and the keys typed next.
+        if self.checks_waiting():
+            kept = self._resource_numbers.kept_numbers_of(root, path)
+        else:
+            kept = self._resource_numbers.numbers_of(root, path)
+        if kept is None:
+            return None
+        index, folder, numbers = kept
+        return index, path, folder, numbers
+
+    def _inlay_hints(self, params) -> list:
+        """Returns the protocol's InlayHints of the request's file: after each
+        number that stands for a resource, its name, such as `logo` after
+        `p0.pic=7`, within the request's lines."""
+        made = self._numbers_of(params.text_document.uri)
+        if made is None:
+            return []
+        index, _, folder, numbers = made
+        first, last = params.range.start.line, params.range.end.line
+        hints = []
+        for number in numbers:
+            names = folder.app.get(LISTS[number.kind], [])
+            if first <= number.place.line <= last and 0 <= number.id < len(names):
+                hints.append({"position": self._range(index, number.place)["end"],
+                              "label": names[number.id], "paddingLeft": True})
+        return hints
+
+    def _number_actions(self, params) -> list:
+        """Returns the code actions writing a number that stands for a
+        resource as its name (resource_numbers.as_name): one for each such
+        number the request's range touches, and one for all of them in the
+        file, as a source action. No diagnostic comes with them."""
+        # A client asking only for other kinds of action, such as quick
+        # fixes, gets none of these.
+        only = params.context.only
+        wanted = [kind.value for kind in (types.CodeActionKind.RefactorRewrite,
+                                          types.CodeActionKind.Source)
+                  if not only or any(kind.value.startswith(asked) for asked in only)]
+        made = self._numbers_of(params.text_document.uri) if wanted else None
+        if made is None:
+            return []
+        index, path, folder, numbers = made
+        named = [(number, as_name(folder, index, number)) for number in numbers]
+        named = [(number, text) for number, text in named if text is not None]
+        start, end = params.range.start, params.range.end
+        actions = []
+        for number, text in named if types.CodeActionKind.RefactorRewrite.value in wanted else []:
+            span = self._range(index, number.place)
+            first = (span["start"]["line"], span["start"]["character"])
+            last = (span["end"]["line"], span["end"]["character"])
+            if (start.line, start.character) <= last and first <= (end.line, end.character):
+                written = index.lines(path)[number.place.line][number.place.start:number.place.end]
+                actions.append({"title": "Write %s as %s" % (written, text),
+                                "kind": types.CodeActionKind.RefactorRewrite.value,
+                                "edit": self._workspace_edit(
+                                    index, {path: [_text_edit(number.place, text)]})})
+        if named and types.CodeActionKind.Source.value in wanted:
+            actions.append({"title": "Write the resource numbers of this file as names",
+                            "kind": types.CodeActionKind.Source.value,
+                            "edit": self._workspace_edit(index, {path: [
+                                _text_edit(number.place, text) for number, text in named]})})
+        return actions
+
+    def _resource_numbers_as_names(self, params: dict) -> dict:
+        """Returns the protocol's WorkspaceEdit that replaces numbers with
+        names in the source folder `folder`: each number that stands for a
+        resource or page of `kind` whose ID is among `ids`. `kind` is the word
+        nxwright's commands use, such as "picture" or "page". A number is
+        replaced only where resource_numbers.as_name gives a name for it, or,
+        for a page, resource_numbers.page_number_as_name."""
+        root = Path(params["folder"])
+        index = FolderIndex(root, self._texts.read)
+        folder = read_folder_source(self._texts.folder_reader(root))
+        edits = {}
+        if params["kind"] == PAGE:
+            # Only the argument of `page` can be written as a name. A number given
+            # to `dp` stays a number.
+            for path in number_files(index, folder.app):
+                if path.endswith(PAGE_FILE_SUFFIX):
+                    continue
+                for number in placed_page_numbers(folder, index, path):
+                    name = page_number_as_name(folder, number)
+                    if number.id in params["ids"] and name is not None:
+                        edits.setdefault(path, []).append(_text_edit(number.place, name))
+            return self._workspace_edit(index, edits)
+        kinds = {noun: kind for kind, noun in NOUNS.items()}
+        if params["kind"] not in kinds:
+            raise NxwrightError("%s is not a kind of resource" % params["kind"])
+        kind, ids = kinds[params["kind"]], set(params["ids"])
+        for path in number_files(index, folder.app):
+            for number in placed_numbers(folder, index, path):
+                if number.kind != kind or number.id not in ids:
+                    continue
+                text = as_name(folder, index, number)
+                if text is not None:
+                    edits.setdefault(path, []).append(_text_edit(number.place, text))
+        return self._workspace_edit(index, edits)
+
+    def _editor_code(self, params: dict):
+        """Returns the Editor code of the request's .nx file, as the first page
+        using it compiles it: {"page", "text", "sourceLines"}, `sourceLines`
+        giving for each line of `text` the file's line it comes from, counted
+        from 0, or -1. When the code does not build: {"page", "error"}.
+        Returns None outside a page's code."""
+        found = self._folder_of(params)
+        pages = found[0].pages_using(found[1]) if found else []
+        if not pages:
+            return None
+        index, path = found
+        try:
+            folder = read_folder_source(self._texts.folder_reader(index.root))
+            # The build's checks first, such as of references, which compiling skips.
+            folder.build_page(folder.app["pages"].index(pages[0]), [])
+            sections = folder.editor_code(pages[0], path)
+        except NxwrightError as error:
+            return {"page": pages[0], "error": str(error)}
+        lines, sources = [], []
+        for title, code in sections:
+            lines.append("// " + title)
+            sources.append(-1)
+            for number, text in code:
+                lines.append(text)
+                sources.append(number - 1 if number else -1)
+        return {"page": pages[0], "text": "\n".join(lines) + "\n", "sourceLines": sources}
+
+    def _page_drawing(self, params: dict):
+        """Returns the drawing of the page of the request's file (testing/preview.py),
+        or None when the file is not a page's own."""
+        found = self._folder_of(params)
+        if found is None:
+            return None
+        index, path = found
+        return self._previews.drawing(index.root, path, self._texts.folder_reader(index.root))
+
+    def _page_objects(self, params: dict):
+        """Returns the objects of the page that the request's file belongs
+        to, the page itself first. Each object comes with the lines of its
+        table, its events (page_editing.object_events), and "eventsLocked",
+        true when no event can be added to it (page_editing.locked_objects).
+        The lines are used to select the object whose table the cursor is
+        in. The page file is read line by line, so the objects of a
+        half-typed one are still listed. Returns None when the file is not
+        one of a page's own files."""
+        found = self._folder_of(params)
+        page = found and page_of_file(found[1])
+        if not page or page not in found[0].pages:
+            return None
+        index = found[0]
+        read = self._texts.folder_reader(index.root)
+        events = object_events(index, read, page)
+        locked = locked_objects(read, page)
+        return {"page": page,
+                "objects": [{"name": entry.name, "type": entry.type,
+                             "firstLine": entry.first_line, "lastLine": entry.last_line,
+                             "events": its_events, "eventsLocked": entry.name in locked}
+                            for entry, its_events in zip(index.page_objects[page], events)]}
+
+    def _page_object(self, params: dict) -> tuple:
+        """Returns (FolderIndex, page, object name) of a request about an
+        object of the page of its file. Raises NxwrightError outside a page."""
+        return *self._page_of(params), params["name"]
+
+    def _page_of(self, params: dict) -> tuple:
+        """Returns (FolderIndex, page) of a request about the page of its
+        file. Raises NxwrightError outside a page."""
+        found = self._folder_of(params)
+        page = found and page_of_file(found[1])
+        if not page:
+            raise NxwrightError("only a page's .page.toml or .nx file has a page")
+        return found[0], page
+
+    def _unlocked_page_of(self, params: dict) -> tuple:
+        """Returns _page_of(params), (FolderIndex, page), for a request that
+        changes the page. Raises NxwrightError when the page is locked, or
+        when its page file cannot be read."""
+        index, page = self._page_of(params)
+        read = self._texts.folder_reader(index.root)
+        defines = parse_app(read("app.toml"))["defines"]
+        if page_header_of_text(read(page_toml_path(page)), page, defines).locked:
+            raise NxwrightError(LOCKED_PAGE % page)
+        return index, page
+
+    def _component_types(self, params: dict) -> dict:
+        """Returns {"types"}: the types a component of the page can have
+        (page_components.component_types)."""
+        index, page = self._page_of(params)
+        return {"types": component_types(self._texts.folder_reader(index.root), page)}
+
+    def _add_component(self, params: dict) -> dict:
+        """Returns {"edit", "name", "passedOver"}: the protocol's
+        WorkspaceEdit adding a component of the type `type` to the page, at
+        `point`, {"x", "y"}, or (0, 0) without one; its name; and the names
+        passed over, {"name", "uri"}, because the file `uri`, which the page
+        includes, has events for them. Raises NxwrightError when the
+        addition is refused."""
+        index, page = self._unlocked_page_of(params)
+        point = params.get("point") or {"x": 0, "y": 0}
+        found = add_component(index, self._texts.folder_reader(index.root),
+                              lambda path: (index.root / path).is_file(), page, params["type"],
+                              point["x"], point["y"], checked="addComponent" in self._checked)
+        return {"edit": self._workspace_edit(index, found["edits"]), "name": found["name"],
+                "passedOver": [{"name": passed["name"], "uri": uri_of(index.root / passed["path"])}
+                               for passed in found["passedOver"]]}
+
+    def _delete_components(self, params: dict) -> dict:
+        """Returns {"edit", "namedElsewhere", "sharedFiles"}: the protocol's
+        WorkspaceEdit deleting the components `names` of the page; the
+        places, {"uri", "line"}, where code that stays uses one of them; and
+        the URIs of the files other pages include too that hold their code,
+        which stays. Raises NxwrightError when the delete is refused."""
+        index, page = self._unlocked_page_of(params)
+        found = delete_components(index, self._texts.folder_reader(index.root), page,
+                                  params["names"])
+        return {"edit": self._workspace_edit(index, found["edits"]),
+                "namedElsewhere": [{"uri": uri_of(index.root / place["path"]),
+                                    "line": place["line"]}
+                                   for place in found["namedElsewhere"]],
+                "sharedFiles": [uri_of(index.root / path) for path in found["sharedFiles"]]}
+
+    def _clear_events(self, params: dict) -> dict:
+        """Returns the protocol's WorkspaceEdit removing the code of the
+        events of the components `names` of the page, without changes when
+        none of them has code. Raises NxwrightError when it is refused."""
+        index, page = self._unlocked_page_of(params)
+        edits = clear_events(index, self._texts.folder_reader(index.root), page,
+                             params["names"])
+        return self._workspace_edit(index, edits)
+
+    def _copy_components(self, params: dict) -> dict:
+        """Returns {"text", "code"}: the tables of the components `names` of
+        the page, as the clipboard holds them, and their events' code, a text
+        per event (page_components.copy_components)."""
+        index, page = self._page_of(params)
+        return copy_components(index, self._texts.folder_reader(index.root), page,
+                               params["names"])
+
+    def _place_components(self, params: dict) -> dict:
+        """Returns the protocol's WorkspaceEdit placing several components
+        of the page at once, `places` being {name: {"x", "y", "w", "h"}}."""
+        index, page = self._unlocked_page_of(params)
+        edits = place_components(index, self._texts.folder_reader(index.root), page,
+                                 params["places"])
+        return self._workspace_edit(index, {page_toml_path(page): edits})
+
+    def _reorder_components(self, params: dict) -> dict:
+        """Returns the protocol's WorkspaceEdit moving the components `names`
+        of the page `direction`: one place "forward" or "backward", or to the
+        "front" or the "back" (page_components.reorder_components)."""
+        index, page = self._unlocked_page_of(params)
+        edits = reorder_components(index, self._texts.folder_reader(index.root), page,
+                                   params["names"], params["direction"])
+        return self._workspace_edit(index, {page_toml_path(page): edits})
+
+    def _lock_components(self, params: dict) -> dict:
+        """Returns the protocol's WorkspaceEdit locking the components `names`
+        of the page, or unlocking them, as `locked` says."""
+        index, page = self._unlocked_page_of(params)
+        edits = lock_components(index, self._texts.folder_reader(index.root), page,
+                                params["names"], params["locked"] is True)
+        return self._workspace_edit(index, {page_toml_path(page): edits})
+
+    def _lock_page(self, params: dict) -> dict:
+        """Returns the protocol's WorkspaceEdit that locks the page if
+        `locked` is true, with the password `password` if given, and unlocks
+        it otherwise (page_edits.page_lock_edits)."""
+        index, page = self._page_of(params)
+        edits = page_lock_edits(index, self._texts.folder_reader(index.root), page,
+                                params["locked"] is True, params.get("password"))
+        return self._workspace_edit(index, {page_toml_path(page): edits})
+
+    def _page_locks(self, params: dict) -> dict:
+        """Returns {"locked"}: the names of the locked pages of the source
+        folder `folder`, in app.toml's order, from their page files as open
+        in the editor, unsaved changes included. A page whose file cannot be
+        read is left out."""
+        read = self._texts.folder_reader(Path(params["folder"]))
+        locked, app = [], parse_app(read("app.toml"))
+        for page in app["pages"]:
+            try:
+                if page_header_of_text(read(page_toml_path(page)), page, app["defines"]).locked:
+                    locked.append(page)
+            except NxwrightError:
+                pass
+        return {"locked": locked}
+
+    def _page_events(self, params: dict) -> dict:
+        """Returns {"events": {page: [{"event", "hasCode"}]}}: the events of
+        each page of the source folder `folder`, from the files as open in
+        the editor, unsaved changes included. Each list has only the events
+        of the page itself, without those of its components. A page whose
+        file cannot be read has no events."""
+        root = Path(params["folder"])
+        index = FolderIndex(root, self._texts.read)
+        read = self._texts.folder_reader(root)
+        events = {}
+        for page in index.pages:
+            # The page itself is the first object of its page file.
+            found = object_events(index, read, page)
+            events[page] = found[0] if found else []
+        return {"events": events}
+
+    def _group_components(self, params: dict) -> dict:
+        """Returns the protocol's WorkspaceEdit giving the components `names`
+        of the page a new group of their own, or taking them out of theirs,
+        as `grouped` says."""
+        index, page = self._unlocked_page_of(params)
+        edits = group_components(index, self._texts.folder_reader(index.root), page,
+                                 params["names"], params["grouped"] is True)
+        return self._workspace_edit(index, {page_toml_path(page): edits})
+
+    def _paste_components(self, params: dict) -> dict:
+        """Returns {"edit", "names"}: the protocol's WorkspaceEdit pasting the
+        tables of `text`, with `code`, the code that came with them, into the
+        page, and their new names. They go to the point `at`, {"x", "y"}, or
+        where they were copied from with `inPlace` true, else where
+        page_components.paste_components puts them. Raises NxwrightError when
+        the paste is refused."""
+        index, page = self._unlocked_page_of(params)
+        at = params.get("at")
+        found = paste_components(index, self._texts.folder_reader(index.root),
+                                 lambda path: (index.root / path).is_file(), page,
+                                 params["text"], params.get("code") or [],
+                                 at=(at["x"], at["y"]) if at else None,
+                                 in_place=params.get("inPlace") is True,
+                                 checked="paste" in self._checked)
+        return {"edit": self._workspace_edit(index, found["edits"], found["created"]),
+                "names": found["names"]}
+
+    def _paste_parts(self, params: dict) -> dict:
+        """Returns {"edit", "notes"}: the protocol's WorkspaceEdit applying
+        `parts` of the one component whose table `text` holds, with `code`,
+        the code that came with it, to the components `names` of the page,
+        and what was left out. Raises NxwrightError when the paste is
+        refused."""
+        index, page = self._unlocked_page_of(params)
+        found = paste_parts(index, self._texts.folder_reader(index.root),
+                            lambda path: (index.root / path).is_file(), page, params["names"],
+                            params["text"], params.get("code") or [], params["parts"],
+                            checked="paste" in self._checked)
+        return {"edit": self._workspace_edit(index, found["edits"], found["created"]),
+                "notes": found["notes"]}
+
+    def _component_properties(self, params: dict) -> dict:
+        """Returns what the properties panel shows of the object `name` of
+        the page (page_editing.properties)."""
+        index, page, name = self._page_object(params)
+        return properties(index, self._texts.folder_reader(index.root), page, name)
+
+    def _set_attributes(self, params: dict) -> dict:
+        """Returns the protocol's WorkspaceEdit setting `values`, {attribute:
+        value as typed}, of the object `name`, each colour the nearest the
+        screen holds when `nearestColours` is true, as for a picked one.
+        Raises NxwrightError for a value the build would refuse, and on a
+        locked page."""
+        index, page = self._unlocked_page_of(params)
+        name = params["name"]
+        edits = attribute_edits(index, self._texts.folder_reader(index.root), page, name,
+                                params["values"],
+                                nearest_colours=params.get("nearestColours") is True)
+        return self._workspace_edit(index, {page_toml_path(page): edits})
+
+    def _key_binding(self, params: dict) -> dict:
+        """Returns what setting the `key` of the object `name` to `key`
+        means (page_editing.key_binding)."""
+        index, page, name = self._page_object(params)
+        return key_binding(index, self._texts.folder_reader(index.root), page, name,
+                           params["key"])
+
+    def _add_keyboard(self, params: dict) -> dict:
+        """Adds nxwright's keyboard page `keyboard` to the source folder of the
+        request's file, writing its files (keyboard_adding.add_keyboard), and
+        returns {"page", "font", "warning"}. The Chinese keyboard's font is
+        drawn from the typeface file `typeface`, or is the folder's font
+        named `font`."""
+        root = self._rewritable_folder(params, "adding a keyboard")
+        page, font, warning = add_keyboard(root, params["keyboard"], params.get("typeface"),
+                                           params.get("font"))
+        return {"page": page, "font": font, "warning": warning}
+
+    def _chinese_keyboard_fonts(self, params: dict) -> dict:
+        """Returns {"fonts"}, the fonts of the source folder `folder` that its
+        Chinese keyboard takes (keyboard_adding.chinese_keyboard_fonts)."""
+        folder = Path(params["folder"])
+        return {"fonts": chinese_keyboard_fonts(folder, read_app(folder))}
+
+    def _project(self, params: dict) -> dict | None:
+        """Returns what the side bar shows of the source folder `folder`, or
+        None when the folder's format cannot be read. The result always has
+        "format" and "currentFormat". For a folder in the current format, it
+        also has these, from app.toml:
+          - "name", "language", and "pages";
+          - "resources", the names of each kind of resource under the name of
+            its list, such as "fonts";
+          - "screen", "size" (such as "800 x 480"), "rotation", and
+            "encoding", if app.toml gives the screen's settings;
+          - "emulator", the full path of the MCU emulator's file, if the
+            project has an MCU emulator (source/mcu_table.py).
+        The format is read first, because app.toml's other keys are read only
+        in the current format."""
+        folder = Path(params["folder"])
+        try:
+            found = folder_format(folder)
+        except NxwrightError:
+            return None
+        project = {"format": found, "currentFormat": SOURCE_FORMAT}
+        if found != SOURCE_FORMAT:
+            return project
+        try:
+            app = read_app(folder)
+        except NxwrightError:
+            return project
+        project.update(name=app_name(app, folder), language=app["language"],
+                       pages=app["pages"],
+                       resources={listed: app[listed] for listed in LISTS.values()})
+        if "screen" in app:
+            model = model_named(app["screen"])
+            project.update(screen=model.name, size="%d x %d" % (model.width, model.height),
+                           rotation=app["rotation"], encoding=app["encoding"])
+        if "mcu" in app:
+            project.update(emulator=str(emulator_file(folder, app["mcu"])))
+        return project
+
+    def _add_emulator(self, params: dict) -> dict:
+        """Adds an MCU emulator to the source folder of the request's file,
+        writing a first program and app.toml's [mcu] table
+        (emulator_adding.add_emulator), and returns {"file"}, the path of the
+        program."""
+        root = self._rewritable_folder(params, "adding an MCU emulator")
+        return {"file": str(add_emulator(root))}
+
+    def _add_page(self, params: dict) -> dict:
+        """Adds a blank page named `name`, or the first free pageN without
+        one, to the source folder of the request's file, writing its files
+        (source_folder.add_page), and returns {"page", "file"}, its name and
+        the path of its page file."""
+        root = self._rewritable_folder(params, "adding a page")
+        page = add_page(root, params.get("name"))
+        return {"page": page, "file": str(root / page_toml_path(page))}
+
+    def _new_folder_choices(self, params) -> dict:
+        """Returns the choices `nxwright new` asks for: {"models", each
+        {"name", "size", "specs"}, "rotations", "encodings", "languages",
+        "defaults"}. A model's "specs" are ScreenModel.specs. "defaults"
+        gives the defaults of `nxwright new` for the rotation, the encoding,
+        and the language. There is no default screen model."""
+        return {"models": [{"name": model.name, "size": "%d x %d" % (model.width, model.height),
+                            "specs": model.specs} for model in MODELS],
+                "rotations": list(ROTATIONS),
+                "encodings": list(ENCODINGS.values()),
+                "languages": list(LANGUAGES),
+                "defaults": {"rotation": 0, "encoding": DEFAULT_ENCODING, "language": NXLANG}}
+
+    def _new_source_folder(self, params: dict) -> dict:
+        """Writes a new source folder at `folder`, of the `screen` model at
+        `rotation`, in `encoding` and `language`, as `nxwright new` does
+        (source_folder.new_source_folder), and returns {"file", "warning"}:
+        the path of its first page's file, and what its font lacks, or None."""
+        folder = Path(params["folder"])
+        settings = DeviceSettings(model_named(params["screen"]), params["rotation"],
+                                  params["encoding"])
+        warning = new_source_folder(folder, settings, params["language"], params.get("name"))
+        return {"file": str(folder / page_toml_path("page0")), "warning": warning}
+
+    def _fonts(self, params: dict) -> dict:
+        """Returns the folder's fonts, with samples of the request's "text" in
+        its "colour" (font_panel.FontPanelAnswers.fonts)."""
+        return self._font_panel.fonts(self._source_folder(params), params["text"],
+                                      _colour(params))
+
+    def _typefaces(self, params: dict) -> dict:
+        """Returns the typefaces nxwright can draw a font from in the folder's
+        encoding (font_panel.FontPanelAnswers.typefaces)."""
+        return self._font_panel.typefaces(self._source_folder(params))
+
+    def _font_file(self, params: dict) -> dict:
+        """Returns one font file's details and a sample of the request's
+        "text" in its "colour", for the font viewer
+        (font_panel.font_file_details)."""
+        return font_file_details(Path(params["file"]), params["text"], _colour(params))
+
+    def _media_frames(self, params: dict) -> dict:
+        """Returns the frames of the animation or video file "file", for the
+        media viewer (media_viewer.media_frames)."""
+        return media_frames(Path(params["file"]))
+
+    def _svg_picture(self, params: dict) -> dict:
+        """Returns the SVG picture file "file" as nxwright draws it, from the
+        files as open in the editor, for the picture editor
+        (picture_view.svg_picture_view)."""
+        return svg_picture_view(Path(params["file"]), self._texts)
+
+    def _nxlang_samples(self, params) -> list:
+        """Returns the sections of the panel explaining the switch to nxlang
+        that show code: what nxlang adds, each in nxlang and, when there is a
+        usual way, in strict Nextion syntax (nxlang_samples.panel_sections)."""
+        return panel_sections()
+
+    def _nxlang_more_features(self, params) -> list:
+        """Returns what else nxlang lets you do, as the panel explaining the
+        switch to nxlang lists it under "And more", each item's code between
+        backticks (nxlang_samples.MORE_FEATURES)."""
+        return list(MORE_FEATURES)
+
+    def _nxlang_switch(self, params: dict) -> dict:
+        """Returns the files the switch to nxlang writes in the source folder
+        "folder", and the lines of code it changes, for the panel making it
+        (nxlang_switch.nxlang_switch)."""
+        return nxlang_switch(Path(params["folder"]))
+
+    def _font_sample(self, params: dict) -> dict:
+        """Returns a sample of a font about to be added, and what adding it
+        would do: of the font drawn from the typeface file "typeface"
+        (font_panel.typeface_sample), or of the ready-made font file "file"
+        (font_panel.font_file_sample); with "replacing", of the font taking
+        the place of that font of the folder."""
+        root, colour = self._source_folder(params), _colour(params)
+        if "typeface" in params:
+            return typeface_sample(root, Path(params["typeface"]), params.get("height"),
+                                   bool(params.get("smoothed", True)), params.get("name"),
+                                   params["text"], colour, params.get("characters"),
+                                   bool(params.get("fullTable", False)), params.get("replacing"))
+        return font_file_sample(root, requested_font_file(params), params.get("name"),
+                                params["text"], colour, params.get("replacing"))
+
+    def _add_font(self, params: dict) -> dict:
+        """Adds a font to the folder, writing its file (font_panel.add), and
+        returns {"name", "warning"}."""
+        return add_font_to_folder(self._rewritable_folder(params, "adding a font"), params)
+
+    def _source_folder(self, params: dict) -> Path:
+        """Returns the source folder of the request's file. Raises
+        NxwrightError outside a source folder."""
+        found = self._folder_of(params)
+        if not found:
+            raise NxwrightError("the file is not in a source folder")
+        return found[0].root
+
+    def _rewritable_folder(self, params: dict, what: str) -> Path:
+        """Returns the source folder of the request's file, whose app.toml
+        `what` rewrites, from disk. Raises NxwrightError outside a source
+        folder, or while app.toml has unsaved changes, which it would lose."""
+        root = self._source_folder(params)
+        if self._texts.unsaved(root / "app.toml"):
+            raise NxwrightError("save or revert the changes to app.toml first; %s rewrites it"
+                                % what)
+        return root
+
+    def _default_event(self, params: dict) -> dict | None:
+        """Returns where the code of the object's event `event` is, or of its
+        default event when no `event` is given, as {"uri", "line",
+        "character"}. The result also has "edit", the WorkspaceEdit that adds
+        the event's heading when the event has no code, or None when it has
+        code. Returns None when the object's type has no events. Raises
+        NxwrightError for an event its type lacks, and for an event without
+        code when the object or its page is locked."""
+        index, page, name = self._page_object(params)
+        read = self._texts.folder_reader(index.root)
+        found = default_event(index, read, page, name, params.get("event"))
+        if found is None:
+            return None
+        if found["edit"]:
+            locked = what_locks_events(read, page, name)
+            if locked:
+                raise NxwrightError(LOCKED_EVENT % locked)
+        uri = uri_of(index.root / found["path"])
+        lines = index.lines(found["path"]) or []
+        cursor = self._client_position(lines, found)
+        return {"uri": uri, "line": cursor["line"], "character": cursor["character"],
+                "edit": {"changes": {uri: self._client_edits(lines, [found["edit"]])}}
+                if found["edit"] else None}
+
+    def _component_events(self, params: dict) -> list:
+        """Returns the object's events in its type's order, each {"event",
+        "uri"}: that of the file holding its code, or None when it has none."""
+        index, page, name = self._page_object(params)
+        return [{"event": found["event"],
+                 "uri": uri_of(index.root / found["path"]) if found["path"] else None}
+                for found in component_events(index, self._texts.folder_reader(index.root),
+                                              page, name)]
+
+    def _limits(self, params: dict):
+        """Returns the measures of the page of the request's file, as the
+        last check kept them, or None."""
+        found = self._root_and_path(params["textDocument"]["uri"])
+        return self._checks.limits(*found) if found else None
+
+    def _workspace_edit(self, index: FolderIndex, edits: dict, created=()) -> dict:
+        """Returns the protocol's WorkspaceEdit of `edits`, {path within the
+        folder: [TextEdit], their columns Python's}, making the files
+        `created` first."""
+        edits = {path: self._client_edits(index.lines(path) or [], file_edits)
+                 for path, file_edits in edits.items()}
+        if not created:
+            return {"changes": {uri_of(index.root / path): file_edits
+                                for path, file_edits in edits.items()}}
+        return {"documentChanges": [{"kind": "create", "uri": uri_of(index.root / path)}
+                                    for path in created]
+                + [{"textDocument": {"uri": uri_of(index.root / path), "version": None},
+                    "edits": file_edits} for path, file_edits in edits.items()]}
+
+    def _client_edits(self, lines: list, edits: list) -> list:
+        """Returns the TextEdits `edits` of a file of `lines`, their columns
+        turned from Python's into the editor's units."""
+        return [dict(edit, range={"start": self._client_position(lines, edit["range"]["start"]),
+                                  "end": self._client_position(lines, edit["range"]["end"])})
+                for edit in edits]
+
+    def _client_position(self, lines: list, position: dict) -> dict:
+        """Returns the protocol's Position of `position`, its column Python's,
+        in a file of `lines`; a line past them, as one an edit adds, keeps it."""
+        line, column = position["line"], position["character"]
+        if line < len(lines):
+            column = self._units(lines[line][:column])
+        return {"line": line, "character": column}
+
+    def _location(self, index: FolderIndex, place: Place) -> dict:
+        """Returns the protocol's Location of a place."""
+        return {"uri": uri_of(index.root / place.path), "range": self._range(index, place)}
+
+    def _range(self, index: FolderIndex, place: Place) -> dict:
+        """Returns the protocol's Range of a place, in the editor's units."""
+        start = end = 0
+        # A file's start needs no columns. Reading the file for them would fail for a picture.
+        if place.end > 0:
+            text = index.lines(place.path)[place.line]
+            start, end = self._units(text[:place.start]), self._units(text[:place.end])
+        return {"start": {"line": place.line, "character": start},
+                "end": {"line": place.line, "character": end}}
+
+    def _document_symbol(self, index: FolderIndex, symbol) -> dict:
+        """Returns the protocol's DocumentSymbol of a Symbol, spanning its lines."""
+        last_line = index.lines(symbol.place.path)[symbol.last_line]
+        lines_range = {"start": {"line": symbol.first_line, "character": 0},
+                       "end": {"line": symbol.last_line, "character": self._units(last_line)}}
+        return {"name": symbol.name, "detail": symbol.detail, "kind": symbol.kind,
+                "range": lines_range, "selectionRange": self._range(index, symbol.place),
+                "children": [self._document_symbol(index, child) for child in symbol.children]}
+
+    def _completion_item(self, index: FolderIndex, item) -> dict:
+        """Returns the protocol's CompletionItem of a completion Item, with its
+        documentation as Markdown, when it has some, and the text it replaces,
+        when that is not the word at the cursor."""
+        found = {"label": item.label, "kind": item.kind, "detail": item.detail}
+        if item.documentation:
+            found["documentation"] = {"kind": "markdown", "value": item.documentation}
+        if item.replaces is not None:
+            found["textEdit"] = {"range": self._range(index, item.replaces),
+                                 "newText": item.label}
+        return found
+
+
+def serve(input_stream, output_stream) -> int:
+    """Answers the messages read from the binary `input_stream`, writing the
+    replies to `output_stream`, until the exit notification or the end of
+    the input. Returns the exit code the protocol asks for: 0 after shutdown
+    and exit, else 1."""
+    server = NxwrightServer()
+    server.start_io(input_stream, output_stream)
+    return 0 if server.shut_down else 1
+
+
+def _text_edit(place: Place, text: str) -> dict:
+    """The protocol's TextEdit putting `text` in the place of `place`. Its
+    columns count Python characters, which is what _workspace_edit
+    expects."""
+    return {"range": {"start": {"line": place.line, "character": place.start},
+                      "end": {"line": place.line, "character": place.end}},
+            "newText": text}
+
+
+def _colour(params: dict) -> tuple:
+    """Returns the RGB colour a request's "colour" gives, [red, green, blue]
+    from 0 to 255, or white."""
+    colour = params.get("colour")
+    if (isinstance(colour, list) and len(colour) == 3
+            and all(isinstance(value, int) and 0 <= value <= 255 for value in colour)):
+        return tuple(colour)
+    return (255, 255, 255)

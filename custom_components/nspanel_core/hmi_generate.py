@@ -15,6 +15,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 
 from . import dashboard_design as dd
 
@@ -253,15 +254,28 @@ def generate_source(
 
 
 def compile_tft(workdir: str, out_path: str) -> str:
-    """nxwright compile → the panel's TFT. Runs in an executor."""
+    """nxwright compile → the panel's TFT. Runs in an executor.
+
+    P312: the toolchain is VENDORED in the integration — the manager runs
+    inside the Home Assistant environment where no global nxwright exists
+    (it was installed only on the development host; the user's
+    "No such file or directory: 'nxwright'"). Invoked via the same
+    interpreter with the vendored package first on sys.path.
+    """
+    from .hmi_tool import ensure_toolchain, VENDORED_DIR
+
+    ensure_toolchain()
     src = os.path.join(workdir, "hmi")
     if os.path.exists(out_path):
         os.unlink(out_path)
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(VENDORED_DIR.parent) + os.pathsep + env.get("PYTHONPATH", "")
     proc = subprocess.run(
-        ["nxwright", "compile", "--overwrite", src, out_path],
+        [sys.executable, "-m", "nxwright", "compile", "--overwrite", src, out_path],
         capture_output=True,
         text=True,
         timeout=300,
+        env=env,
     )
     if proc.returncode != 0 or not os.path.isfile(out_path):
         raise RuntimeError(
