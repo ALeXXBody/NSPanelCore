@@ -1,21 +1,21 @@
 {
-    "version": "0.1.10",
-    "notes": "Native firmware 0.1.10 \u2014 THE DISPLAY FIX: the handshake's own send was gated by the raw-mode/not-ready state it exists to establish (since P279 batch 3) \u2014 the panel transmitted nothing to a healthy display; the handshake now sends ungated, the reprobe takes over the screen on revival, and a failed restart runs a 6-baud scan; RX byte counter on the panel status; web-log de-duplicated.",
+    "version": "0.1.11",
+    "notes": "Native firmware 0.1.11 \u2014 the fault instrument: the IDF's task_wdt/panic diagnostics are captured into a .noinit ring that survives reboots and surfaces on /status.json (fault_log) \u2014 the crash loop names its own hanging task. Carries the P316 display fix (ungated handshake) unchanged.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/native-firmware-0.1.10.bin",
-            "md5": "0396419b630f1ef3a53e87534a0fb592"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/native-firmware-0.1.11.bin",
+            "md5": "f538e920ffde5c6fcee32b0d0d6cf467"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/native-firmware-0.1.10.bin",
-            "md5": "0396419b630f1ef3a53e87534a0fb592"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/native-firmware-0.1.11.bin",
+            "md5": "f538e920ffde5c6fcee32b0d0d6cf467"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.10/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

@@ -227,7 +227,7 @@ std::string nsp_web_status_json(const NspWebStatus &s) {
          + kv("mqtt", s.mqtt) + "," + kv("manager", s.manager) + ","
          + kv("md5_fw", s.md5_fw) + "," + kv("md5_fs", s.md5_fs) + ","
          + kv("ota_state", s.ota_state) + "," + kv("ota_progress", s.ota_progress) + ","
-         + kv("uptime_s", s.uptime_s) + "}";
+         + kv("uptime_s", s.uptime_s) + "," + kv("fault_log", s.fault_log) + "}";
 }
 
 std::string nsp_web_log_page(const std::string &logdump) {

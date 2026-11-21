@@ -27,6 +27,7 @@ struct NspWebStatus {
     std::string ota_state;
     std::string ota_progress;
     std::string uptime_s;
+    std::string fault_log;    // P317: captured task_wdt/panic lines (survive reboots)
     bool wifi_known;          // setup form prefill state
     std::string wifi_ssid_value;
     std::string hostname_value;

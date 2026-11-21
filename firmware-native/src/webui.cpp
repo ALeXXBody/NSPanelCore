@@ -37,6 +37,7 @@ void nsp_web_log(const std::string &line) {
 extern void nsp_mqtt_publish_log(const char *msg);
 extern void nsp_ota_start();
 extern bool nsp_display_restart(void);
+extern std::string nsp_fault_dump(void);  // P317
 extern bool nsp_mqtt_connected(void);
 extern int nsp_wifi_rssi(void);
 extern std::string nsp_wifi_ip(void);
@@ -81,6 +82,7 @@ static NspWebStatus nsp_web_gather_status(void) {
     s.ota_state = ota_state_name(st);
     s.ota_progress = std::to_string(nsp_ota_progress()) + " %";
     s.uptime_s = std::to_string((long long)(esp_timer_get_time() / 1000000LL));
+    s.fault_log = nsp_fault_dump();  // P317: the captured death diagnostics
     return s;
 }
 

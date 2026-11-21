@@ -82,7 +82,13 @@ static void nsp_boot_log_line(const char *line) {
     nsp_mqtt_publish_log(line);  // P315: writes the web buffer AND MQTT — one line
 }
 
+extern void nsp_fault_capture_install(void);  // P317: file scope (P160)
+extern std::string nsp_fault_dump(void);
+
 extern "C" void app_main(void) {
+    /* P317: capture the IDF's own death diagnostics (task_wdt names the
+     * starving tasks) BEFORE anything else can crash. */
+    nsp_fault_capture_install();
     /* P310: the console must tell the whole boot story — who started us, what
      * we completed, and what the PREVIOUS reset was (POWERON = power rail,
      * SW = our own esp_restart, BROWNOUT/RTCWDT = a real fault). The app used
