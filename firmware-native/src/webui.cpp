@@ -37,6 +37,8 @@ void nsp_web_log(const std::string &line) {
 extern void nsp_mqtt_publish_log(const char *msg);
 extern void nsp_ota_start();
 extern bool nsp_display_restart(void);
+extern const esp_partition_t *esp_partition_find_first(
+    esp_partition_type_t type, esp_partition_subtype_t subtype, const char *label);  // P160: file scope
 extern std::string nsp_fault_dump(void);  // P317
 extern bool nsp_mqtt_connected(void);
 extern int nsp_wifi_rssi(void);
@@ -106,6 +108,32 @@ static esp_err_t on_get_root(httpd_req_t *req) {
     }
     std::string page = nsp_web_status_page(s, s_logbuf.dump());
     httpd_resp_send(req, page.c_str(), page.size());
+    return ESP_OK;
+}
+
+/* P321: the coredump partition, raw — the host's espcoredump.py decodes it
+ * against the build's ELF and names the tasks that panicked. Read-only. */
+static esp_err_t on_get_coredump(httpd_req_t *req) {
+    static const esp_partition_t *part = nullptr;
+    if (part == nullptr) {
+        part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
+                                        ESP_PARTITION_SUBTYPE_DATA_COREDUMP, "coredump");
+    }
+    if (part == nullptr) {
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "no coredump partition");
+        return ESP_OK;
+    }
+    static uint8_t buf[4096];
+    size_t n = part->size;
+    if (n > sizeof(buf)) n = sizeof(buf);
+    if (esp_partition_read(part, 0, buf, n) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "coredump read failed");
+        return ESP_OK;
+    }
+    /* trim the 0xFF tail (an empty/unwritten coredump) */
+    while (n > 0 && buf[n - 1] == 0xFF) n--;
+    httpd_resp_set_type(req, "application/octet-stream");
+    httpd_resp_send(req, (const char *)buf, n);
     return ESP_OK;
 }
 
@@ -235,6 +263,7 @@ bool nsp_web_start(bool ap_mode) {
     httpd_uri_t scan = {"/scan", HTTP_GET, on_get_scan, nullptr};
     httpd_uri_t save = {"/save", HTTP_POST, on_post_save, nullptr};
     httpd_uri_t action = {"/action", HTTP_POST, on_post_action, nullptr};
+    httpd_uri_t coredump = {"/coredump", HTTP_GET, on_get_coredump, nullptr};
     httpd_register_uri_handler(server, &root);
     httpd_register_uri_handler(server, &status);
     httpd_register_uri_handler(server, &log);
@@ -243,6 +272,7 @@ bool nsp_web_start(bool ap_mode) {
     httpd_register_uri_handler(server, &scan);
     httpd_register_uri_handler(server, &save);
     httpd_register_uri_handler(server, &action);
+    httpd_register_uri_handler(server, &coredump);
     s_web_up = true;
     nsp_web_log(std::string("webui started (") + (ap_mode ? "setup AP" : "station") + ")");
     return true;

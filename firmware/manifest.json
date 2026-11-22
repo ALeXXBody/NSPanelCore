@@ -1,21 +1,21 @@
 {
-    "version": "0.1.11",
-    "notes": "Native firmware 0.1.11 \u2014 the fault instrument: the IDF's task_wdt/panic diagnostics are captured into a .noinit ring that survives reboots and surfaces on /status.json (fault_log) \u2014 the crash loop names its own hanging task. Carries the P316 display fix (ungated handshake) unchanged.",
+    "version": "0.1.12",
+    "notes": "Native firmware 0.1.12 \u2014 the crash verdict instrument: a watchdog timeout now PANICS and the panic handler writes the full coredump (both cores' backtraces) into the contract-legal coredump partition; the panel's web UI serves it raw at /coredump for decoding with espcoredump against the build ELF. The early-log backtrace print went to a serial port nobody has attached \u2014 this ends the guessing. Fault ring clears on power-on (the P318 gap).",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/native-firmware-0.1.11.bin",
-            "md5": "f538e920ffde5c6fcee32b0d0d6cf467"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/native-firmware-0.1.12.bin",
+            "md5": "0e9a1bd6ca44d310d0cebd31c18621f6"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/native-firmware-0.1.11.bin",
-            "md5": "f538e920ffde5c6fcee32b0d0d6cf467"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/native-firmware-0.1.12.bin",
+            "md5": "0e9a1bd6ca44d310d0cebd31c18621f6"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.11/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

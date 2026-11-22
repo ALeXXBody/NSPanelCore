@@ -9,6 +9,14 @@ CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 # Brownout: keep default detector (rail protection)
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
+# P321: a watchdog timeout PANICS so the panic handler writes the COREDUMP
+# to the (already-present, contract-legal) coredump partition — the backtrace
+# of the spinning task lands in flash where the panel's web UI can serve it;
+# the early-log backtrace print goes to a serial port nobody has attached.
+CONFIG_ESP_TASK_WDT_PANIC=y
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_COREDUMP_CHECK_BOOT=y
 # MQTT
 CONFIG_MQTT_TRANSPORT_SSL=n
 # HTTP OTA buffer

@@ -10,6 +10,7 @@
 #include <cstdarg>
 #include <string>
 #include "esp_log.h"
+#include "esp_system.h"
 
 #define FAULT_SLOTS 8
 #define FAULT_LEN 96
@@ -51,8 +52,14 @@ static int fault_vprintf(const char *fmt, va_list args) {
 }
 
 void nsp_fault_capture_install(void) {
-    /* first boot: the .noinit ring starts as garbage — stamp a clean head */
-    if (s_fault_head < 0 || s_fault_head >= FAULT_SLOTS) {
+    /* P321: a POWER-ON reset means RAM came from nothing — the .noinit ring
+     * is garbage and must be stamped clean. Any soft reset (WDT, panic,
+     * esp_restart) RETAINS it: that is the whole point — the previous
+     * boot's captured lines survive. (The P318 gap: the first post-flash
+     * boot showed stale RAM garbage as "fault_log".) */
+    if (esp_reset_reason() == ESP_RST_POWERON ||
+        s_fault_head < 0 || s_fault_head >= FAULT_SLOTS ||
+        s_fault_wrapped < 0 || s_fault_wrapped > 1) {
         s_fault_head = 0;
         s_fault_wrapped = 0;
         for (int i = 0; i < FAULT_SLOTS; i++) s_fault_ring[i][0] = '\0';
