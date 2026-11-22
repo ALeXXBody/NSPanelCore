@@ -1,21 +1,21 @@
 {
-    "version": "0.1.12",
-    "notes": "Native firmware 0.1.12 \u2014 the crash verdict instrument: a watchdog timeout now PANICS and the panic handler writes the full coredump (both cores' backtraces) into the contract-legal coredump partition; the panel's web UI serves it raw at /coredump for decoding with espcoredump against the build ELF. The early-log backtrace print went to a serial port nobody has attached \u2014 this ends the guessing. Fault ring clears on power-on (the P318 gap).",
+    "version": "0.1.13",
+    "notes": "Native firmware 0.1.13 \u2014 the delivery unblocker: the OTA and TFT tasks suspend the task-watchdog for their flash/stream sections (esp_task_wdt_deinit) \u2014 the full-partition erase (~15-30s with no runnable task) was being killed by the watchdog's hardware stage-2 reset at 20s, so every OTA into the crash loop died mid-erase and rolled back. The watchdog re-arms fresh on the next boot (the firmware OTA) and explicitly after the TFT stream. Carries 0.1.12's coredump verdict instrument unchanged.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/native-firmware-0.1.12.bin",
-            "md5": "0e9a1bd6ca44d310d0cebd31c18621f6"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.13/native-firmware-0.1.13.bin",
+            "md5": "2162dc122d8465be2095aa97fcd1f597"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.13/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/native-firmware-0.1.12.bin",
-            "md5": "0e9a1bd6ca44d310d0cebd31c18621f6"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.13/native-firmware-0.1.13.bin",
+            "md5": "2162dc122d8465be2095aa97fcd1f597"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.12/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.13/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

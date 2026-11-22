@@ -15,6 +15,7 @@
  */
 
 #include "esp_ota_ops.h"
+#include "esp_task_wdt.h"
 #include "esp_http_client.h"
 #include "esp_timer.h"
 #include "mbedtls/md5.h"
@@ -182,10 +183,38 @@ static bool nsp_write_fs_partition(const std::string &checksum) {
 }
 
 /* Rail #1: firmware first, REBOOT, fs later under the new firmware. */
+/* P321c: the flash/stream window must OUTLIVE the watchdog. The TWDT's
+ * hardware stage-2 resets the system 20 s after the last idle feed — while
+ * esp_ota_begin erases the WHOLE 1.75 MB app partition up front (~15-30 s
+ * during which NO task can run and feed anything). Every OTA into the crash
+ * loop died inside that erase: the reset hit mid-erase, the bootloader
+ * rolled back, the next attempt restarted the erase. Suspending the TWDT
+ * for the flash/stream section lets the erase run to completion; the fresh
+ * boot after the flash re-arms it from the sdkconfig. */
+static void nsp_twdt_suspend_for_flash(void) {
+    esp_err_t err = esp_task_wdt_deinit();
+    char l[80];
+    snprintf(l, sizeof(l), "OTA: watchdog suspended for flash (err=%d)", (int)err);
+    nsp_mqtt_publish_log(l);
+}
+
+static void nsp_twdt_resume_after_stream(void) {
+    esp_task_wdt_config_t cfg = {
+        .timeout_ms = 10000,
+        .idle_core_mask = (1 << 0) | (1 << 1),
+        .trigger_panic = true,
+    };
+    esp_err_t err = esp_task_wdt_init(&cfg);
+    char l[80];
+    snprintf(l, sizeof(l), "OTA: watchdog resumed (err=%d)", (int)err);
+    nsp_mqtt_publish_log(l);
+}
+
 static void nsp_ota_fw_task(void *) {
     s_progress = 0;
     s_last_progress_us = esp_timer_get_time();
     nsp_mqtt_publish_log("OTA: task started");
+    nsp_twdt_suspend_for_flash();  // P321c: the erase cannot be interrupted
 
     std::string checksum;
     for (int i = 0; i < 60 && checksum.empty(); i++) {
@@ -341,6 +370,7 @@ void nsp_ota_start() {
  *      offset = full clean restart; 0 = keep forward)
  *   4. after the last block the display finishes and reboots itself. */
 static void nsp_tft_task(void *) {
+    nsp_twdt_suspend_for_flash();  // P321c: the stream outruns the watchdog
     const char *url_path = "/download_tft_eu";
     s_state = OTA_FS;
     s_progress = 0;
@@ -686,6 +716,7 @@ static void nsp_tft_task(void *) {
                                       : "TFT: display not answering after reflash");
             s_progress = 100;
             nsp_display_set_raw_mode(false);
+            nsp_twdt_resume_after_stream();  // P321c: the crash protection is back
             s_state = OTA_IDLE;
             vTaskDelete(nullptr);
             return;
@@ -701,6 +732,7 @@ static void nsp_tft_task(void *) {
     }
     nsp_display_set_raw_mode(false);
     nsp_mqtt_publish_log("TFT: update FAILED after attempts");
+    nsp_twdt_resume_after_stream();  // P321c
     s_state = OTA_IDLE;
     vTaskDelete(nullptr);
 }
