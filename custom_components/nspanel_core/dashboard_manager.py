@@ -383,8 +383,25 @@ class DashboardService:
             return {"error": reject}
         ext = ".png" if Image.open(io.BytesIO(file_bytes)).format == "PNG" else ".jpg"
         safe = f"gal_{mac}_{secrets.token_hex(6)}{ext}"
-        with open(os.path.join(_dash_dir(self.hass), safe), "wb") as f:
+        path = os.path.join(_dash_dir(self.hass), safe)
+        with open(path, "wb") as f:
             f.write(file_bytes)
+        # P320: an upload that does not survive the disk must not report ok —
+        # read it back and re-open before the studio ever references it.
+        try:
+            with open(path, "rb") as f:
+                written = f.read()
+            if len(written) != len(file_bytes):
+                os.remove(path)
+                return {"error": "the upload did not survive the disk — try again"}
+            with Image.open(io.BytesIO(written)) as im:
+                im.verify()
+        except Exception as exc:  # noqa: BLE001
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            return {"error": f"the uploaded image failed verification: {exc}"}
         return {"ok": True, "name": safe}
 
     def gallery_photos(self, mac: str) -> list[dict]:
@@ -398,6 +415,13 @@ class DashboardService:
             if not name.startswith(prefix) or not self._GALLERY_RE.match(name):
                 continue
             path = os.path.join(origins, name)
+            # P320: an empty file can never render — listing it only feeds
+            # the studio a thumbnail grid that cannot load.
+            try:
+                if os.path.getsize(path) <= 0:
+                    continue
+            except OSError:
+                continue
             out.append({"name": name, "modified": os.path.getmtime(path)})
         out.sort(key=lambda p: p["modified"], reverse=True)
         return [{"name": p["name"]} for p in out]

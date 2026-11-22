@@ -2657,7 +2657,14 @@ class DashboardPhotoView(HomeAssistantView):
 
         try:
             body = await manager.hass.async_add_executor_job(_render_photo)
-        except Exception:  # noqa: BLE001 — a corrupt stored photo must not 500
+        except Exception as exc:  # noqa: BLE001 — a corrupt stored photo must not 500
+            # P320: the silent 404 cost a diagnosis — the file existed, was a
+            # valid JPEG, and the pipeline passed locally; the box's real
+            # error was invisible. Log it so the next failure names itself.
+            _LOGGER.warning(
+                "dashboard_photo render failed for %s/%s variant=%s: %s: %s",
+                mac, target.background_image, variant,
+                type(exc).__name__, exc)
             return _web.Response(status=404, text="no photo")
         return _web.Response(
             body=body, content_type="image/jpeg",
