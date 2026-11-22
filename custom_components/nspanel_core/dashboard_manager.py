@@ -243,16 +243,29 @@ class DashboardService:
     # -- push config to a (freshly booted) panel ---------------------------
 
     async def async_push_config(self, mac: str) -> None:
-        """Push dash_map + current item values to a panel running its TFT."""
+        """Push dash_map + current item values to a panel running its TFT.
+
+        P321f: the dash_map push is DISABLED — it is the crash trigger.
+        Both panel crash loops (0.1.10 era and the current one) began the
+        moment a Send armed this push, and the panel's MQTT task dies
+        processing the post-accept commands whenever it is live; the same
+        binary was stable for 400+ s in the era when the push was absent.
+        The page ids stay stored; the values push below is unchanged. The
+        touch routing degrades to the stock base chains until the panel
+        firmware's dash_map handling is fixed (0.1.14, after the coredump
+        verdict names the exact bug).
+        """
         if not self.has_design(mac):
             return
         page_ids = self._page_ids.get(mac)
         if not page_ids:
             return
-        await self.manager._publish(
-            self._cmd_topic(mac),
-            json.dumps({"command": "dash_map", "pages": page_ids}),
-        )
+        # P321f: the push itself is disabled — the page ids are kept so a
+        # future firmware fix can re-enable the flow without a re-Send.
+        _LOGGER.warning(
+            "dash_map push to %s suppressed (P321f: the push is the panel "
+            "crash trigger; re-enabled with the 0.1.14 panel fix)",
+            mac)
         await self.async_push_values(mac)
 
     async def async_push_values(self, mac: str) -> None:
