@@ -63,7 +63,7 @@ def test_detached_press_toggles_the_bound_ha_entity():
     no lights-in-rooms detour, no manager-registered light needed."""
     panel = _panel()
     mgr = _mgr(panel)
-    mgr._panel_by_topic = lambda seg: panel
+    mgr._panel_by_msg_topic = lambda msg, suffix: panel  # P319: the handler resolves via the helper
     _run(M.NSPanelCoreManager._on_panel_button(mgr, _msg()))
     mgr.hass.services.async_call.assert_awaited_once_with(
         "switch", "toggle", {"entity_id": "switch.coffee"}, blocking=False)
@@ -72,7 +72,7 @@ def test_detached_press_toggles_the_bound_ha_entity():
 def test_script_entities_use_turn_on_not_toggle():
     panel = _panel(button1_detached_entity="script.door_sequence")
     mgr = _mgr(panel)
-    mgr._panel_by_topic = lambda seg: panel
+    mgr._panel_by_msg_topic = lambda msg, suffix: panel  # P319: the handler resolves via the helper
     _run(M.NSPanelCoreManager._on_panel_button(mgr, _msg()))
     mgr.hass.services.async_call.assert_awaited_once_with(
         "script", "turn_on", {"entity_id": "script.door_sequence"}, blocking=False)
@@ -81,7 +81,7 @@ def test_script_entities_use_turn_on_not_toggle():
 def test_input_button_uses_press():
     panel = _panel(button1_detached_entity="input_button.doorbell")
     mgr = _mgr(panel)
-    mgr._panel_by_topic = lambda seg: panel
+    mgr._panel_by_msg_topic = lambda msg, suffix: panel  # P319: the handler resolves via the helper
     _run(M.NSPanelCoreManager._on_panel_button(mgr, _msg()))
     mgr.hass.services.async_call.assert_awaited_once_with(
         "input_button", "press", {"entity_id": "input_button.doorbell"}, blocking=False)
@@ -91,7 +91,7 @@ def test_button2_uses_the_button2_binding():
     panel = _panel(button1_detached_entity="switch.never",
                    button2_mode=1, button2_detached_entity="light.desk")
     mgr = _mgr(panel)
-    mgr._panel_by_topic = lambda seg: panel
+    mgr._panel_by_msg_topic = lambda msg, suffix: panel  # P319: the handler resolves via the helper
     _run(M.NSPanelCoreManager._on_panel_button(
         mgr, _msg(payload='{"button":2,"event":"press"}')))
     mgr.hass.services.async_call.assert_awaited_once_with(
@@ -105,7 +105,7 @@ def test_legacy_light_binding_still_routes():
     light.name = "Ceiling"
     panel = _panel(button1_detached_entity="", button1_detached_light=3)
     mgr = _mgr(panel)
-    mgr._panel_by_topic = lambda seg: panel
+    mgr._panel_by_msg_topic = lambda msg, suffix: panel  # P319: the handler resolves via the helper
     mgr._light_by_id = lambda lid: light if lid == 3 else None
     mgr._apply_light_command = AsyncMock()
     _run(M.NSPanelCoreManager._on_panel_button(mgr, _msg()))
@@ -117,7 +117,7 @@ def test_direct_mode_press_is_ignored_by_the_manager():
     """DIRECT toggles on-panel — the manager must NOT actuate anything."""
     panel = _panel(button1_mode=0)
     mgr = _mgr(panel)
-    mgr._panel_by_topic = lambda seg: panel
+    mgr._panel_by_msg_topic = lambda msg, suffix: panel  # P319: the handler resolves via the helper
     _run(M.NSPanelCoreManager._on_panel_button(mgr, _msg()))
     mgr.hass.services.async_call.assert_not_awaited()
 
@@ -125,7 +125,7 @@ def test_direct_mode_press_is_ignored_by_the_manager():
 def test_nothing_bound_is_logged_not_crashed():
     panel = _panel(button1_detached_entity="", button1_detached_light=0)
     mgr = _mgr(panel)
-    mgr._panel_by_topic = lambda seg: panel
+    mgr._panel_by_msg_topic = lambda msg, suffix: panel  # P319: the handler resolves via the helper
     _run(M.NSPanelCoreManager._on_panel_button(mgr, _msg()))  # no raise
 
 

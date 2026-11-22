@@ -997,16 +997,10 @@ class NSPanelCoreManager:
         """
         from .const import topic_safe
 
-        segment = mac_from_topic(msg.topic, "status")
-        if not segment:
-            return
-        panel = self._panel_by_topic(segment)
-        if panel is None:
-            # Try the verbatim segment before giving up: mac_from_topic
-            # normalizes, but hostnames keep case/spaces on the wire.
-            panel = self._panel_by_topic(self._topic_segment(msg.topic))
+        panel = self._panel_by_msg_topic(msg, "status")  # P319: verbatim fallback
         if panel is None:
             return
+        segment = self._topic_segment(msg.topic)
         try:
             data = json.loads(msg.payload)
         except (ValueError, TypeError):
@@ -1238,10 +1232,11 @@ class NSPanelCoreManager:
             event = int(data["event"])
         except (ValueError, TypeError, KeyError):
             return
-        mac = mac_from_topic(msg.topic, "touch")
-        if not mac:
+        panel = self._panel_by_msg_topic(msg, "touch")  # P319: verbatim fallback
+        if panel is None:
             return
-        self.dash.on_touch(mac, page, component, event)
+        # the dash is keyed by the panel's MAC, never by the wire hostname
+        self.dash.on_touch(panel.mac, page, component, event)
 
     async def _on_panel_button(self, msg) -> None:
         """P312: PHYSICAL button presses in DETACHED mode
@@ -1254,8 +1249,7 @@ class NSPanelCoreManager:
         2. buttonN_detached_light — the LEGACY binding (a manager light id)
            for configs stored before this rework.
         """
-        segment = mac_from_topic(msg.topic, "button")
-        panel = self._panel_by_topic(segment)
+        panel = self._panel_by_msg_topic(msg, "button")  # P319: verbatim fallback
         if not panel:
             return
         try:
@@ -1304,12 +1298,10 @@ class NSPanelCoreManager:
         ``state`` is only present while updating (updating_tft/fw/fs);
         otherwise the panel is online.
         """
-        segment = mac_from_topic(msg.topic, "status_report")
-        if not segment:
-            return
-        panel = self._panel_by_topic(segment)
+        panel = self._panel_by_msg_topic(msg, "status_report")  # P319: verbatim fallback
         if not panel:
             return
+        segment = self._topic_segment(msg.topic)
         self._note_panel_hostname(panel, self._topic_segment(msg.topic))
         md5s: dict = {}
         try:
@@ -1645,6 +1637,20 @@ class NSPanelCoreManager:
                 )
                 return panel
         return None
+
+    def _panel_by_msg_topic(self, msg, suffix: str) -> PanelConfig | None:
+        """P319: resolve a panel from an inbound topic — normalized segment
+        first, then the VERBATIM one. mac_from_topic() lowercases, but a
+        hostname with case/charset quirks (the user's "KitchenPanrl") matches
+        nothing normalized when the registry name spells differently — every
+        normalized-only handler was deaf to that panel (the dead telemetry
+        that kept the Send guard refusing). The relay handler already parsed
+        verbatim and worked; this is that pattern for every handler."""
+        panel = self._panel_by_topic(mac_from_topic(str(msg.topic), suffix))
+        if panel is not None:
+            return panel
+        return self._panel_by_topic(self._topic_segment(str(msg.topic)))
+
 
     def _panel_by_mac(self, mac: str) -> PanelConfig | None:
         from .const import topic_safe
@@ -2453,12 +2459,10 @@ class NSPanelCoreManager:
         The firmware publishes JSON lines to nspanel/<hostname>/log; the edit
         page subscribes to nspanel/<mac>/log (live) and .../log_backlog.
         """
-        segment = mac_from_topic(msg.topic, "log")
-        if not segment:
-            return
-        panel = self._panel_by_topic(segment)
+        panel = self._panel_by_msg_topic(msg, "log")  # P319: verbatim fallback
         if panel is None or self.stomp is None:
             return
+        segment = self._topic_segment(msg.topic)
         self._note_panel_hostname(panel, self._topic_segment(msg.topic))
         if isinstance(msg.payload, (bytes, bytearray)):
             text = msg.payload.decode("utf-8", "replace")
