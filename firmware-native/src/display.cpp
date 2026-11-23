@@ -91,16 +91,21 @@ static void nsp_display_write_init(void) {
     }
 }
 
+/* P339: the handshake's commands MUST reach the display — uart_tx_chars
+ * DROPS them when the TX ring is full, and the handshake fails because the
+ * "connect" never left the chip. send_now uses the BLOCKING write: the
+ * handshake is one short command, it can't flood. The regular display
+ * writes (the clock, the style, the dim) use the non-blocking path. */
 static void nsp_display_send_now(const char *cmd) {
     size_t len = strlen(cmd);
     if (s_display_write_mutex) {
         xSemaphoreTake(s_display_write_mutex, portMAX_DELAY);
-        uart_tx_chars(DISPLAY_UART, cmd, len);  // P338: non-blocking
-        uart_tx_chars(DISPLAY_UART, END_SEQ, 3);  // P338: non-blocking
+        uart_write_bytes(DISPLAY_UART, cmd, len);  // P339: blocking — must arrive
+        uart_write_bytes(DISPLAY_UART, END_SEQ, 3);
         xSemaphoreGive(s_display_write_mutex);
     } else {
-        uart_tx_chars(DISPLAY_UART, cmd, len);  // P338: non-blocking
-        uart_tx_chars(DISPLAY_UART, END_SEQ, 3);  // P338: non-blocking
+        uart_write_bytes(DISPLAY_UART, cmd, len);
+        uart_write_bytes(DISPLAY_UART, END_SEQ, 3);
     }
 }
 

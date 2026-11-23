@@ -1,21 +1,21 @@
 {
-    "version": "0.1.21",
-    "notes": "Native firmware 0.1.21 \u2014 THE TFT-PUSH CRASH FIX: every display write used uart_write_bytes, which BLOCKS when the display's TX ring is full. The display's program (the new TFT) doesn't drain the ring fast enough on some pages, so the retained-message burst at MQTT connect filled the ring, the write blocked inside the interrupt context, and the 300ms interrupt watchdog aborted the chip. uart_tx_chars writes WITHOUT blocking \u2014 the overflow is dropped, the display catches up on its own. Carries all prior fixes.",
+    "version": "0.1.22",
+    "notes": "Native firmware 0.1.22 \u2014 the handshake blocking-write restored: the 0.1.21 non-blocking change made the handshake's 'connect' command drop when the TX ring was full, so the handshake failed. The handshake (send_now) uses the blocking write; the regular display writes (the clock, the style) stay non-blocking. Carries all prior proven fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.21/native-firmware-0.1.21.bin",
-            "md5": "ddaa6d9344758ea14d90249390ff59d8"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.22/native-firmware-0.1.22.bin",
+            "md5": "dfcc2cbd0ac066b9883010504557dc8a"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.21/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.22/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.21/native-firmware-0.1.21.bin",
-            "md5": "ddaa6d9344758ea14d90249390ff59d8"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.22/native-firmware-0.1.22.bin",
+            "md5": "dfcc2cbd0ac066b9883010504557dc8a"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.21/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.22/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {
