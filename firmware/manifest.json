@@ -1,21 +1,21 @@
 {
-    "version": "0.1.18",
-    "notes": "Native firmware 0.1.18 \u2014 the crash-era fixes: (1) the watchdog panic mode OFF (the TFT delivery's resume re-armed it with panic on \u2014 the panic aborts from the interrupt context and the coredump write fails silently there; the hardware-reset path of every stable era restored); (2) the mdns recv task priority 5 -> 1 (the unpinned prio-5 task processing the LAN's multicast chatter starved both idle feeds \u2014 the crash signature); (3) the OTA/TFT task priority 1 -> 3 (the delivery outranks the network chatter); (4) the watchdog suspend/resume double-call guard. Carries all prior proven fixes.",
+    "version": "0.1.19",
+    "notes": "Native firmware 0.1.19 \u2014 THE MQTT-CONNECT CRASH FIX: every display write held a portMUX critical section (interrupts disabled) across uart_write_bytes, which BLOCKS when the transmit ring fills. The retained-message burst at every MQTT connect (the screensaver's style commands, the clock, the weather) filled the ring and the write waited with interrupts disabled \u2014 the interrupt watchdog (300 ms) aborted the chip. The critical section is gone: the writes serialize on a blocking-safe FreeRTOS mutex.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.18/native-firmware-0.1.18.bin",
-            "md5": "2a60589c596b2da061b235172038152d"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.19/native-firmware-0.1.19.bin",
+            "md5": "58bcfb63aaa8070c9eea3aee98b169bb"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.18/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.19/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.18/native-firmware-0.1.18.bin",
-            "md5": "2a60589c596b2da061b235172038152d"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.19/native-firmware-0.1.19.bin",
+            "md5": "58bcfb63aaa8070c9eea3aee98b169bb"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.18/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.19/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

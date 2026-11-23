@@ -16,6 +16,8 @@
 #include <cstring>
 #include <cstdio>
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"  // P334: the write mutex
 #include "protocol.h"
 #include "config.h"
 #include "dash_cmd.h"
@@ -63,7 +65,6 @@ void nsp_display_baud_scan(void);  // P316: defined below
  * interleaved mid-command bytes garbled the wire. One mutex serializes
  * every command write; the TFT streamer bypasses it (it owns the UART in
  * raw mode). */
-static portMUX_TYPE s_display_cmd_mux = portMUX_INITIALIZER_UNLOCKED;
 
 void nsp_display_send(const char *data, size_t len) {  // P210: shared with the TFT streamer
     uart_write_bytes(DISPLAY_UART, data, len);
@@ -73,12 +74,34 @@ void nsp_display_send(const char *data, size_t len) {  // P210: shared with the 
  * handshake's OUTPUT; gating its own send on the state it establishes
  * (raw mode at init, not-ready afterwards) made the panel transmit
  * NOTHING since P279 batch 3 — the "dead" display was never dead. */
+
+/* P334: the old write held a portMUX critical section (interrupts
+ * disabled) across uart_write_bytes — which BLOCKS when the TX ring fills.
+ * The retained-message burst at every MQTT connect (the screensaver's 18
+ * style commands + the clock + the weather) filled the ring and the write
+ * waited with interrupts disabled: the interrupt watchdog (300 ms) aborted
+ * the chip — the MQTT-connect crash. The critical section is GONE: the
+ * serialization is a FreeRTOS mutex (blocking-safe, priority-inheriting),
+ * and uart_write_bytes serializes internally for our lengths. */
+static SemaphoreHandle_t s_display_write_mutex = nullptr;
+
+static void nsp_display_write_init(void) {
+    if (s_display_write_mutex == nullptr) {
+        s_display_write_mutex = xSemaphoreCreateMutex();
+    }
+}
+
 static void nsp_display_send_now(const char *cmd) {
     size_t len = strlen(cmd);
-    taskENTER_CRITICAL(&s_display_cmd_mux);
-    uart_write_bytes(DISPLAY_UART, cmd, len);
-    uart_write_bytes(DISPLAY_UART, END_SEQ, 3);
-    taskEXIT_CRITICAL(&s_display_cmd_mux);
+    if (s_display_write_mutex) {
+        xSemaphoreTake(s_display_write_mutex, portMAX_DELAY);
+        uart_write_bytes(DISPLAY_UART, cmd, len);
+        uart_write_bytes(DISPLAY_UART, END_SEQ, 3);
+        xSemaphoreGive(s_display_write_mutex);
+    } else {
+        uart_write_bytes(DISPLAY_UART, cmd, len);
+        uart_write_bytes(DISPLAY_UART, END_SEQ, 3);
+    }
 }
 
 void nsp_display_send_command(const char *cmd) {
@@ -134,6 +157,7 @@ void nsp_display_init(void) {
     ucfg.stop_bits = UART_STOP_BITS_1;
     ucfg.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
     uart_driver_install(DISPLAY_UART, 512, 512, 0, nullptr, 0);
+    nsp_display_write_init();  // P334: the blocking-safe write mutex
     uart_param_config(DISPLAY_UART, &ucfg);
     uart_set_pin(DISPLAY_UART, DISPLAY_TX_PIN, DISPLAY_RX_PIN, -1, -1);
 
