@@ -1,21 +1,21 @@
 {
-    "version": "0.1.14",
-    "notes": "Native firmware 0.1.14 \u2014 the repair build: (1) the HTTP server's route limit raised to 12 (the default 8 silently dropped the 9th registered route \u2014 /coredump never served, every read 404'd); (2) the touch loop yields a tick when a read produces no frames \u2014 a garbage flood (the floating RX, the baud-mismatched display) made the loop burn full CPU without yielding. Carries 0.1.13's OTA watchdog suspend + the coredump verdict instrument.",
+    "version": "0.1.15",
+    "notes": "Native firmware 0.1.15 \u2014 the EVENT LADDER: every esp-mqtt event is logged with its type over the panel's own MQTT log, so the last event before the crash names the dying step \u2014 remotely, no serial needed. Carries 0.1.14's HTTP route limit + the touch-loop yield and 0.1.13's OTA watchdog suspend + the coredump instrument.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/native-firmware-0.1.14.bin",
-            "md5": "8b71a06ffdba2946140a625afae49369"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/native-firmware-0.1.15.bin",
+            "md5": "10295f741da5cda5a7a555c8588338cb"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/native-firmware-0.1.14.bin",
-            "md5": "8b71a06ffdba2946140a625afae49369"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/native-firmware-0.1.15.bin",
+            "md5": "10295f741da5cda5a7a555c8588338cb"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.14/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

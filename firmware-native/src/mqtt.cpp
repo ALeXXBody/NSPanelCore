@@ -377,6 +377,10 @@ void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
                             buf, 0, 0, true);
 }
 
+/* P329: forward declaration — the dispatcher is defined right after. */
+static void nsp_mqtt_any_event(void *handler_args, esp_event_base_t base,
+                               int32_t event_id, void *event_data);
+
 void nsp_mqtt_start(const std::string &hostname) {
     if (s_mqtt != nullptr) return;  // P279 HIGH fix: no client leak on re-IP
     s_hostname = hostname;
@@ -390,16 +394,41 @@ void nsp_mqtt_start(const std::string &hostname) {
     cfg.session.keepalive = 30;
     cfg.network.reconnect_timeout_ms = 5000;
     s_mqtt = esp_mqtt_client_init(&cfg);
-    esp_mqtt_client_register_event(s_mqtt, MQTT_EVENT_CONNECTED, nsp_mqtt_connected, nullptr);
-    esp_mqtt_client_register_event(s_mqtt, MQTT_EVENT_DISCONNECTED,
-                                   [](void *, esp_event_base_t, int32_t, void *) {
-                                       s_mqtt_up = false;  // P184 fail-safe: the status page reflects reality
-                                       /* P279 LOW fix: a dropped final fragment left
-                                        * stale reassembly state — the next complete
-                                        * message dispatched as prefix+garbage. */
-                                       s_frag_active = false;
-                                       s_frag_data.clear();
-                                   }, nullptr);
-    esp_mqtt_client_register_event(s_mqtt, MQTT_EVENT_DATA, nsp_mqtt_data, nullptr);
+    /* P329: the EVENT LADDER — every esp-mqtt event logged with its type.
+     * The crash in the MQTT connect path was unnameable: the watchdog's
+     * backtrace goes to the serial console (never attached) and the coredump
+     * write fails from the ISR context. The event ladder is visible over
+     * MQTT itself: the LAST logged event before death names the dying step. */
+    esp_mqtt_client_register_event(s_mqtt, MQTT_EVENT_ANY, nsp_mqtt_any_event, nullptr);
     esp_mqtt_client_start(s_mqtt);
+}
+
+/* P329: the ANY-event dispatcher — log the event type, then run the
+ * existing per-event logic. The event-id map (esp-mqtt): 0 ERROR,
+ * 1 CONNECTED, 2 DISCONNECTED, 3 SUBSCRIBED, 4 UNSUBSCRIBED, 5 PUBLISHED,
+ * 6 DATA, 7 DELETED, 8 BEFORE_CONNECT, 9 CLIENT... */
+static void nsp_mqtt_any_event(void *handler_args, esp_event_base_t base,
+                               int32_t event_id, void *event_data) {
+    {
+        char l[40];
+        snprintf(l, sizeof(l), "stage: ev=%d", (int)event_id);
+        nsp_mqtt_publish_log(l);
+    }
+    switch (event_id) {
+    case MQTT_EVENT_CONNECTED:
+        nsp_mqtt_connected(handler_args, base, event_id, event_data);
+        break;
+    case MQTT_EVENT_DATA:
+        nsp_mqtt_data(handler_args, base, event_id, event_data);
+        break;
+    case MQTT_EVENT_DISCONNECTED:
+        s_mqtt_up = false;  // P184 fail-safe: the status page reflects reality
+        /* P279 LOW fix: a dropped final fragment left stale reassembly
+         * state — the next complete message dispatched as prefix+garbage. */
+        s_frag_active = false;
+        s_frag_data.clear();
+        break;
+    default:
+        break;
+    }
 }
