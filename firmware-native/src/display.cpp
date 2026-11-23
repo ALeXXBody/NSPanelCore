@@ -67,7 +67,7 @@ void nsp_display_baud_scan(void);  // P316: defined below
  * raw mode). */
 
 void nsp_display_send(const char *data, size_t len) {  // P210: shared with the TFT streamer
-    uart_tx_chars(DISPLAY_UART, data, len);  // P338: non-blocking
+    uart_write_bytes(DISPLAY_UART, data, len);
 }
 
 /* P316: the UNGATED send — used by the handshake only. Readiness is the
@@ -240,8 +240,8 @@ void nsp_display_baud_scan(void) {
     for (unsigned i = 0; i < sizeof(bauds) / sizeof(bauds[0]); i++) {
         uart_set_baudrate(DISPLAY_UART, bauds[i]);
         uart_flush_input(DISPLAY_UART);
-        uart_tx_chars(DISPLAY_UART, "connect", 7);  // P338: non-blocking
-        uart_tx_chars(DISPLAY_UART, END_SEQ, 3);  // P338: non-blocking
+        uart_write_bytes(DISPLAY_UART, "connect", 7);
+        uart_write_bytes(DISPLAY_UART, END_SEQ, 3);
         vTaskDelay(pdMS_TO_TICKS(300));
         uint8_t buf[128];
         int n = uart_read_bytes(DISPLAY_UART, buf, sizeof(buf), pdMS_TO_TICKS(400));
