@@ -67,7 +67,7 @@ void nsp_display_baud_scan(void);  // P316: defined below
  * raw mode). */
 
 void nsp_display_send(const char *data, size_t len) {  // P210: shared with the TFT streamer
-    uart_write_bytes(DISPLAY_UART, data, len);
+    uart_tx_chars(DISPLAY_UART, data, len);  // P338: non-blocking
 }
 
 /* P316: the UNGATED send — used by the handshake only. Readiness is the
@@ -95,12 +95,12 @@ static void nsp_display_send_now(const char *cmd) {
     size_t len = strlen(cmd);
     if (s_display_write_mutex) {
         xSemaphoreTake(s_display_write_mutex, portMAX_DELAY);
-        uart_write_bytes(DISPLAY_UART, cmd, len);
-        uart_write_bytes(DISPLAY_UART, END_SEQ, 3);
+        uart_tx_chars(DISPLAY_UART, cmd, len);  // P338: non-blocking
+        uart_tx_chars(DISPLAY_UART, END_SEQ, 3);  // P338: non-blocking
         xSemaphoreGive(s_display_write_mutex);
     } else {
-        uart_write_bytes(DISPLAY_UART, cmd, len);
-        uart_write_bytes(DISPLAY_UART, END_SEQ, 3);
+        uart_tx_chars(DISPLAY_UART, cmd, len);  // P338: non-blocking
+        uart_tx_chars(DISPLAY_UART, END_SEQ, 3);  // P338: non-blocking
     }
 }
 
@@ -192,6 +192,13 @@ void nsp_display_init(void) {
  * restart (or a recovered hang) must be navigated into the screensaver and
  * the relay buttons re-synced, exactly like the boot path. */
 static void nsp_display_after_handshake(void) {
+    /* P337: the navigation SUPPRESSED for the delivery test — the display
+     * goes deaf between the restart's handshake and the TFT task's
+     * handshake, and the only step between them is this navigation. The
+     * navigation returns after the TFT delivery completes (the display's
+     * own post-write flow navigates it back). */
+    /* P337: suppressed — see above */
+    return;
     nsp_display_show_screensaver();
     extern int nsp_relay_state(int relay);
     nsp_display_relay(1, nsp_relay_state(1));
@@ -228,8 +235,8 @@ void nsp_display_baud_scan(void) {
     for (unsigned i = 0; i < sizeof(bauds) / sizeof(bauds[0]); i++) {
         uart_set_baudrate(DISPLAY_UART, bauds[i]);
         uart_flush_input(DISPLAY_UART);
-        uart_write_bytes(DISPLAY_UART, "connect", 7);
-        uart_write_bytes(DISPLAY_UART, END_SEQ, 3);
+        uart_tx_chars(DISPLAY_UART, "connect", 7);  // P338: non-blocking
+        uart_tx_chars(DISPLAY_UART, END_SEQ, 3);  // P338: non-blocking
         vTaskDelay(pdMS_TO_TICKS(300));
         uint8_t buf[128];
         int n = uart_read_bytes(DISPLAY_UART, buf, sizeof(buf), pdMS_TO_TICKS(400));

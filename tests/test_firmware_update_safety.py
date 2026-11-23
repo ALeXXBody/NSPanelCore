@@ -111,7 +111,7 @@ def test_the_recovery_script_exists_and_gates_its_output():
 
 
 def test_the_recovery_image_is_present_and_intact():
-    merged = RELEASES / "recovery-merged-flash-0.1.20.bin"
+    merged = RELEASES / "recovery-merged-flash-0.1.21.bin"
     if not merged.is_file():
         import pytest
         pytest.skip("recovery image not generated yet")
