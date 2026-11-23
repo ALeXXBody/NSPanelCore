@@ -32,6 +32,7 @@ extern int nsp_display_uart_baud(void);
 extern void nsp_display_send_command(const char *cmd);
 extern void nsp_display_uart_set_baud(int baud);
 extern void nsp_display_power(int state);
+extern void nsp_display_send_now(const char *cmd);  // P340: the ungated send
 extern int nsp_display_read(uint8_t *buf, int len, int timeout_ms);
 extern bool nsp_display_handshake_pub(int attempts);
 extern void nsp_tft_start(void);
@@ -416,12 +417,17 @@ static void nsp_tft_task(void *) {
             power_cycle_needed = false;
         }
 
-        nsp_display_send_command("DRAKJHSUYDGBNCJHGJKSHBDN");
+        /* P340: the raw-mode gate made the handshake SILENT — the TFT task
+         * sets raw_mode=true, then nsp_display_send_command checks raw_mode
+         * and RETURNS without sending. The escape and the connect never
+         * left the chip. Use send_now (the ungated path) — the TFT task
+         * owns the UART via raw mode and MUST send directly. */
+        nsp_display_send_now("DRAKJHSUYDGBNCJHGJKSHBDN");
         vTaskDelay(pdMS_TO_TICKS(400));
         nsp_display_drain(200);
         vTaskDelay(pdMS_TO_TICKS(100));
 
-        nsp_display_send_command("connect");
+        nsp_display_send_now("connect");
         char comok[128] = "";
         {
             int n = nsp_display_read((uint8_t *)comok, (int)sizeof(comok) - 1, 10000);

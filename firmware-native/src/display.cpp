@@ -96,7 +96,7 @@ static void nsp_display_write_init(void) {
  * "connect" never left the chip. send_now uses the BLOCKING write: the
  * handshake is one short command, it can't flood. The regular display
  * writes (the clock, the style, the dim) use the non-blocking path. */
-static void nsp_display_send_now(const char *cmd) {
+void nsp_display_send_now(const char *cmd) {
     size_t len = strlen(cmd);
     if (s_display_write_mutex) {
         xSemaphoreTake(s_display_write_mutex, portMAX_DELAY);
