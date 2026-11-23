@@ -1147,10 +1147,15 @@ class NSPanelCoreManager:
             await self._publish(
                 self._panel_cmd_topic(panel, "command"), reply, True
             )
-            await self._publish(
-                self._panel_cmd_topic(panel, "command"),
-                json.dumps({"command": "reload"}),
-            )
+            # P324: the reload nudge is SUPPRESSED — the isolation step of
+            # the crash hunt: with the dash_map already suppressed (P321f),
+            # the panel still dies ~1s after the register-time messages and
+            # the reload's handler never logs — the reload is the last
+            # wire-level candidate. The nudge is inert for the fixed panel
+            # firmware; restored after the 0.1.14 verdict.
+            _LOGGER.warning(
+                "reload nudge to %s suppressed (P324: the isolation step "
+                "of the crash hunt)", panel.name)
             await self._publish_panel_status(panel, "online")
             # P234: re-push the dashboard config (RAM-only on the panel)
             dash = getattr(self, "dash", None)
@@ -1191,10 +1196,10 @@ class NSPanelCoreManager:
             json.dumps(self._register_accept_reply(panel)),
             True,
         )
-        await self._publish(
-            self._panel_cmd_topic(panel, "command"),
-            json.dumps({"command": "reload"}),
-        )
+        # P324: suppressed — see the register-time note above.
+        _LOGGER.warning(
+            "reload nudge to %s suppressed (P324: the isolation step "
+            "of the crash hunt)", panel.name)
         # P312: deliver the physical-button configuration — the firmware
         # never consumed the old JSON config, so modes/custom topics were
         # dead at every layer. Sent on accept AND after every settings save
