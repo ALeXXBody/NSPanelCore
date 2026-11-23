@@ -1,21 +1,21 @@
 {
-    "version": "0.1.15",
-    "notes": "Native firmware 0.1.15 (rev2) \u2014 the EVENT LADDER with the self-feedback fixed: the first ladder build logged its own publish's PUBLISHED event, an infinite publish loop that crashed the client pre-connect. The dispatcher now skips PUBLISHED and ERROR. The event ladder names the dying step remotely.",
+    "version": "0.1.16",
+    "notes": "Native firmware 0.1.16 \u2014 THE REVERT: the 0.1.15 event ladder removed, the 0.1.14 runtime behavior restored verbatim (the last build that ran stable in quarantine). No new code. The OTA watchdog suspend, the touch-loop yield, and the HTTP route limit are retained \u2014 all runtime-proven on this panel.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/native-firmware-0.1.15.bin",
-            "md5": "03989d3bc511fd8063e75ae6867f3ee5"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.16/native-firmware-0.1.16.bin",
+            "md5": "3b8e5c8b887c54dae88372b04187328c"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.16/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/native-firmware-0.1.15.bin",
-            "md5": "03989d3bc511fd8063e75ae6867f3ee5"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.16/native-firmware-0.1.16.bin",
+            "md5": "3b8e5c8b887c54dae88372b04187328c"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.16/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {
