@@ -126,6 +126,15 @@ void nsp_display_drain(int ms) {  // P210: shared
 static bool nsp_display_handshake(int attempts) {
     for (int i = 0; i < attempts; i++) {
         uart_flush_input(DISPLAY_UART);
+        /* P336: WAKE the display before the handshake — the HMI's sleep
+         * (its own timer or a stray sleep command) silences its serial and
+         * every handshake failed "no comok" while a power-cycle answered.
+         * The wake command exits sleep; the sleep timer is then disabled
+         * (thsp=0) so the display never silences itself again. */
+        nsp_display_send_now("wake");
+        vTaskDelay(pdMS_TO_TICKS(150));
+        nsp_display_send_now("thsp=0");
+        vTaskDelay(pdMS_TO_TICKS(150));
         nsp_display_send_now("connect");  // P316: the ungated path
         vTaskDelay(pdMS_TO_TICKS(1000));
         uint8_t buf[128];

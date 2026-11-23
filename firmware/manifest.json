@@ -1,21 +1,21 @@
 {
-    "version": "0.1.19",
-    "notes": "Native firmware 0.1.19 \u2014 THE MQTT-CONNECT CRASH FIX: every display write held a portMUX critical section (interrupts disabled) across uart_write_bytes, which BLOCKS when the transmit ring fills. The retained-message burst at every MQTT connect (the screensaver's style commands, the clock, the weather) filled the ring and the write waited with interrupts disabled \u2014 the interrupt watchdog (300 ms) aborted the chip. The critical section is gone: the writes serialize on a blocking-safe FreeRTOS mutex.",
+    "version": "0.1.20",
+    "notes": "Native firmware 0.1.20 \u2014 THE DISPLAY SLEEP FIX: every handshake failed 'no comok' while a power-cycle answered \u2014 the HMI's sleep silences its serial. The handshake now WAKES the display first (wake) and disables its sleep timer (thsp=0), so the display never silences itself. Carries all prior proven fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.19/native-firmware-0.1.19.bin",
-            "md5": "58bcfb63aaa8070c9eea3aee98b169bb"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.20/native-firmware-0.1.20.bin",
+            "md5": "6db28196022022d974da21e045a4d1ab"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.19/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.20/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.19/native-firmware-0.1.19.bin",
-            "md5": "58bcfb63aaa8070c9eea3aee98b169bb"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.20/native-firmware-0.1.20.bin",
+            "md5": "6db28196022022d974da21e045a4d1ab"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.19/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.20/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {
