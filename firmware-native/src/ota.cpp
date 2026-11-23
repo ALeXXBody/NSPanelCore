@@ -191,23 +191,33 @@ static bool nsp_write_fs_partition(const std::string &checksum) {
  * rolled back, the next attempt restarted the erase. Suspending the TWDT
  * for the flash/stream section lets the erase run to completion; the fresh
  * boot after the flash re-arms it from the sdkconfig. */
+static bool s_twdt_suspended = false;
 static void nsp_twdt_suspend_for_flash(void) {
+    if (s_twdt_suspended) return;  // P333: the second OTA task's deinit
+                                   // errors "never initialized" — skip it
     esp_err_t err = esp_task_wdt_deinit();
+    s_twdt_suspended = (err == ESP_OK);
     char l[80];
     snprintf(l, sizeof(l), "OTA: watchdog suspended for flash (err=%d)", (int)err);
     nsp_mqtt_publish_log(l);
 }
 
 static void nsp_twdt_resume_after_stream(void) {
+    if (!s_twdt_suspended) return;  // P333: nothing to resume
     esp_task_wdt_config_t cfg = {
         .timeout_ms = 10000,
         .idle_core_mask = (1 << 0) | (1 << 1),
-        .trigger_panic = true,
+        /* P333: panic OFF — the panic path aborts from the TWDT interrupt
+         * context and the coredump write fails silently there (0 bytes,
+         * proven). The hardware-reset path of every stable era is the
+         * proven behavior; restoring it verbatim. */
+        .trigger_panic = false,
     };
     esp_err_t err = esp_task_wdt_init(&cfg);
     char l[80];
     snprintf(l, sizeof(l), "OTA: watchdog resumed (err=%d)", (int)err);
     nsp_mqtt_publish_log(l);
+    s_twdt_suspended = (err != ESP_OK);
 }
 
 static void nsp_ota_fw_task(void *) {
@@ -344,7 +354,9 @@ void nsp_ota_start() {
         return;
     }
     s_state = OTA_FW;  // claim BEFORE spawn: no race window
-    BaseType_t ok = xTaskCreatePinnedToCore(nsp_ota_fw_task, "ota", 8192, nullptr, 1, nullptr, 0);
+    /* P333: prio 1 -> 3 — the OTA must outrank the mdns tasks (prio 1) to
+ * complete its fetch/erase/write while any network chatter runs. */
+BaseType_t ok = xTaskCreatePinnedToCore(nsp_ota_fw_task, "ota", 8192, nullptr, 3, nullptr, 0);
     if (ok != pdPASS) {
         // P187 fail-safe: spawn failures were SILENT — now logged.
         nsp_mqtt_publish_log("OTA: task spawn FAILED (memory?)");
@@ -746,7 +758,7 @@ void nsp_tft_start() {
     s_state = OTA_FS;
     /* P279 MEDIUM fix: the spawn result was discarded — a failed spawn
      * left s_state busy forever (every later update rejected as busy). */
-    if (xTaskCreatePinnedToCore(nsp_tft_task, "tft", 12288, nullptr, 1, nullptr, 0) != pdPASS) {
+    if (xTaskCreatePinnedToCore(nsp_tft_task, "tft", 12288, nullptr, 3, nullptr, 0) != pdPASS) {
         nsp_mqtt_publish_log("TFT: task spawn FAILED (memory?)");
         s_state = OTA_IDLE;
         return;
