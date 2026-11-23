@@ -359,6 +359,14 @@ void nsp_display_touch_task(void *) {
          * bounds; also skip while another sequence owns the UART (P208#5). */
         if (n <= 0 || s_display_raw_mode) continue;
         auto frames = nsp_touch_decode(buf, (size_t)n);
+        /* P328: a garbage flood (the floating RX, the baud-mismatched
+         * display) decodes to NOTHING — consumed 0 of every chunk (the
+         * host test pins it) — and the read returns instantly while data
+         * flows: the loop burned full CPU without yielding. A tick of
+         * sleep on zero progress costs nothing when frames ARE flowing. */
+        if (frames.empty() && n > 0) {
+            vTaskDelay(pdMS_TO_TICKS(1));
+        }
         if (!frames.empty()) {
             size_t used = frames.back().consumed + (frames.front().page == -1 || frames.front().consumed ? 0 : 0);
             // the consumed offsets are per-frame relative to the decode start —

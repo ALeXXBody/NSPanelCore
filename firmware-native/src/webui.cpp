@@ -253,6 +253,10 @@ bool nsp_web_start(bool ap_mode) {
     s_ap_mode = ap_mode;
     httpd_handle_t server = nullptr;
     httpd_config_t hcfg = HTTPD_DEFAULT_CONFIG();
+    /* P327: the default limit is 8 routes and we register NINE — the last
+     * one (/coredump, P321) was silently dropped at registration and every
+     * read 404'd. Raise the limit with headroom. */
+    hcfg.max_uri_handlers = 12;
     if (httpd_start(&server, &hcfg) != ESP_OK) return false;
     httpd_uri_t root = {"/", HTTP_GET, on_get_root, nullptr};
     httpd_uri_t status = {"/status.json", HTTP_GET, on_get_status_json, nullptr};
