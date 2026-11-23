@@ -56,6 +56,16 @@ def test_register_sends_accept_but_never_reload():
     assert not any("reload" in s for s in sent), "the reload nudge is suppressed"
 
 
+def test_accept_is_not_retained():
+    # P326: the retained accept re-delivered at every boot killed the panel
+    # within a second of subscribing — the accept goes out live-only.
+    mgr = _mgr(_panel())
+    _run(M.NSPanelCoreManager._send_panel_config(mgr, _panel()))
+    for c in mgr._publish.await_args_list:
+        if "register_accept" in c.args[1]:
+            assert c.args[2] is False, "the accept must NOT be retained"
+
+
 def test_button_config_still_pushed():
     mgr = _mgr(_panel())
     _run(M.NSPanelCoreManager._send_panel_config(mgr, _panel()))

@@ -1144,8 +1144,15 @@ class NSPanelCoreManager:
             # Accepted panels get the accept reply + a config reload nudge on
             # their own hostname-based command topic (the only topic the
             # panel subscribes to).
+            # P326: NON-RETAINED — the retained accept killed the panel at
+            # every boot: the broker re-delivered it the instant the panel
+            # subscribed and the accept processing crashed it within a
+            # second (the live-provision experiment: the MQTT configured ->
+            # the crash returned; the factory-reset empty config -> stable).
+            # A live panel gets the accept at its register; a booting panel
+            # MUST NOT be fed it from the broker's memory.
             await self._publish(
-                self._panel_cmd_topic(panel, "command"), reply, True
+                self._panel_cmd_topic(panel, "command"), reply, False
             )
             # P324: the reload nudge is SUPPRESSED — the isolation step of
             # the crash hunt: with the dash_map already suppressed (P321f),
@@ -1191,10 +1198,11 @@ class NSPanelCoreManager:
         hostname-based command topic — the only topic it subscribes to.
         There is no protobuf on the wire.
         """
+        # P326: non-retained — see the register-time note above.
         await self._publish(
             self._panel_cmd_topic(panel, "command"),
             json.dumps(self._register_accept_reply(panel)),
-            True,
+            False,
         )
         # P324: suppressed — see the register-time note above.
         _LOGGER.warning(

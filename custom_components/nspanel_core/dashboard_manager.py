@@ -127,34 +127,44 @@ class DashboardService:
         other panel and wedged all future sends when the target was
         offline. Only the triggered panel's download is honored; the slot
         ages out after 10 minutes."""
-        if not self._serving:
-            return None
         import time as _t
-
-        if _t.time() - self._serving.get("ts", 0) > 600:
-            self._serving = None
-            return None
-        if requesting_mac and self._serving["mac"] != requesting_mac:
-            return None  # the other panels keep their stock TFT
+        # P335: the manual slot first, then the auto-redelivery slot —
+        # both expire on their own clocks; the rearm's missing "ts" made
+        # the auto delivery itself 404 forever.
+        for slot_name in ("_serving", "_auto_serving"):
+            slot = getattr(self, slot_name, None)
+            if not slot:
+                continue
+            if _t.time() - slot.get("ts", 0) > 600:
+                setattr(self, slot_name, None)
+                continue
+            if requesting_mac and slot["mac"] != requesting_mac:
+                continue  # the other panels keep their stock TFT
+            if os.path.isfile(slot["path"]):
+                self._serving = slot if slot_name == "_serving" else self._serving
+                return slot["path"]
+        return None
         if os.path.isfile(self._serving["path"]):
             return self._serving["path"]
         return None
 
     def serving_info(self) -> dict:
-        # P312: the slot EXPIRES after 10 minutes (the download window) —
-        # an expired slot must not be reported as an in-progress send, or
-        # every later send is refused with "already in progress" forever
-        # (the user's Send wedged after one delivery that never completed).
-        if self._serving:
-            import time as _t
-            if _t.time() - self._serving.get("ts", 0) > 600:
-                self._serving = None
-        return dict(self._serving) if self._serving else {}
+        # P312+P335: both slots expire on their own 600 s clocks — an
+        # expired slot must never be reported as an in-progress send.
+        import time as _t
+        for slot_name in ("_serving", "_auto_serving"):
+            slot = getattr(self, slot_name, None)
+            if slot and _t.time() - slot.get("ts", 0) > 600:
+                setattr(self, slot_name, None)
+        live = self._serving or self._auto_serving
+        return dict(live) if live else {}
 
     def stored_tft_path(self, mac: str) -> str | None:
         """The panel's compiled dashboard TFT on disk, if any."""
         p = os.path.join(_dash_dir(self.hass), f"{mac}.tft")
         return p if os.path.isfile(p) else None
+
+    _auto_serving: dict | None = None  # P335: the auto-redelivery slot
 
     def rearm_serving(self, mac: str) -> dict:
         """Re-arm the serving slot for a panel whose dashboard was wiped
@@ -166,7 +176,14 @@ class DashboardService:
         if not path:
             return {"error": "no stored dashboard TFT"}
         md5 = hashlib.md5(open(path, "rb").read()).hexdigest()
-        self._serving = {"mac": mac, "path": path, "md5": md5}
+        # P335: the auto slot is SEPARATE from the manual send slot — the
+        # rearm used to overwrite _serving, which (a) blocked the manual
+        # Send forever via the register-time rearm loop and (b) lacked the
+        # "ts" field, so the expiry logic saw 0 and the auto delivery
+        # itself 404'd. Both slots expire on their own 600 s clocks.
+        import time as _t
+        self._auto_serving = {"mac": mac, "path": path, "md5": md5,
+                              "ts": _t.time()}
         return {"ok": True}
 
     async def async_send_to_panel(self, mac: str) -> dict:
