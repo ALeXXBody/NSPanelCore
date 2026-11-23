@@ -1,21 +1,21 @@
 {
-    "version": "0.1.25",
-    "notes": "Native firmware 0.1.25 \u2014 uart_tx_chars reverted to uart_write_bytes. The 0.1.21 non-blocking change was unnecessary (the P334 mutex already fixed the original crash) and broke the TFT block transfer: 4096-byte blocks written with a 512-byte TX ring dropped 87% of each block. The blocking write with the mutex is the correct behavior for both the display commands and the TFT streamer.",
+    "version": "0.1.26",
+    "notes": "Native firmware 0.1.26 \u2014 the TFT delivery's first attempt now power-cycles the display (the display's serial goes deaf between power cycles; the handshake on the stale serial always fails 'no comok'). The display restart action proves the display answers after a power cycle. Carries all prior fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.25/native-firmware-0.1.25.bin",
-            "md5": "06c3ef4f3fbe75ca91a0dc8a227ce4b4"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.26/native-firmware-0.1.26.bin",
+            "md5": "92cbdcb30d485d4469fe7ee54f3e0b87"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.25/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.26/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.25/native-firmware-0.1.25.bin",
-            "md5": "06c3ef4f3fbe75ca91a0dc8a227ce4b4"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.26/native-firmware-0.1.26.bin",
+            "md5": "92cbdcb30d485d4469fe7ee54f3e0b87"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.25/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.26/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

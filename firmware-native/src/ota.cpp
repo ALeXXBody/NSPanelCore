@@ -398,7 +398,13 @@ static void nsp_tft_task(void *) {
      * mechanism), so cycling buys nothing for the protocol — attempt 1
      * talks to the display directly; a cycle happens only when a previous
      * attempt found the display unresponsive (its recovery role). */
-    bool power_cycle_needed = false;
+    /* P343: the first attempt MUST power-cycle the display — the display's
+     * serial goes deaf between power cycles (the HMI's program silences
+     * it), and the handshake on the stale serial always fails "no comok".
+     * The display restart action (which DOES power-cycle) proves the
+     * display answers after a power cycle. The first TFT attempt should
+     * do the same instead of relying on a serial that's been idle. */
+    bool power_cycle_needed = true;
     for (int attempt = 0; attempt < 3; attempt++) {
         s_no_reply_strikes = 0;  // P242: fresh count per clean attempt
         /* P310 (the dead-panel incident): every attempt must feed the OTA
