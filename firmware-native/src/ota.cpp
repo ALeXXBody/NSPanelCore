@@ -567,27 +567,32 @@ static void nsp_tft_task(void *) {
             s_last_progress_us = esp_timer_get_time();
 
             /* per-block handshake: 0x05 next / 0x08+LE-offset resend */
-            uint8_t resp[8] = {0};
+            /* P341: the display's program (the new TFT) may emit serial
+             * bytes before the 0x05 ACK — the old code read ONE byte and
+             * broke if it wasn't 0x05, missing the ACK behind the noise.
+             * Read a BURST of bytes and scan for 0x05 or 0x08 inside it. */
+            uint8_t resp[64] = {0};
             int rlen = 0;
+            bool got_05 = false;
+            bool got_08 = false;
             int64_t resp_dead = esp_timer_get_time();
-            while (rlen < 5 && esp_timer_get_time() - resp_dead < 5000000LL) {
-                uint8_t b = 0;
-                int n = nsp_display_read(&b, 1, 250);
-                if (n > 0) {
-                    resp[rlen++] = b;
-                    /* P238c: 0x05 ("next") is ONE byte — accepting it late
-                     * burned ~5 s per block (~15 min per full TFT). Break
-                     * the moment it lands; only 0x08 carries 4 more bytes. */
-                    if (resp[0] == 0x05) break;
-                    if (rlen == 1 && resp[0] != 0x08) break;
+            while (esp_timer_get_time() - resp_dead < 5000000LL) {
+                uint8_t b[16] = {0};
+                int n = nsp_display_read(b, sizeof(b), 250);
+                for (int i = 0; i < n && rlen < (int)sizeof(resp); i++) {
+                    if (b[i] == 0x05) { got_05 = true; }
+                    if (b[i] == 0x08) { got_08 = true; }
+                    if (rlen < (int)sizeof(resp)) resp[rlen++] = b[i];
                 }
+                if (got_05 || (got_08 && rlen >= 5)) break;
+                if (n <= 0 && rlen > 0) break;  // had bytes, then silence
                 s_last_progress_us = esp_timer_get_time();
             }
             /* P279 MEDIUM fix: a truncated 0x08 (the offset bytes missing)
              * fell through to the "0x05 accepted" path — the next block
              * streamed while the display expected a resend, desyncing the
              * transfer with the panel's md5 reporting "correct". */
-            if (resp[0] == 0x08 && rlen < 5) {
+            if (got_08 && !got_05 && rlen < 5) {
                 char l[80];
                 snprintf(l, sizeof(l), "TFT: truncated 0x08 reply (%d bytes) — retrying block", rlen);
                 nsp_mqtt_publish_log(l);
@@ -595,7 +600,7 @@ static void nsp_tft_task(void *) {
                 resent = true;
                 continue;
             }
-            if (rlen == 0) {
+            if (!got_05 && !got_08) {
                 if (offset >= file_size) break;  // last block: silence = done
                 /* P242: cap the no-reply retries — the display stopping
                  * mid-write must NOT hang the task forever (progress
