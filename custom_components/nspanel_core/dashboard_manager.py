@@ -174,8 +174,18 @@ class DashboardService:
         design = self._designs.get(mac)
         if design is None or not (design.pages or design.items):
             return {"error": "no design saved for this panel"}
+        # P323: the guard must honour the slot expiry EXACTLY like
+        # serving_info() does — the bare truthiness check refused every
+        # later send forever when a delivery never completed (the bench
+        # reproduced it: the slot armed, the panel never reported the md5,
+        # and "already in progress" stood after 10+ minutes). The expired
+        # slot is cleared here and the send proceeds.
         if self._serving:
-            return {"error": "a send is already in progress (panel %s)" % self._serving["mac"]}
+            import time as _t
+            if _t.time() - self._serving.get("ts", 0) > 600:
+                self._serving = None
+            else:
+                return {"error": "a send is already in progress (panel %s)" % self._serving["mac"]}
         panel = self.manager._panel_by_mac(mac)
         if panel is None or not panel.accepted:
             return {"error": "panel not found or not accepted"}
