@@ -48,7 +48,7 @@ def test_the_ota_watchdog_is_fed_on_every_display_wait():
     ota = _read(REPO / "firmware-native" / "src" / "ota.cpp")
     # P310: the TFT attempt loop feeds progress at the loop head — a silent
     # display can never reach the 120 s stall restart
-    marker = 'nsp_display_send_command("DRAKJHSUYDGBNCJHGJKSHBDN");'
+    marker = 'nsp_display_send_now("DRAKJHSUYDGBNCJHGJKSHBDN");'
     assert "s_last_progress_us = esp_timer_get_time();" in \
         ota[ota.index("for (int attempt = 0; attempt < 3; attempt++)"):
             ota.index(marker)]
