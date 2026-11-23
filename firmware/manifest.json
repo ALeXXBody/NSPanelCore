@@ -1,10 +1,10 @@
 {
     "version": "0.1.15",
-    "notes": "Native firmware 0.1.15 \u2014 the EVENT LADDER: every esp-mqtt event is logged with its type over the panel's own MQTT log, so the last event before the crash names the dying step \u2014 remotely, no serial needed. Carries 0.1.14's HTTP route limit + the touch-loop yield and 0.1.13's OTA watchdog suspend + the coredump instrument.",
+    "notes": "Native firmware 0.1.15 (rev2) \u2014 the EVENT LADDER with the self-feedback fixed: the first ladder build logged its own publish's PUBLISHED event, an infinite publish loop that crashed the client pre-connect. The dispatcher now skips PUBLISHED and ERROR. The event ladder names the dying step remotely.",
     "files": {
         "firmware/sonoff/firmware.bin": {
             "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/native-firmware-0.1.15.bin",
-            "md5": "10295f741da5cda5a7a555c8588338cb"
+            "md5": "03989d3bc511fd8063e75ae6867f3ee5"
         },
         "firmware/sonoff/data_file.bin": {
             "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/data_file.bin",
@@ -12,7 +12,7 @@
         },
         "firmware/custom/firmware.bin": {
             "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/native-firmware-0.1.15.bin",
-            "md5": "10295f741da5cda5a7a555c8588338cb"
+            "md5": "03989d3bc511fd8063e75ae6867f3ee5"
         },
         "firmware/custom/data_file.bin": {
             "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.15/data_file.bin",

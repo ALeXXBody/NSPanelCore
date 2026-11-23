@@ -409,6 +409,14 @@ void nsp_mqtt_start(const std::string &hostname) {
  * 6 DATA, 7 DELETED, 8 BEFORE_CONNECT, 9 CLIENT... */
 static void nsp_mqtt_any_event(void *handler_args, esp_event_base_t base,
                                int32_t event_id, void *event_data) {
+    /* P329b: the PUBLISHED and ERROR events are SKIPPED — the first build's
+     * ladder logged its own log-publish's PUBLISHED event, generating
+     * another publish, another event: an infinite self- feedback loop that
+     * crashed the client before it ever connected. The publish feedback is
+     * structural; only the meaningful events stay on the ladder. */
+    if (event_id == MQTT_EVENT_PUBLISHED || event_id == MQTT_EVENT_ERROR) {
+        return;
+    }
     {
         char l[40];
         snprintf(l, sizeof(l), "stage: ev=%d", (int)event_id);
