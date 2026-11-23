@@ -1,6 +1,6 @@
 {
-    "name": "NSPanel Core \u2014 P310 RECOVERY: fw v0.1.14 (current)",
-    "version": "0.1.14-recovery",
+    "name": "NSPanel Core \u2014 P310 RECOVERY: fw v0.1.15 (current)",
+    "version": "0.1.15-recovery",
     "new_install_prompt_erase": false,
     "builds": [
         {
@@ -19,7 +19,7 @@
                     "offset": 57344
                 },
                 {
-                    "path": "native_0114_recovery.bin",
+                    "path": "native_0115_recovery.bin",
                     "offset": 65536
                 }
             ]
