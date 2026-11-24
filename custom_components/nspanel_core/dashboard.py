@@ -2642,9 +2642,10 @@ class DashboardPhotoView(HomeAssistantView):
         from . import bg_process as bgp
         from aiohttp import web as _web
         import io as _io
+        import os as _os  # P346: the photo view's os reference
 
         def _render_photo():
-            with Image.open(os.path.join(origins, target.background_image)) as im:
+            with Image.open(_os.path.join(origins, target.background_image)) as im:
                 im = im.convert("RGB")
                 base = bgp.cover_crop(im)
                 if variant == "dash":
