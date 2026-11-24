@@ -1,21 +1,21 @@
 {
-    "version": "0.1.33",
-    "notes": "Native firmware 0.1.33 \u2014 the send-completion proof: the TFT record counter (tft_md5_seq) is bumped at every 'delivered md5 recorded', persisted in NVS and carried in the register payload; the manager snapshots it when a send is armed and only a HIGHER count can complete the send \u2014 a stale pre-send md5 can never clear the serving slot mid-transfer again (P352). The panel now identifies itself on every TFT fetch (?panel=<hostname>) so the per-panel serving slot engages. Carries all prior fixes.",
+    "version": "0.1.34",
+    "notes": "Native firmware 0.1.34 \u2014 the P337 navigation suppression LIFTED: the post-handshake navigation (splash -> screensaver + the relay state re-sync) is back. The authored splash never auto-advances, so with the suppression every boot sat on the logo forever and the physical switch zones (which live on home) were unreachable \u2014 the user's report. The P337 'goes deaf' suspicion was falsified by P352 (the served file switched mid-transfer). The navigation's writes are inert while the TFT task holds raw mode. Carries all prior fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.33/native-firmware-0.1.33.bin",
-            "md5": "77e4216f47aa1785faa0c058d3f483a1"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.34/native-firmware-0.1.34.bin",
+            "md5": "97c75bd661f327669276d89924742433"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.33/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.34/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.33/native-firmware-0.1.33.bin",
-            "md5": "77e4216f47aa1785faa0c058d3f483a1"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.34/native-firmware-0.1.34.bin",
+            "md5": "97c75bd661f327669276d89924742433"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.33/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.34/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

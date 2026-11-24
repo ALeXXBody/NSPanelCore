@@ -204,13 +204,14 @@ void nsp_display_init(void) {
  * restart (or a recovered hang) must be navigated into the screensaver and
  * the relay buttons re-synced, exactly like the boot path. */
 static void nsp_display_after_handshake(void) {
-    /* P337: the navigation SUPPRESSED for the delivery test — the display
-     * goes deaf between the restart's handshake and the TFT task's
-     * handshake, and the only step between them is this navigation. The
-     * navigation returns after the TFT delivery completes (the display's
-     * own post-write flow navigates it back). */
-    /* P337: suppressed — see above */
-    return;
+    /* P355: the P337 suppression is LIFTED — the "goes deaf" suspicion it
+     * isolated was falsified by P352 (the served file switched mid-transfer;
+     * the display was faithfully ACKing throughout). The navigation's own
+     * writes go through nsp_display_send_command, which is INERT while the
+     * TFT task holds raw mode — a handshake inside the delivery never
+     * navigates mid-upload. With the suppression, every boot sat on the
+     * splash forever (the user's report: the logo stuck, the switches dead —
+     * the button zones live on home, which nothing ever reached). */
     nsp_display_show_screensaver();
     extern int nsp_relay_state(int relay);
     nsp_display_relay(1, nsp_relay_state(1));
