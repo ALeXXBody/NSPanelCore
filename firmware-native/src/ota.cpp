@@ -382,6 +382,19 @@ BaseType_t ok = xTaskCreatePinnedToCore(nsp_ota_fw_task, "ota", 8192, nullptr, 3
  *      -> wait up to 5 s for 0x05 (next) / 0x08+LE-offset (resend; absurd
  *      offset = full clean restart; 0 = keep forward)
  *   4. after the last block the display finishes and reboots itself. */
+/* P351: hex+timing log of the display's reply bytes — the evidence line.
+ * Every block reply is published so the failure mode (silence vs truncated
+ * 0x08 vs garbage) is READ off the log, not theorized. */
+static void nsp_tft_hex_log(const char *tag, const uint8_t *b, int n) {
+    char l[160];
+    int pos = snprintf(l, sizeof(l), "%s (%d):", tag, n);
+    for (int i = 0; i < n && i < 12 && pos < (int)sizeof(l) - 4; i++) {
+        pos += snprintf(l + pos, sizeof(l) - (size_t)pos, " %02x", b[i]);
+    }
+    if (n > 12) pos += snprintf(l + pos, sizeof(l) - (size_t)pos, " ...");
+    nsp_mqtt_publish_log(l);
+}
+
 static void nsp_tft_task(void *) {
     nsp_twdt_suspend_for_flash();  // P321c: the stream outruns the watchdog
     const char *url_path = "/download_tft_eu";
@@ -391,6 +404,7 @@ static void nsp_tft_task(void *) {
     nsp_mqtt_publish_log("TFT: update started (block protocol)");
 
     extern void nsp_display_set_raw_mode(bool on);
+    extern void nsp_display_set_tft_baud(int baud);  // P351: restore every attempt
     nsp_display_set_raw_mode(true);  // own the UART for the whole sequence
 
     /* P245 (user demand — no power cycles as a "solution"): the display's
@@ -415,6 +429,12 @@ static void nsp_tft_task(void *) {
          * "self-deactivating relays"). The watchdog must never kill the
          * panel because a DISPLAY is unresponsive. */
         s_last_progress_us = esp_timer_get_time();
+        /* P351: the ESP's baud must be 115200 BEFORE the handshake. The
+         * restore-to-115200 lived only on the success path, so after a
+         * failed attempt at 57600 (0.1.31) the ESP stayed there while the
+         * freshly power-cycled display boots at 115200 — attempts 2 and 3
+         * failed "no comok" for nothing but the baud mismatch. */
+        nsp_display_set_tft_baud(115200);
         if (power_cycle_needed) {
             nsp_display_power(1);
             vTaskDelay(pdMS_TO_TICKS(1000));
@@ -478,19 +498,14 @@ static void nsp_tft_task(void *) {
 
         {
             char cmd[64];
-            /* P347: the TFT transfer at 57600 — the display's processor
-             * drops bytes at 115200 during the ~160s transfer (the truncated
-             * 0x08 at 66%). At 57600 the display keeps up with every byte.
-             * The ESP's UART switches to match; it restores 115200 after. */
-            snprintf(cmd, sizeof(cmd), "whmi-wris %lld,57600,1", (long long)file_size);
+            /* P351: back to 115200 everywhere. The 0.1.31 run at 57600 got
+             * ZERO reply to the first block (worse than 115200's truncated
+             * 0x08), and the historical 66% runs were at 115200. The
+             * "display drops bytes at 115200" theory is dead: the display
+             * goes SILENT mid-reply — a protocol/state problem, not byte
+             * loss. No baud switching during the transfer at all. */
+            snprintf(cmd, sizeof(cmd), "whmi-wris %lld,115200,1", (long long)file_size);
             nsp_display_send_now(cmd);
-            /* P350: the display switches to the whmi-wris baud BEFORE ACKing
-             * (the Nextion firmware behavior). The ESP must match. The delay
-             * lets the TX ring drain at 115200 — without it, the last
-             * whmi-wris bytes are garbled when the baud changes. */
-            vTaskDelay(pdMS_TO_TICKS(5));
-            extern void nsp_display_set_tft_baud(int baud);  // P347
-            nsp_display_set_tft_baud(57600);
         }
         vTaskDelay(pdMS_TO_TICKS(120));
 
@@ -508,6 +523,14 @@ static void nsp_tft_task(void *) {
             continue;
         }
         nsp_mqtt_publish_log("TFT: 0x05 ACK — block transfer starting");
+        /* P351: capture anything the display pushes on its OWN right after
+         * the ACK — a pre-emptive resume request (0x08+offset) for a stale
+         * flash pointer arrives HERE, before the first block is sent. */
+        {
+            uint8_t pre[16] = {0};
+            int pn = nsp_display_read(pre, sizeof(pre), 300);
+            if (pn > 0) nsp_tft_hex_log("TFT: pre-block bytes", pre, pn);
+        }
 
         /* P238: hash every byte we hand the display (resends excluded) —
          * on completion the digest is recorded as the panel's TFT md5, so
@@ -578,18 +601,12 @@ static void nsp_tft_task(void *) {
                 hashed_upto = offset + (long long)got;
             }
 
-            /* P347: the block written in 256-byte chunks with 5ms gaps —
-             * the display's processor needs time between chunks at 115200,
-             * the hardware UART buffer overflows without the gaps. */
-            {
-                size_t sent = 0;
-                while (sent < (size_t)got) {
-                    size_t chunk = (size_t)got - sent > 256 ? 256 : (size_t)got - sent;
-                    nsp_display_send((const char *)block + sent, chunk);
-                    sent += chunk;
-                    vTaskDelay(pdMS_TO_TICKS(5));
-                }
-            }
+            /* P351: single blocking write per block — the historical 66%
+             * configuration (0.1.28). The 256-byte chunking with 5ms gaps
+             * (P347c) added nothing: 0.1.29–0.1.31 all failed at block 1
+             * WITH the chunks. uart_write_bytes is blocking and self-paces
+             * through the TX ring. */
+            nsp_display_send((const char *)block, got);
             offset += (long long)got;
             s_progress = (int)(100ULL * offset / (unsigned long long)file_size);
             s_last_progress_us = esp_timer_get_time();
@@ -599,37 +616,62 @@ static void nsp_tft_task(void *) {
              * bytes before the 0x05 ACK — the old code read ONE byte and
              * broke if it wasn't 0x05, missing the ACK behind the noise.
              * Read a BURST of bytes and scan for 0x05 or 0x08 inside it. */
+            /* P351: the block reply with REAL patience. The old loop broke
+             * on the first quiet read after any bytes — a 0x08 whose offset
+             * bytes were late looked "truncated", the P349 flush then
+             * DESTROYED the late bytes, and the resent block desynced
+             * against the display's resume pointer (it remembers its flash
+             * write position across power cycles, P243). Now: complete
+             * replies break immediately (0x05, or 0x08+5 bytes); incomplete
+             * replies are waited out up to 1.5s of silence, inside a 5s
+             * total cap. */
             uint8_t resp[64] = {0};
             int rlen = 0;
             bool got_05 = false;
             bool got_08 = false;
             int64_t resp_dead = esp_timer_get_time();
+            int64_t last_byte_us = resp_dead;
             while (esp_timer_get_time() - resp_dead < 5000000LL) {
                 uint8_t b[16] = {0};
                 int n = nsp_display_read(b, sizeof(b), 250);
-                for (int i = 0; i < n && rlen < (int)sizeof(resp); i++) {
-                    if (b[i] == 0x05) { got_05 = true; }
-                    if (b[i] == 0x08) { got_08 = true; }
-                    if (rlen < (int)sizeof(resp)) resp[rlen++] = b[i];
+                if (n > 0) {
+                    last_byte_us = esp_timer_get_time();
+                    for (int i = 0; i < n && rlen < (int)sizeof(resp); i++) {
+                        if (b[i] == 0x05) { got_05 = true; }
+                        if (b[i] == 0x08) { got_08 = true; }
+                        if (rlen < (int)sizeof(resp)) resp[rlen++] = b[i];
+                    }
+                    if (got_05 || (got_08 && rlen >= 5)) break;  // complete reply
+                    s_last_progress_us = esp_timer_get_time();
+                    continue;  // P351: incomplete — keep waiting for the rest
                 }
-                if (got_05 || (got_08 && rlen >= 5)) break;
-                if (n <= 0 && rlen > 0) break;  // had bytes, then silence
                 s_last_progress_us = esp_timer_get_time();
+                if (rlen > 0 &&
+                    esp_timer_get_time() - last_byte_us < 1500000LL) continue;
+                break;  // true silence
             }
-            /* P279 MEDIUM fix: a truncated 0x08 (the offset bytes missing)
-             * fell through to the "0x05 accepted" path — the next block
-             * streamed while the display expected a resend, desyncing the
-             * transfer with the panel's md5 reporting "correct". */
+            /* P351: the evidence line — every block reply, hex + position. */
+            {
+                char lt[40];
+                snprintf(lt, sizeof(lt), "TFT: reply@%lld",
+                         offset - (long long)got);
+                nsp_tft_hex_log(lt, resp, rlen);
+            }
             if (got_08 && !got_05 && rlen < 5) {
-                char l[80];
-                snprintf(l, sizeof(l), "TFT: truncated 0x08 reply (%d bytes) — drain + retry block", rlen);
+                char l[96];
+                snprintf(l, sizeof(l),
+                         "TFT: 0x08 at %lld, offset never arrived — resending",
+                         offset - (long long)got);
                 nsp_mqtt_publish_log(l);
-                /* P349: the display sent the 0x08 but the 4 offset bytes were
-                 * cut off mid-transmission — they arrive AFTER the code
-                 * detects the truncation. The late bytes pollute the next
-                 * block's reply read. Flush the UART before retrying. */
-                extern void nsp_display_drain(int ms);  // P349: the drain via display.cpp
-                nsp_display_drain(50);
+                /* P351: NO flush — the P349 drain destroyed late-arriving
+                 * offset bytes. Resend the block; the display's state
+                 * machine decides what it means. */
+                s_no_reply_strikes++;
+                if (s_no_reply_strikes >= 3) {
+                    nsp_mqtt_publish_log("TFT: display not answering — restarting attempt");
+                    failed = true;
+                    break;
+                }
                 offset -= (long long)got;
                 resent = true;
                 continue;
@@ -789,6 +831,7 @@ static void nsp_tft_task(void *) {
         vTaskDelay(pdMS_TO_TICKS(3000));
         /* the loop restarts: power-cycle + full clean upload from byte 0 */
     }
+    nsp_display_set_tft_baud(115200);  // P351: leave the UART where the display layer expects it
     nsp_display_set_raw_mode(false);
     nsp_mqtt_publish_log("TFT: update FAILED after attempts");
     nsp_twdt_resume_after_stream();  // P321c

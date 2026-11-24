@@ -1,21 +1,21 @@
 {
-    "version": "0.1.31",
-    "notes": "Native firmware 0.1.31 \u2014 the baud switch timing: the display switches to the whmi-wris baud BEFORE ACKing (the Nextion firmware behavior); the ESP must match. The TX ring drains at 115200 (5ms delay) before the ESP switches to 57600, then both sides communicate at 57600 for the data transfer. Carries all prior fixes.",
+    "version": "0.1.32",
+    "notes": "Native firmware 0.1.32 \u2014 the block-reply patience rework: the truncated-0x08 path no longer flushes the UART (the P349 drain destroyed late-arriving offset bytes of the display's resume request) and waits out incomplete replies up to 1.5s of silence inside a 5s cap; every block reply is hex+position logged. Back to 115200 with a single blocking write per block (the historical 66% configuration). The baud restore to 115200 now happens at every attempt start and on the failure exit \u2014 after 0.1.31's failed attempt the ESP stayed at 57600 while the power-cycled display boots at 115200, so attempts 2-3 failed no-comok for nothing but the baud mismatch. Carries all prior fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.31/native-firmware-0.1.31.bin",
-            "md5": "1438f0ab3e6a3855d0bc691760427dff"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.32/native-firmware-0.1.32.bin",
+            "md5": "810742fafc0538e0520b81223523ecd6"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.31/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.32/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.31/native-firmware-0.1.31.bin",
-            "md5": "1438f0ab3e6a3855d0bc691760427dff"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.32/native-firmware-0.1.32.bin",
+            "md5": "810742fafc0538e0520b81223523ecd6"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.31/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.32/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {
