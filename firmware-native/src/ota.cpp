@@ -823,6 +823,13 @@ static void nsp_tft_task(void *) {
             bool hand = nsp_display_handshake_pub(3);
             nsp_mqtt_publish_log(hand ? "TFT: display back, handshake OK"
                                       : "TFT: display not answering after reflash");
+            /* P358: a proven link navigates the display off the splash —
+             * the authored logo has no auto-page code and the failed-
+             * handshake case is covered by the revival paths. */
+            if (hand) {
+                extern void nsp_display_after_handshake_pub(void);
+                nsp_display_after_handshake_pub();
+            }
             s_progress = 100;
             extern void nsp_display_set_tft_baud(int baud);  // P347
             nsp_display_set_tft_baud(115200);

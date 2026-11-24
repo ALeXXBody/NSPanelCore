@@ -158,6 +158,14 @@ static bool nsp_display_handshake(int attempts) {
             return true;
         }
     }
+    /* P358: a FAILED handshake must clear the ready flag. The post-TFT-
+     * delivery handshake failed while the flag stayed true from the pre-
+     * delivery one — the revival paths (the reprobe, the P312 housekeeping)
+     * all gate on !s_display_ready and were SKIPPED FOREVER: the freshly
+     * rebooted display sat on the splash (the authored logo) with nobody
+     * to navigate it (the user's report after the re-delivery). */
+    s_display_ready = false;
+    snprintf(s_warnings, sizeof(s_warnings), "No response from the display.");
     return false;
 }
 
@@ -622,4 +630,10 @@ int nsp_display_read(uint8_t *buf, int len, int timeout_ms) {
 }
 bool nsp_display_handshake_pub(int attempts) {
     return nsp_display_handshake(attempts);
+}
+
+/* P358: the post-delivery navigation — the freshly rebooted display must
+ * leave the splash (the authored logo) the moment the link is proven. */
+void nsp_display_after_handshake_pub(void) {
+    nsp_display_after_handshake();
 }
