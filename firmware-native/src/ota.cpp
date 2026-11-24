@@ -484,8 +484,9 @@ static void nsp_tft_task(void *) {
              * The ESP's UART switches to match; it restores 115200 after. */
             snprintf(cmd, sizeof(cmd), "whmi-wris %lld,57600,1", (long long)file_size);
             nsp_display_send_now(cmd);
-            extern void nsp_display_set_tft_baud(int baud);  // P347
-            nsp_display_set_tft_baud(57600);
+            /* P347: DON'T switch the ESP's baud yet — the display ACKs the
+             * whmi-wris at the CURRENT baud (115200) before switching to
+             * 57600. The ESP must wait for the ACK at 115200, then switch. */
         }
         vTaskDelay(pdMS_TO_TICKS(120));
 
@@ -495,6 +496,12 @@ static void nsp_tft_task(void *) {
             uint8_t b = 0;
             if (nsp_display_read(&b, 1, 250) > 0 && b == 0x05) { acked = true; break; }
             s_last_progress_us = esp_timer_get_time();
+        }
+        if (acked) {
+            /* P347: BOTH sides switch to 57600 for the data transfer —
+             * the display switches after ACKing, the ESP switches now. */
+            extern void nsp_display_set_tft_baud(int baud);  // P347
+            nsp_display_set_tft_baud(57600);
         }
         if (!acked) {
             nsp_mqtt_publish_log("TFT: no 0x05 ACK — retrying");
