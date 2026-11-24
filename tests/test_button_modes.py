@@ -187,8 +187,9 @@ def test_publish_panel_device_config_carries_the_modes():
     assert d["button2_mode"] == 3
     assert d["button1_mqtt_topic"] == "home/btn1"
     assert d["button1_mqtt_payload"] == "ON"
-    assert d["relay1_default_mode"] is True
-    assert d["relay2_default_mode"] is True
+    # P359b: STRINGS — the firmware's parser drops a bare JSON bool
+    assert d["relay1_default_mode"] == "true"
+    assert d["relay2_default_mode"] == "true"
     assert d["button2_mqtt_topic"] == "home/btn2"
     assert d["button2_mqtt_payload"] == "OFF"
 

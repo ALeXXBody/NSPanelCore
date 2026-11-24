@@ -1236,8 +1236,11 @@ class NSPanelCoreManager:
                 "button1_mqtt_payload": panel.button1_mqtt_payload,
                 "button2_mqtt_topic": panel.button2_mqtt_topic,
                 "button2_mqtt_payload": panel.button2_mqtt_payload,
-                "relay1_default_mode": bool(panel.relay1_default_mode),
-                "relay2_default_mode": bool(panel.relay2_default_mode),
+                # P359b: the firmware's field parser reads QUOTED strings and
+                # bare numbers only — a JSON bare true/false is SILENTLY
+                # DROPPED (the defaults would never land). Send strings.
+                "relay1_default_mode": "true" if panel.relay1_default_mode else "false",
+                "relay2_default_mode": "true" if panel.relay2_default_mode else "false",
             }),
         )
 
