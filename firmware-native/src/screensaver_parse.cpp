@@ -4,6 +4,7 @@
 #include "screensaver_parse.h"
 
 #include <cctype>
+#include <cstdlib>  // P356: atoi
 
 namespace {
 
@@ -191,6 +192,13 @@ bool nsp_screensaver_parse(const std::string &payload, NspScreensaverConfig &out
         r.outside_override = nsp_display_clean(v, 24);
     if (json_string(weather, "room_temp_override", v))
         r.room_override = nsp_display_clean(v, 24);
+    /* P356: the screensaver activation timeout (top-level, seconds as a
+     * string — every other field of this contract is a string too).
+     * Clamped 5..3600; anything unparsable keeps the 15 s default. */
+    if (json_string(payload, "activation_timeout", v)) {
+        int secs = atoi(v.c_str());
+        if (secs >= 5 && secs <= 3600) r.activation_timeout = secs;
+    }
     r.valid = true;
     out = r;
     return true;

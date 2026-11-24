@@ -26,6 +26,10 @@ extern void nsp_mqtt_send_register(void);
 extern bool nsp_display_reprobe(void);  // P312
 extern void nsp_web_log(const std::string &line);
 extern void nsp_mqtt_publish_log(const char *msg);
+extern void nsp_screensaver_idle_poll(void);  // P356: FILE SCOPE — the P160 trap
+                                              // (an extern declared inside
+                                              // extern "C" app_main gets C
+                                              // linkage and never links)
 extern void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
                                            int heap_pct, float temperature,
                                            const std::string &warnings);
@@ -174,6 +178,9 @@ extern "C" void app_main(void) {
                 nsp_ota_start();
                 s_last_otacheck_us = now;
             }
+            /* P356: the screensaver activation timeout — the idle poll
+             * runs at the housekeeping cadence (1 s). */
+            nsp_screensaver_idle_poll();
             // P312: periodic display revival — while the display is dead,
             // retry its handshake every 30 s; the moment it answers, the
             // panel resumes full display operation by itself.

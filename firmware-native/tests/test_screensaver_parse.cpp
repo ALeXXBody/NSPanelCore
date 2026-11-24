@@ -197,6 +197,34 @@ int main() {
     CHECK(has(pub_wcmds, "screensaver.wRoomTemp.txt=\"19.5" + DEG + "C\""),
           "published room override wins over the panel sensor");
 
+    /* P356: the screensaver activation timeout rides the payload. */
+    {
+        NspScreensaverConfig to;
+        const std::string with_to =
+            "{\"activation_timeout\":\"45\",\"clock\":{\"font\":\"large\"}}";
+        CHECK(nsp_screensaver_parse(with_to, to) && to.valid,
+              "payload with activation_timeout accepted");
+        CHECK(to.activation_timeout == 45, "activation_timeout parsed (45 s)");
+        NspScreensaverConfig def;
+        const std::string without_to = "{\"clock\":{\"font\":\"large\"}}";
+        CHECK(nsp_screensaver_parse(without_to, def) && def.valid,
+              "payload without activation_timeout accepted");
+        CHECK(def.activation_timeout == 15, "default stays 15 s");
+        NspScreensaverConfig junk;
+        const std::string bad_to =
+            "{\"activation_timeout\":\"banana\",\"clock\":{\"font\":\"large\"}}";
+        CHECK(nsp_screensaver_parse(bad_to, junk) && junk.valid,
+              "junk timeout tolerated");
+        CHECK(junk.activation_timeout == 15, "junk timeout keeps the default");
+        NspScreensaverConfig clamped;
+        const std::string big_to =
+            "{\"activation_timeout\":\"99999\",\"clock\":{\"font\":\"large\"}}";
+        CHECK(nsp_screensaver_parse(big_to, clamped) && clamped.valid,
+              "out-of-range timeout accepted");
+        CHECK(clamped.activation_timeout == 15,
+              "out-of-range timeout (beyond 3600) keeps the default");
+    }
+
     printf(g_fail ? "\n%d FAILURES\n" : "\nALL PASSED\n", g_fail);
     return g_fail ? 1 : 0;
 }

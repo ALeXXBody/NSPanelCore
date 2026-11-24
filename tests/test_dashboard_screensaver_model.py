@@ -72,7 +72,8 @@ def test_payload_shape_is_stable_and_carries_resolved_temps():
     cfg = IntegrationConfig()
     payload = build_panel_screensaver_config(p, cfg.settings,
                                              outside_temp="21.4", room_temp="")
-    assert set(payload) == {"clock", "date", "weather"}
+    assert set(payload) == {"clock", "date", "weather", "activation_timeout"}
+    assert payload["activation_timeout"] == "15"
     assert payload["clock"] == {"font": "medium", "weight": "bold",
                                 "color": "#c8cbce", "align": "center"}
     assert payload["date"]["color"] == "#39c8e8"
@@ -84,6 +85,21 @@ def test_payload_shape_is_stable_and_carries_resolved_temps():
     assert set(payload["weather"]) == {
         "outside_temp", "room_temp", "forecast", "wind", "rain",
         "sunrise_sunset", "outside_temp_override", "room_temp_override"}
+
+
+def test_activation_timeout_rides_the_payload_and_clamps():
+    """P356: the idle timeout reaches the firmware on the screensaver payload."""
+    p = _panel()
+    cfg = IntegrationConfig()
+    p.screensaver_activation_timeout = 45
+    payload = build_panel_screensaver_config(p, cfg.settings)
+    assert payload["activation_timeout"] == "45"
+    p.screensaver_activation_timeout = 1
+    assert build_panel_screensaver_config(p, cfg.settings)["activation_timeout"] == "5"
+    p.screensaver_activation_timeout = 99999
+    assert build_panel_screensaver_config(p, cfg.settings)["activation_timeout"] == "3600"
+    p.screensaver_activation_timeout = 0
+    assert build_panel_screensaver_config(p, cfg.settings)["activation_timeout"] == "15"
 
 
 def test_room_sensor_entity_defaults_from_the_panels_room():

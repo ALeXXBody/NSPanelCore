@@ -41,6 +41,7 @@ struct NspScreensaverConfig {
     NspWeatherFlags flags;
     std::string outside_override;  // sanitized; empty => use global weather
     std::string room_override;     // sanitized; empty => use the panel's NTC
+    int activation_timeout = 15;   // P356: seconds of no touch -> the screensaver
     bool valid = false;
 };
 

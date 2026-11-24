@@ -316,6 +316,33 @@ void nsp_display_start_tft_update(int new_baud) {
 static const char *SCREENSAVER_PAGE = "screensaver";
 static const char *SCREENSAVER_MINIMAL_PAGE = "mini";
 
+/* P356: the screensaver activation timeout. The screensaver appeared only
+ * at boot/handshake; once the user left it nothing returned (the user's
+ * report: "after entering the menu, there is no time-out for the
+ * screensaver to appear again"). After <timeout> seconds without a touch
+ * the panel navigates back. The timeout rides the screensaver payload
+ * (default 15 s); 0 or negative disables the idle return. */
+static volatile int s_screensaver_idle_timeout = 15;
+static volatile int64_t s_last_touch_us = 0;
+static volatile int s_last_component_page = -1;  // the last 0x65 page seen
+
+void nsp_screensaver_set_idle_timeout(int secs) {
+    s_screensaver_idle_timeout = (secs >= 5 && secs <= 3600) ? secs : 15;
+}
+
+void nsp_screensaver_idle_poll(void) {
+    if (!s_display_ready || s_display_raw_mode) return;
+    int timeout_s = s_screensaver_idle_timeout;
+    if (timeout_s <= 0) return;
+    int64_t now = esp_timer_get_time();
+    if (now - s_last_touch_us < (int64_t)timeout_s * 1000000LL) return;
+    int page = s_last_component_page;
+    if (page == 1 || page == 3) return;  // already on the screensaver/mini
+    nsp_display_show_screensaver();
+    s_last_component_page = 1;   // we are on the screensaver now
+    s_last_touch_us = now;       // don't re-fire every housekeeping second
+}
+
 void nsp_display_show_screensaver(void) {
     if (!s_display_ready) return;
     std::string cmd = std::string("page ") + SCREENSAVER_PAGE;
@@ -433,6 +460,11 @@ void nsp_display_touch_task(void *) {
         for (const auto &f : frames) {
             int page = f.page, component = f.component, event = f.event;
             bool pressed = (event == 1);
+            /* P356: every frame is activity — the idle clock restarts. The
+             * 0x65 frames also reveal the page (the idle poll needs to know
+             * whether the panel is already on the screensaver pages). */
+            s_last_touch_us = esp_timer_get_time();
+            if (f.page >= 0) s_last_component_page = f.page;
             /* P256: every touch frame the panel receives is visible in the
              * log — the relay-latency diagnosis (quick taps lost?) needs
              * the raw frames with their arrival spacing. */

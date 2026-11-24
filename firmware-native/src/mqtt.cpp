@@ -144,6 +144,9 @@ void nsp_mqtt_dispatch(const std::string &topic, const std::string &payload) {
         if (nsp_screensaver_parse(payload, cfg)) {
             s_screensaver_cfg = cfg;
             nsp_screensaver_apply(true);
+            /* P356: the activation timeout rides the screensaver payload. */
+            extern void nsp_screensaver_set_idle_timeout(int secs);
+            nsp_screensaver_set_idle_timeout(cfg.activation_timeout);
         } else {
             nsp_mqtt_publish_log("screensaver: rejected payload");
         }

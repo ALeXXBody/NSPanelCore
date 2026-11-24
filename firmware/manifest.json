@@ -1,21 +1,21 @@
 {
-    "version": "0.1.34",
-    "notes": "Native firmware 0.1.34 \u2014 the P337 navigation suppression LIFTED: the post-handshake navigation (splash -> screensaver + the relay state re-sync) is back. The authored splash never auto-advances, so with the suppression every boot sat on the logo forever and the physical switch zones (which live on home) were unreachable \u2014 the user's report. The P337 'goes deaf' suspicion was falsified by P352 (the served file switched mid-transfer). The navigation's writes are inert while the TFT task holds raw mode. Carries all prior fixes.",
+    "version": "0.1.35",
+    "notes": "Native firmware 0.1.35 \u2014 the screensaver activation timeout: the panel had no idle return at all (the screensaver appeared only at boot/handshake; once the user left it, nothing brought it back). After N seconds without a touch the panel now navigates back (default 15 s, clamped 5..3600; the timeout rides the screensaver payload as activation_timeout; the last 0x65 page decides whether the panel is already asleep). Also: the P160 trap again \u2014 the idle poll's extern must live at file scope (an extern declared inside extern-C app_main gets C linkage and never links). Carries all prior fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.34/native-firmware-0.1.34.bin",
-            "md5": "97c75bd661f327669276d89924742433"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.35/native-firmware-0.1.35.bin",
+            "md5": "9ae7d620fda3ab05071242e5247b1ae1"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.34/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.35/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.34/native-firmware-0.1.34.bin",
-            "md5": "97c75bd661f327669276d89924742433"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.35/native-firmware-0.1.35.bin",
+            "md5": "9ae7d620fda3ab05071242e5247b1ae1"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.34/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.35/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {
