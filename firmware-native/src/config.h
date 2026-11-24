@@ -24,6 +24,10 @@ struct NSPConfig {
     std::string md5_firmware;
     std::string md5_data_file;
     std::string md5_tft_file;
+    uint32_t tft_md5_seq = 0;  // P352: bumped at EVERY "delivered md5 recorded" — the
+                               // manager distinguishes a fresh record from a stale one
+                               // by this counter (a record BEFORE the send armed can
+                               // never count as the delivery's proof)
 };
 
 inline NSPConfig g_cfg;
@@ -56,6 +60,7 @@ inline bool nsp_config_load() {
     get("md5_fw", g_cfg.md5_firmware);
     get("md5_fs", g_cfg.md5_data_file);
     get("md5_tft", g_cfg.md5_tft_file);
+    nvs_get_u32(h, "tft_md5_seq", &g_cfg.tft_md5_seq);
     nvs_close(h);
     return !g_cfg.wifi_ssid.empty();
 }
@@ -85,6 +90,7 @@ inline bool nsp_config_save() {
     set("md5_fw", g_cfg.md5_firmware);
     set("md5_fs", g_cfg.md5_data_file);
     set("md5_tft", g_cfg.md5_tft_file);
+    nvs_set_u32(h, "tft_md5_seq", g_cfg.tft_md5_seq);
     esp_err_t err = nvs_commit(h);
     nvs_close(h);
     return err == ESP_OK;

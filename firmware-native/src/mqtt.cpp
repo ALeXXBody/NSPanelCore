@@ -339,10 +339,10 @@ void nsp_mqtt_send_register(esp_mqtt_client_handle_t client) {
         "{\"command\":\"register_request\",\"mac_origin\":\"%s\","
         "\"friendly_name\":\"%s\",\"version\":\"" FW_VERSION "\","
         "\"md5_firmware\":\"%s\",\"md5_data_file\":\"%s\","
-        "\"md5_tft_file\":\"%s\",\"address\":\"%s\"}",
+        "\"md5_tft_file\":\"%s\",\"tft_md5_seq\":%u,\"address\":\"%s\"}",
         g_mac.c_str(), s_hostname.c_str(),
         g_cfg.md5_firmware.c_str(), g_cfg.md5_data_file.c_str(),
-        g_cfg.md5_tft_file.c_str(), g_ip.c_str());
+        g_cfg.md5_tft_file.c_str(), (unsigned)g_cfg.tft_md5_seq, g_ip.c_str());
     esp_mqtt_client_publish(client, TOPIC_MANAGER_COMMAND, buf, 0, 0, false);
 }
 

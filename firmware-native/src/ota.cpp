@@ -397,7 +397,12 @@ static void nsp_tft_hex_log(const char *tag, const uint8_t *b, int n) {
 
 static void nsp_tft_task(void *) {
     nsp_twdt_suspend_for_flash();  // P321c: the stream outruns the watchdog
-    const char *url_path = "/download_tft_eu";
+    /* P352: the panel identifies itself on every TFT fetch — the manager's
+     * per-panel serving slot (P279) only engages when the requester is
+     * known; an anonymous fetch got ANY slot or the stock fallback. */
+    const std::string tft_path = std::string("/download_tft_eu") +
+                                 "?panel=" + g_cfg.wifi_hostname;
+    const char *url_path = tft_path.c_str();
     s_state = OTA_FS;
     s_progress = 0;
     s_last_progress_us = esp_timer_get_time();
@@ -800,8 +805,13 @@ static void nsp_tft_task(void *) {
             for (int i = 0; i < 16; i++) snprintf(hex + i * 2, 3, "%02x", dig[i]);
             if (g_cfg.md5_tft_file != hex) {
                 g_cfg.md5_tft_file = hex;
-                nsp_config_save();
             }
+            /* P352: the record counter — the manager compares this against
+             * the count it saw when the send was armed. A count at or below
+             * that is a PRE-SEND record (stale) and must never complete the
+             * send's serving slot. */
+            g_cfg.tft_md5_seq += 1;
+            nsp_config_save();
             {
                 char l[80];
                 snprintf(l, sizeof(l), "TFT: delivered md5 recorded (%s)", hex);
