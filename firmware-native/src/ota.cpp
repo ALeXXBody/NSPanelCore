@@ -615,8 +615,14 @@ static void nsp_tft_task(void *) {
              * transfer with the panel's md5 reporting "correct". */
             if (got_08 && !got_05 && rlen < 5) {
                 char l[80];
-                snprintf(l, sizeof(l), "TFT: truncated 0x08 reply (%d bytes) — retrying block", rlen);
+                snprintf(l, sizeof(l), "TFT: truncated 0x08 reply (%d bytes) — drain + retry block", rlen);
                 nsp_mqtt_publish_log(l);
+                /* P349: the display sent the 0x08 but the 4 offset bytes were
+                 * cut off mid-transmission — they arrive AFTER the code
+                 * detects the truncation. The late bytes pollute the next
+                 * block's reply read. Flush the UART before retrying. */
+                extern void nsp_display_drain(int ms);  // P349: the drain via display.cpp
+                nsp_display_drain(50);
                 offset -= (long long)got;
                 resent = true;
                 continue;
