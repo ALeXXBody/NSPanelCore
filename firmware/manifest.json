@@ -1,21 +1,21 @@
 {
-    "version": "0.1.30",
-    "notes": "Native firmware 0.1.30 \u2014 the truncated 0x08 reply: the display sends 0x08 (resend) but the 4 offset bytes are cut off mid-transmission; they arrive AFTER the code detects the truncation, polluting the next block's reply read. The UART is drained before retrying the block. Carries all prior fixes.",
+    "version": "0.1.31",
+    "notes": "Native firmware 0.1.31 \u2014 the baud switch timing: the display switches to the whmi-wris baud BEFORE ACKing (the Nextion firmware behavior); the ESP must match. The TX ring drains at 115200 (5ms delay) before the ESP switches to 57600, then both sides communicate at 57600 for the data transfer. Carries all prior fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.30/native-firmware-0.1.30.bin",
-            "md5": "eb7e817ed0957faca872e0820a2fa815"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.31/native-firmware-0.1.31.bin",
+            "md5": "1438f0ab3e6a3855d0bc691760427dff"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.30/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.31/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.30/native-firmware-0.1.30.bin",
-            "md5": "eb7e817ed0957faca872e0820a2fa815"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.31/native-firmware-0.1.31.bin",
+            "md5": "1438f0ab3e6a3855d0bc691760427dff"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.30/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.31/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

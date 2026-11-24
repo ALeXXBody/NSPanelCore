@@ -482,8 +482,15 @@ static void nsp_tft_task(void *) {
              * drops bytes at 115200 during the ~160s transfer (the truncated
              * 0x08 at 66%). At 57600 the display keeps up with every byte.
              * The ESP's UART switches to match; it restores 115200 after. */
-            snprintf(cmd, sizeof(cmd), "whmi-wris %lld,115200,1", (long long)file_size);
+            snprintf(cmd, sizeof(cmd), "whmi-wris %lld,57600,1", (long long)file_size);
             nsp_display_send_now(cmd);
+            /* P350: the display switches to the whmi-wris baud BEFORE ACKing
+             * (the Nextion firmware behavior). The ESP must match. The delay
+             * lets the TX ring drain at 115200 — without it, the last
+             * whmi-wris bytes are garbled when the baud changes. */
+            vTaskDelay(pdMS_TO_TICKS(5));
+            extern void nsp_display_set_tft_baud(int baud);  // P347
+            nsp_display_set_tft_baud(57600);
         }
         vTaskDelay(pdMS_TO_TICKS(120));
 
