@@ -1,8 +1,10 @@
-"""P324: the reload nudge is suppressed (the isolation step of the crash
-hunt — the panel dies ~1s after the register-time messages and the
-reload's handler never logs; with the dash_map already eliminated, the
-reload is the last wire-level candidate). The manager sends ONLY the
-accept at register; the nudge comes back after the 0.1.14 verdict.
+"""P355: the reload nudge is RESTORED — the P324 suppression is lifted.
+
+P324 isolated the nudge as the last wire-level crash candidate; P334 later
+root-caused the crash (the display write's portMUX critical section) and
+the panel firmware has never had a reload handler (the nudge is an ignored
+unknown command — harmless on the wire). Restored at BOTH publish sites
+(register-time and _send_panel_config), non-retained (P326).
 """
 
 from __future__ import annotations
@@ -41,29 +43,28 @@ def _mgr(panel):
 
 def _panel():
     return PanelConfig(id=7, mac="e465b849a100", name="KitchenPanel",
-                       wifi_hostname="KitchenPanrl", accepted=True)
+                       wifi_hostname="KitchenPanel", accepted=True)
 
 
 def _captured(mgr):
     return [c.args[1] for c in mgr._publish.await_args_list]
 
 
-def test_register_sends_accept_but_never_reload():
+def test_register_sends_accept_and_the_reload_nudge():
     mgr = _mgr(_panel())
     _run(M.NSPanelCoreManager._send_panel_config(mgr, _panel()))
     sent = _captured(mgr)
     assert any("register_accept" in s for s in sent), "the accept must go out"
-    assert not any("reload" in s for s in sent), "the reload nudge is suppressed"
+    assert any('"reload"' in s for s in sent), "the nudge is restored (P355)"
 
 
-def test_accept_is_not_retained():
-    # P326: the retained accept re-delivered at every boot killed the panel
-    # within a second of subscribing — the accept goes out live-only.
+def test_nudge_and_accept_are_not_retained():
+    # P326: retained commands replay at every boot and killed the panel.
     mgr = _mgr(_panel())
     _run(M.NSPanelCoreManager._send_panel_config(mgr, _panel()))
     for c in mgr._publish.await_args_list:
-        if "register_accept" in c.args[1]:
-            assert c.args[2] is False, "the accept must NOT be retained"
+        retain = c.kwargs.get("retain", c.args[2] if len(c.args) > 2 else False)
+        assert not retain, f"non-retained only: {c.args[1]}"
 
 
 def test_button_config_still_pushed():

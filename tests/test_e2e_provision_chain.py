@@ -266,11 +266,11 @@ async def test_e2e_full_provision_chain(host_tools):
         assert rows[0].accepted is True, "single accept: pre-accepted at discovery"
         assert rows[0].name == PANEL_HOSTNAME
 
-        # register_accept went to the panel's OWN command topic; the reload
-        # nudge is suppressed (P324 — the isolation step of the crash hunt)
+        # register_accept + the reload nudge went to the panel's OWN command
+        # topic (P355: the P324 suppression lifted — accept + reload)
         topics = [c.args[0] for c in mgr._publish.await_args_list]
         cmd_topic = f"nspanel/{PANEL_HOSTNAME}/command"
-        assert topics.count(cmd_topic) == 1, topics
+        assert topics.count(cmd_topic) == 2, topics
 
         # 6. the panel adopts the manager with its REAL parser
         accept_payload = mgr._publish.await_args_list[0].args[1]

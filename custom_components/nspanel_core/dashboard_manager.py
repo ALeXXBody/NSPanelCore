@@ -310,27 +310,28 @@ class DashboardService:
     async def async_push_config(self, mac: str) -> None:
         """Push dash_map + current item values to a panel running its TFT.
 
-        P321f: the dash_map push is DISABLED — it is the crash trigger.
-        Both panel crash loops (0.1.10 era and the current one) began the
-        moment a Send armed this push, and the panel's MQTT task dies
-        processing the post-accept commands whenever it is live; the same
-        binary was stable for 400+ s in the era when the push was absent.
-        The page ids stay stored; the values push below is unchanged. The
-        touch routing degrades to the stock base chains until the panel
-        firmware's dash_map handling is fixed (0.1.14, after the coredump
-        verdict names the exact bug).
+        P355: the P321f suppression is LIFTED. The push was isolated as the
+        "crash trigger" during the hunt, but the crash was later root-caused
+        (P334): the display write held a portMUX critical section across a
+        blocking uart_write_bytes — removed long ago. The dash_map handler
+        on the panel is a bounded parse into a fixed array (no display
+        writes at all). With the map suppressed, the panel's swipe
+        navigation and dash-page detection were dead (P234's routing
+        degraded to the stock base chains) and a delivered dashboard sat
+        unreachable behind the splash.
         """
         if not self.has_design(mac):
             return
         page_ids = self._page_ids.get(mac)
         if not page_ids:
             return
-        # P321f: the push itself is disabled — the page ids are kept so a
-        # future firmware fix can re-enable the flow without a re-Send.
-        _LOGGER.warning(
-            "dash_map push to %s suppressed (P321f: the push is the panel "
-            "crash trigger; re-enabled with the 0.1.14 panel fix)",
-            mac)
+        # non-retained (P326): a retained map replays at every panel boot;
+        # the map is RAM-only on the panel and re-pushed at every register.
+        await self.manager._publish(
+            const.panel_topic(mac, "command"),
+            json.dumps({"command": "dash_map", "pages": page_ids}),
+        )
+        _LOGGER.info("dash_map pushed to %s (pages %s)", mac, page_ids)
         await self.async_push_values(mac)
 
     async def async_push_values(self, mac: str) -> None:

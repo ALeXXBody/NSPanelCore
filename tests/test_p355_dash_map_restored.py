@@ -1,13 +1,12 @@
-"""P321f: the dash_map push is the panel crash trigger — the manager must
-not send it.
+"""P355: the dash_map push is RESTORED — the P321f suppression is lifted.
 
-Both panel crash loops began the moment a dashboard Send armed the
-dash_map push (the panel's MQTT task dies processing the post-accept
-commands whenever it is live); the same panel binary was stable for
-400+ s in the era when the push was absent. Until the panel firmware's
-dash_map handling is fixed, the manager must never publish dash_map —
-while keeping the page ids stored (so a future fix can re-enable the
-flow without a re-Send) and the values push intact.
+The P321f isolation pinned the push as the "crash trigger", but P334 later
+root-caused the crash (the display write's portMUX critical section across
+a blocking uart_write_bytes — removed) and P352 falsified the "display goes
+deaf" era entirely. The panel's dash_map handler is a bounded parse into a
+fixed array. With the map suppressed, the swipe navigation and dash-page
+detection were dead. The manager must publish the map (non-retained, P326)
+followed by the values push; no design means no traffic.
 """
 
 from __future__ import annotations
@@ -44,22 +43,26 @@ def _svc(page_ids):
     return svc
 
 
-def test_dash_map_is_never_published():
+def test_dash_map_is_published_with_the_stored_page_ids():
+    svc = _svc([4, 7])
+    _run(DashboardService.async_push_config(svc, "e465b849a100"))
+    maps = [json.loads(c.args[1]) for c in svc.manager._publish.await_args_list
+            if "dash_map" in c.args[1]]
+    assert maps, "the dash_map push must go out again (P355)"
+    assert maps[0]["pages"] == [4, 7]
+    assert maps[0]["command"] == "dash_map"
+
+
+def test_dash_map_is_published_non_retained():
+    """P326: a retained command replays at every panel boot and killed it."""
     svc = _svc([4, 7])
     _run(DashboardService.async_push_config(svc, "e465b849a100"))
     for call in svc.manager._publish.await_args_list:
-        payload = call.args[1]
-        assert "dash_map" not in payload, f"the crash trigger went out: {payload}"
+        if "dash_map" in call.args[1]:
+            retain = call.kwargs.get("retain", call.args[2] if len(call.args) > 2 else False)
+            assert not retain, "the dash_map must be non-retained"
 
-
-def test_page_ids_stay_stored_for_the_future_fix():
-    svc = _svc([4, 7])
-    _run(DashboardService.async_push_config(svc, "e465b849a100"))
-    # the ids must survive (no re-Send needed when the panel fix ships)
-    assert svc._page_ids["e465b849a100"] == [4, 7]
-
-
-def test_values_push_still_runs():
+def test_values_push_still_runs_after_the_map():
     svc = _svc([4, 7])
     _run(DashboardService.async_push_config(svc, "e465b849a100"))
     svc.async_push_values.assert_awaited_once_with("e465b849a100")
