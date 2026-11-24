@@ -1072,7 +1072,8 @@ class SavePanelSettingsView(HomeAssistantView):
         # Radio groups post "True"/"False" strings (one option always checked):
         # presence-check would force True. Parse the value instead.
         for radio_bool in ("reverse_relays", "relay1_default_mode", "relay2_default_mode",
-                           "lock_to_default_room", "relay1_is_light", "relay2_is_light"):
+                           "lock_to_default_room", "relay1_is_light", "relay2_is_light",
+                           "show_home_relays"):
             if radio_bool in form:
                 b = _parse_bool_strict(form[radio_bool])
                 if b is not None:

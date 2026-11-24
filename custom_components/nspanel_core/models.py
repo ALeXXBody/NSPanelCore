@@ -164,6 +164,10 @@ class PanelConfig:
     reverse_relays: bool = False
     relay1_default_mode: bool = False
     relay2_default_mode: bool = False
+    # P357 (user order): the relay buttons live on the home page ONLY when
+    # the user wants them there — this integration setting is the default
+    # owner of that decision (the kit bakes nothing).
+    show_home_relays: bool = True
     relay1_is_light: bool = False
     relay2_is_light: bool = False
     temperature_calibration: float = 0.0

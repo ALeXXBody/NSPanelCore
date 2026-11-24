@@ -82,6 +82,11 @@ def build_panel_screensaver_config(
 ) -> dict[str, Any]:
     """Return the screensaver style + weather payload for one panel."""
     return {
+        # P356: seconds of no touch before the panel returns to the
+        # screensaver (the firmware clamps 5..3600, default 15). Published
+        # as a string — every field of this contract is a string on the wire.
+        "activation_timeout": str(max(5, min(3600, int(
+            panel.screensaver_activation_timeout or 15)))),
         "clock": {
             "font": panel.clock_font,
             "weight": panel.clock_weight,

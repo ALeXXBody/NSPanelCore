@@ -95,11 +95,14 @@ class DashboardService:
 
     # -- generate + compile ----------------------------------------------
 
-    def _generate_and_compile(self, design: dd.PanelDesign) -> tuple[str, str, dict, list]:
+    def _generate_and_compile(
+        self, design: dd.PanelDesign, show_home_relays: bool = True,
+    ) -> tuple[str, str, dict, list]:
         """Blocking: design → TFT path + md5 + component map + page ids."""
         with tempfile.TemporaryDirectory(prefix="nspdash") as wd:
             origins = _dash_dir(self.hass)
-            cmap = hg.generate_source(design, KIND, wd, origins_dir=origins)
+            cmap = hg.generate_source(design, KIND, wd, origins_dir=origins,
+                                      show_home_relays=show_home_relays)
             tft_tmp = os.path.join(wd, "panel.tft")
             hg.compile_tft(wd, tft_tmp)
             data = open(tft_tmp, "rb").read()
@@ -112,9 +115,11 @@ class DashboardService:
                 json.dump({"map": cmap, "page_ids": dd.page_ids(design), "md5": md5}, f)
             return out, md5, cmap, dd.page_ids(design)
 
-    async def async_generate(self, design: dd.PanelDesign) -> tuple[str, str, dict, list]:
+    async def async_generate(
+        self, design: dd.PanelDesign, show_home_relays: bool = True,
+    ) -> tuple[str, str, dict, list]:
         return await self.hass.async_add_executor_job(
-            self._generate_and_compile, design
+            self._generate_and_compile, design, show_home_relays
         )
 
     # -- send to panel -----------------------------------------------------
@@ -232,7 +237,9 @@ class DashboardService:
         # sends both passed the check and both published tft_update
         self._serving = {"mac": mac, "path": "", "md5": "", "ts": 0, "reserving": True}
         try:
-            path, md5, cmap, page_ids = await self.async_generate(design)
+            path, md5, cmap, page_ids = await self.async_generate(
+                design,
+                show_home_relays=bool(getattr(panel, "show_home_relays", True)))
         except Exception as exc:  # noqa: BLE001
             self._serving = None
             _LOGGER.exception("dashboard generate/compile failed for %s", mac)
@@ -528,6 +535,25 @@ class DashboardService:
         ids = self._page_ids.get(mac) or []
         dash_pages = {p.name: i for p, i in zip(design.pages, ids[1:])} if ids else {}
 
+        # P357: the home page (id 2) — the GENERATED layout: the relay
+        # buttons (when the user kept them) toggle the panel's relays, the
+        # room/scenes buttons navigate. The map knows every id.
+        if page == dd.HOME_PAGE_ID:
+            hmap = cmap.get("home") or {}
+            if hmap.get("rel1") == component:
+                self._toggle_panel_relay(mac, 1)
+                return
+            if hmap.get("rel2") == component:
+                self._toggle_panel_relay(mac, 2)
+                return
+            if hmap.get("room") == component:
+                self._dash(mac, "page room")
+                return
+            if hmap.get("scenes") == component:
+                self._dash(mac, "page scenes")
+                return
+            return
+
         # menu page: room id 4 → hotspots navigate
         if page == dd.MENU_PAGE_ID:
             for n, p in enumerate(design.pages):
@@ -578,6 +604,20 @@ class DashboardService:
                 else:
                     self._run_item(item)
                 return
+
+    @callback
+    def _toggle_panel_relay(self, mac: str, relay: int) -> None:
+        """A home-page relay tile: toggle the panel's physical relay.
+
+        P357 (user order): the relay logic lives in the integration — the
+        tile press routes here and flips the relay the integration owns.
+        """
+        panel = self.manager._panel_by_mac(mac)
+        if panel is None:
+            return
+        current = self.manager.relay_state(panel, relay)
+        self.hass.async_create_task(
+            self.manager.set_relay(panel, relay, not current))
 
     @callback
     def _dash(self, mac: str, stmt: str) -> None:

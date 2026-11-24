@@ -21,6 +21,7 @@ WIDGET_TYPES = ("switch", "light", "rgb_light", "scene", "sensor", "climate")
 # mini, ROOM, spare, scenes → id 4).
 MENU_PAGE_NAME = "room"
 MENU_PAGE_ID = 4
+HOME_PAGE_ID = 2  # P357: the generated home page (the kit's fixed base order)
 
 _PAGE_NAME_RE = __import__("re").compile(r"^dash_[a-z0-9_]{1,9}$")
 _ENTITY_RE = __import__("re").compile(r"^[a-z_]+\.[a-z0-9_]+$")
@@ -207,6 +208,40 @@ def clean_text(value: str, max_len: int) -> str:
     return (value or "").translate(_TEXT_SAFETY)[:max_len]
 
 
+def home_components(design: PanelDesign, show_relays: bool = True) -> list[dict]:
+    """The generated home page (replaces the authored kit page).
+
+    P357 (user order): the relays appear ONLY when the user wants them
+    there — the integration's panel setting decides (the default lives in
+    the integration, not baked into the kit). The kit's static home baked
+    rel1/rel2 unconditionally and carried no labels (the compiler default
+    "newtxt" leaked onto the tiles)."""
+    comps: list[dict] = [
+        {"name": "bg", "type": "picture", "x": 0, "y": 0, "w": 480, "h": 320,
+         "pic": "bg_home"},
+    ]
+    if show_relays:
+        comps += [
+            {"name": "rel1", "type": "dual-state-button", "sendkey": 3,
+             "text": "", "x": 20, "y": 60, "w": 210, "h": 96,
+             "pic": "btn_off", "pic2": "btn_on"},
+            {"name": "rel2", "type": "dual-state-button", "sendkey": 3,
+             "text": "", "x": 250, "y": 60, "w": 210, "h": 96,
+             "pic": "btn_off", "pic2": "btn_on"},
+        ]
+    comps += [
+        {"name": "room_btn", "type": "hotspot", "sendkey": 3,
+         "x": 20, "y": 180, "w": 210, "h": 64},
+        {"name": "room_pic", "type": "picture",
+         "x": 20, "y": 180, "w": 210, "h": 64, "pic": "btn_room"},
+        {"name": "scenes_btn", "type": "hotspot", "sendkey": 3,
+         "x": 250, "y": 180, "w": 210, "h": 64},
+        {"name": "scenes_pic", "type": "picture",
+         "x": 250, "y": 180, "w": 210, "h": 64, "pic": "btn_scenes"},
+    ]
+    return comps
+
+
 def menu_components(design: PanelDesign) -> list[dict]:
     """The generated menu page (replaces the authored 'room' page)."""
     comps: list[dict] = [
@@ -243,7 +278,11 @@ def dash_components(design: PanelDesign, page: DashPage) -> list[dict]:
         if it.widget in ("switch", "light", "rgb_light"):
             comps.append({"name": f"b{it.slot}", "type": "dual-state-button",
                           "x": x, "y": y, "w": TILE_W, "h": BTN_H,
-                          "pic": "btn_off", "pic2": "btn_on", "sendkey": 3})
+                          "pic": "btn_off", "pic2": "btn_on", "sendkey": 3,
+                          # P357: an EXPLICIT empty txt — the compiler's
+                          # default ("newtxt") leaks onto the tile when the
+                          # attr is unset (the user's screenshot)
+                          "text": ""})
         elif it.widget == "scene":
             comps.append({"name": f"b{it.slot}", "type": "picture",
                           "x": x, "y": y, "w": TILE_W, "h": BTN_H,
@@ -264,7 +303,9 @@ def dash_components(design: PanelDesign, page: DashPage) -> list[dict]:
 
 # -- component-id map (the touch-routing contract) ----------------------
 
-def component_map(design: PanelDesign) -> dict[str, dict[str, int]]:
+def component_map(
+    design: PanelDesign, show_home_relays: bool = True
+) -> dict[str, dict[str, int]]:
     """page name → component name → Nextion component id (1-based).
 
     Derived from the SAME layout functions the generator renders, so the
@@ -273,6 +314,7 @@ def component_map(design: PanelDesign) -> dict[str, dict[str, int]]:
     out: dict[str, dict[str, int]] = {}
     for page_name, comps in (
         (MENU_PAGE_NAME, menu_components(design)),
+        ("home", home_components(design, show_relays=show_home_relays)),
         *[(p.name, dash_components(design, p)) for p in design.pages],
     ):
         out[page_name] = {c["name"]: n for n, c in enumerate(comps, start=1)}
@@ -327,7 +369,8 @@ def detail_components(design: PanelDesign, item: DashItem, n: int) -> list[dict]
          "pic": "bg_plain"},
         {"name": "title", "type": "text", "x": 10, "y": 20, "w": 380, "h": 30,
          "text": clean_text(item.label, 24), "font": "NotoSans24"},
-        {"name": "pwr", "type": "dual-state-button", "x": 165, "y": 60,
+        # P357: explicit empty txt — the compiler default ("newtxt") leaks
+        {"name": "pwr", "type": "dual-state-button", "text": "", "x": 165, "y": 60,
          "w": 150, "h": 88, "pic": "btn_off", "pic2": "btn_on", "sendkey": 3},
         {"name": "minus", "type": "hotspot", "x": 30, "y": 150, "w": 90, "h": 90,
          "sendkey": 3},

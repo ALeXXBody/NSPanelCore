@@ -53,6 +53,14 @@ def _write_toml(path: str, page_name: str, comps: list[dict]) -> None:
             lines.append(f'txt = "{c["txt"]}"')
         if "text" in c:
             lines.append(f'txt = "{c["text"]}"')
+        # P357: txt_maxl MUST be >= the text's byte length — nxwright's
+        # component default is 10, and a longer text REJECTS the whole
+        # compile ("its txt has 13 bytes; its txt_maxl is 10"). The
+        # generated pages set no txt_maxl, so any real-world label broke
+        # the build. Set it from the text, floored at the default.
+        if ("txt" in c or "text" in c) and "txt_maxl" not in c:
+            text = c.get("txt", c.get("text", ""))
+            lines.append(f"txt_maxl = {max(10, len(text))}")
         if "txt_maxl" in c:
             lines.append(f'txt_maxl = {int(c["txt_maxl"])}')
         if "font" in c:
@@ -121,6 +129,7 @@ def _write_app_toml(kit_dir: str, design: dd.PanelDesign, dest_dir: str,
 def generate_source(
     design: dd.PanelDesign, kit_dir: str, workdir: str,
     origins_dir: str | None = None,
+    show_home_relays: bool = True,
 ) -> dict[str, dict[str, int]]:
     """Build the per-panel HMI source folder; return the component map.
 
@@ -214,6 +223,16 @@ def generate_source(
     )
     open(os.path.join(src, "pages", "room.nx"), "w").close()
 
+    # P357: the home page — regenerated over the authored kit page; the
+    # relay buttons appear only when the integration's panel setting says
+    # so (the user decides there, the kit bakes nothing).
+    _write_toml(
+        os.path.join(src, "pages", "home.page.toml"),
+        "home",
+        dd.home_components(design, show_relays=show_home_relays),
+    )
+    open(os.path.join(src, "pages", "home.nx"), "w").close()
+
     # dash pages — appended after the base seven
     for page in design.pages:
         _write_toml(
@@ -239,7 +258,7 @@ def generate_source(
     ] if False else extra_pictures  # the swatch resources are kit-level (sw_*)
     _write_app_toml(kit_dir, design, src, extra_pictures=extra_pictures)
 
-    cmap = dd.component_map(design)
+    cmap = dd.component_map(design, show_home_relays=show_home_relays)
     # the detail pages' maps (the manager routes the detail presses)
     for i, item in enumerate(lights):
         cmap[dd.detail_name(i)] = {

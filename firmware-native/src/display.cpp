@@ -527,7 +527,25 @@ void nsp_display_touch_task(void *) {
              * the old code navigated on press from EVERY page (mid-
              * interaction jumps) and ignored screensaver releases. */
             if ((page == 1 || page == 3) && !pressed) {
-                nsp_display_send_command("page home");
+                /* P356b: with a delivered design, the wake lands on the
+                 * USER'S dashboard — the first dash page (the map's second
+                 * entry; the contract is [menu, dash…, details], P234
+                 * page_ids) — not the stock home with its placeholder
+                 * buttons (the user's screenshot: kit-default "newtxt").
+                 * Without an adopted map: the stock home, as before. */
+                int map_count = nsp_dash_page_count();
+                if (map_count >= 2) {
+                    int target = nsp_dash_page_id(1);
+                    if (target >= 0) {
+                        char wcmd[24];
+                        snprintf(wcmd, sizeof(wcmd), "dp=%d", target);
+                        nsp_display_send_command(wcmd);
+                    } else {
+                        nsp_display_send_command("page home");
+                    }
+                } else {
+                    nsp_display_send_command("page home");
+                }
             } else if (nsp_dash_is_dash_page(page)) {
                 /* P234: dash pages publish ONLY — the manager owns every
                  * action there (it generated the layout). No local relay
@@ -538,7 +556,20 @@ void nsp_display_touch_task(void *) {
                  * order), and the release's component event is suppressed
                  * so a swipe over a tile never toggles it. */
             } else if (event == 0) {  // releases act (P210)
-                if (page == HMI_HOME_PAGE_ID) {
+                /* P357: with a DELIVERED design (the map adopted), home and
+                 * the menu are GENERATED layouts — the kit-era component
+                 * constants cannot know their ids (the relays may not even
+                 * exist there: the integration's setting decides). Their
+                 * presses PUBLISH ONLY; the manager routes every action
+                 * (the rel toggles, the menu hotspots, the navigation)
+                 * against the map it generated. Stock-TFT panels (no map)
+                 * keep the kit chains below unchanged. */
+                bool design_owned =
+                    nsp_dash_page_count() > 0 &&
+                    (page == HMI_HOME_PAGE_ID || page == HMI_ROOM_PAGE_ID);
+                if (design_owned) {
+                    /* publish-only — the touch goes out below */
+                } else if (page == HMI_HOME_PAGE_ID) {
                     if (component == HMI_HOME_REL1) nsp_relay_toggle_pub(1);
                     else if (component == HMI_HOME_REL2) nsp_relay_toggle_pub(2);
                     else if (component == HMI_HOME_ROOM) nsp_display_send_command("page room");

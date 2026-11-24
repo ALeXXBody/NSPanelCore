@@ -19,6 +19,11 @@ pic = "bg_home"
 name = "rel1"
 type = "dual-state-button"
 sendkey = 3
+# P357: EXPLICIT empty txt — the compiler default ("newtxt") leaks when the
+# attr is unset. The relay behavior/labels belong to the INTEGRATION (the
+# button modes are selected there, not on the panel); the kit ships no fake
+# static labels.
+txt = ""
 x = 20
 y = 60
 w = 210
@@ -30,6 +35,7 @@ pic2 = "btn_on"
 name = "rel2"
 type = "dual-state-button"
 sendkey = 3
+txt = ""
 x = 250
 y = 60
 w = 210
