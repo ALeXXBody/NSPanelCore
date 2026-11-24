@@ -254,7 +254,8 @@ def menu_components(design: PanelDesign) -> list[dict]:
                       "x": x, "y": y, "w": TILE_W, "h": BTN_H, "sendkey": 3})
         comps.append({"name": f"ml{n}", "type": "text",
                       "x": x, "y": y + BTN_H, "w": TILE_W, "h": LBL_H,
-                      "text": clean_text(page.title, 24), "font": "NotoSans24"})
+                      "text": clean_text(page.title, 24), "font": "NotoSans24",
+                      "pco": "#f0f4f8"})
     comps.append({"name": "back", "type": "hotspot",
                   "x": 165, "y": 290, "w": TILE_W, "h": 24, "sendkey": 3})
     comps.append({"name": "back_pic", "type": "picture",
@@ -268,7 +269,9 @@ def dash_components(design: PanelDesign, page: DashPage) -> list[dict]:
         {"name": "bg", "type": "picture", "x": 0, "y": 0, "w": 480, "h": 320,
          "pic": page.background if page.background else "bg_plain"},
         {"name": "title", "type": "text", "x": 10, "y": 20, "w": 300, "h": 30,
-         "text": clean_text(page.title, 24), "font": "NotoSans24"},
+         "text": clean_text(page.title, 24), "font": "NotoSans24",
+         # P360: the brand palette — the titles cyan, the labels light
+         "pco": "#39c8e8"},
     ]
     page_items = sorted(
         (i for i in design.items if i.page == page.name), key=lambda x: x.slot
@@ -293,7 +296,8 @@ def dash_components(design: PanelDesign, page: DashPage) -> list[dict]:
                           "text": "--", "font": "NotoSans64"})
         comps.append({"name": f"l{it.slot}", "type": "text",
                       "x": x, "y": y + BTN_H, "w": TILE_W, "h": LBL_H,
-                      "text": clean_text(it.label, 24), "font": "NotoSans24"})
+                      "text": clean_text(it.label, 24), "font": "NotoSans24",
+                      "pco": "#f0f4f8"})
     comps.append({"name": "back", "type": "hotspot",
                   "x": 395, "y": 20, "w": 75, "h": 30, "sendkey": 3})
     comps.append({"name": "back_pic", "type": "picture",
@@ -368,7 +372,8 @@ def detail_components(design: PanelDesign, item: DashItem, n: int) -> list[dict]
         {"name": "bg", "type": "picture", "x": 0, "y": 0, "w": 480, "h": 320,
          "pic": "bg_plain"},
         {"name": "title", "type": "text", "x": 10, "y": 20, "w": 380, "h": 30,
-         "text": clean_text(item.label, 24), "font": "NotoSans24"},
+         "text": clean_text(item.label, 24), "font": "NotoSans24",
+         "pco": "#39c8e8"},
         # P357: explicit empty txt — the compiler default ("newtxt") leaks
         {"name": "pwr", "type": "dual-state-button", "text": "", "x": 165, "y": 60,
          "w": 150, "h": 88, "pic": "btn_off", "pic2": "btn_on", "sendkey": 3},
@@ -377,7 +382,7 @@ def detail_components(design: PanelDesign, item: DashItem, n: int) -> list[dict]
         {"name": "minus_pic", "type": "picture", "x": 30, "y": 150, "w": 90, "h": 90,
          "pic": "btn_minus"},
         {"name": "pct", "type": "text", "x": 165, "y": 150, "w": 150, "h": 90,
-         "text": "--", "font": "NotoSans64"},
+         "text": "--", "font": "NotoSans64", "pco": "#f0f4f8"},
         {"name": "plus", "type": "hotspot", "x": 360, "y": 150, "w": 90, "h": 90,
          "sendkey": 3},
         {"name": "plus_pic", "type": "picture", "x": 360, "y": 150, "w": 90, "h": 90,
