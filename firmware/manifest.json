@@ -1,21 +1,21 @@
 {
-    "version": "0.1.28",
-    "notes": "Native firmware 0.1.28 \u2014 the baud switch timing fixed: the ESP was switching to 57600 BEFORE the display's 0x05 ACK (the display ACKs at 115200 then switches to 57600, but the ESP was already at 57600 and couldn't receive the ACK). The ESP now waits for the ACK at 115200, then both sides switch to 57600 for the data transfer. Carries all prior fixes.",
+    "version": "0.1.29",
+    "notes": "Native firmware 0.1.29 \u2014 the TFT block transfer at 115200 with chunked writes: the display's processor needs time between data chunks at 115200 baud (the hardware UART buffer overflows without gaps). The whmi-wris stays at 115200 (the display only ACKs when the baud matches); the data written in 256-byte chunks with 5ms gaps. Carries all prior fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.28/native-firmware-0.1.28.bin",
-            "md5": "435ba41a4aa8e2f9f5f033ea4b47050d"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.29/native-firmware-0.1.29.bin",
+            "md5": "4f0b0b56444773f6bf74f4bb96abed5d"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.28/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.29/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.28/native-firmware-0.1.28.bin",
-            "md5": "435ba41a4aa8e2f9f5f033ea4b47050d"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.29/native-firmware-0.1.29.bin",
+            "md5": "4f0b0b56444773f6bf74f4bb96abed5d"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.28/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.29/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

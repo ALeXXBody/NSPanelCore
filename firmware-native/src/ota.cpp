@@ -482,11 +482,8 @@ static void nsp_tft_task(void *) {
              * drops bytes at 115200 during the ~160s transfer (the truncated
              * 0x08 at 66%). At 57600 the display keeps up with every byte.
              * The ESP's UART switches to match; it restores 115200 after. */
-            snprintf(cmd, sizeof(cmd), "whmi-wris %lld,57600,1", (long long)file_size);
+            snprintf(cmd, sizeof(cmd), "whmi-wris %lld,115200,1", (long long)file_size);
             nsp_display_send_now(cmd);
-            /* P347: DON'T switch the ESP's baud yet — the display ACKs the
-             * whmi-wris at the CURRENT baud (115200) before switching to
-             * 57600. The ESP must wait for the ACK at 115200, then switch. */
         }
         vTaskDelay(pdMS_TO_TICKS(120));
 
@@ -496,12 +493,6 @@ static void nsp_tft_task(void *) {
             uint8_t b = 0;
             if (nsp_display_read(&b, 1, 250) > 0 && b == 0x05) { acked = true; break; }
             s_last_progress_us = esp_timer_get_time();
-        }
-        if (acked) {
-            /* P347: BOTH sides switch to 57600 for the data transfer —
-             * the display switches after ACKing, the ESP switches now. */
-            extern void nsp_display_set_tft_baud(int baud);  // P347
-            nsp_display_set_tft_baud(57600);
         }
         if (!acked) {
             nsp_mqtt_publish_log("TFT: no 0x05 ACK — retrying");
@@ -580,7 +571,18 @@ static void nsp_tft_task(void *) {
                 hashed_upto = offset + (long long)got;
             }
 
-            nsp_display_send((const char *)block, got);
+            /* P347: the block written in 256-byte chunks with 5ms gaps —
+             * the display's processor needs time between chunks at 115200,
+             * the hardware UART buffer overflows without the gaps. */
+            {
+                size_t sent = 0;
+                while (sent < (size_t)got) {
+                    size_t chunk = (size_t)got - sent > 256 ? 256 : (size_t)got - sent;
+                    nsp_display_send((const char *)block + sent, chunk);
+                    sent += chunk;
+                    vTaskDelay(pdMS_TO_TICKS(5));
+                }
+            }
             offset += (long long)got;
             s_progress = (int)(100ULL * offset / (unsigned long long)file_size);
             s_last_progress_us = esp_timer_get_time();
