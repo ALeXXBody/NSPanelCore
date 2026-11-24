@@ -8,7 +8,7 @@ PARAMETERS below (or replace splash_boot.png with your own design) and run:
 
 It writes the frames to BOTH HMI sets; recompile after:
 
-    nxwright compile --overwrite hmi/nspanel-core-native /tmp/epoch/nspanel-core-ui.tft
+    nxwright compile --overwrite custom_components/nspanel_core/hmi_kit /tmp/epoch/nspanel-core-ui.tft
 
 Requirements: Pillow. The logo must be 480x320 (full screen).
 """
@@ -22,8 +22,8 @@ N_FRAMES = 10          # how many fade frames (more = smoother, bigger TFT)
 FRAME_MS = 150         # ms per frame (set in page0's timer too — keep in sync)
 FADE = "ease"          # "linear" | "ease" (fast start, slow settle)
 BACKGROUND = (13, 16, 22)  # #0d1016
-LOGO = os.path.join(REPO, "hmi/nspanel-core-native/pictures/splash_boot.png")
-SETS = (os.path.join(REPO, "hmi/nspanel-core-native/pictures"),
+LOGO = os.path.join(REPO, "custom_components/nspanel_core/hmi_kit/pictures/splash_boot.png")
+SETS = (os.path.join(REPO, "custom_components/nspanel_core/hmi_kit/pictures"),
         os.path.join(REPO, "custom_components/nspanel_core/hmi_kit/pictures"))
 # --------------------------------------------------------------------------
 

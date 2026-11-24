@@ -17,7 +17,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 
 KIT = REPO / "custom_components" / "nspanel_core" / "hmi_kit"
-HMI = REPO / "hmi" / "nspanel-core-native"
+HMI = REPO / "custom_components/nspanel_core/hmi_kit"
 # The proven set: the original compiled NotoSans24/64 pair.
 FONTS = ["NotoSans24", "NotoSans64"]
 WEATHER = ["wOutTemp", "wRoomTemp", "wWind", "wRain", "wSun", "wForecast"]

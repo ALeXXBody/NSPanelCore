@@ -1,21 +1,9 @@
-# HMI — nxwright source (Step 5)
+# HMI kit — single source of truth
 
-The display UI lives here as TEXT, versioned and diffable — no binary blobs.
+The authoritative HMI kit lives at `custom_components/nspanel_core/hmi_kit/`
+(the integration copies it into a temp dir and compiles with the vendored
+nxwright toolchain at every dashboard Send).
 
-## Layout
-- `nspanel-core-native/` — the source: `program.nx` (code), `pages/`, `fonts/`,
-  `pictures/`, `app.toml`, `defaults.toml` (device: NX4832F035).
-- The compiled display file (`*.tft`) is a RELEASE ARTIFACT, never committed.
-
-## Pipeline
-1. `nxwright check hmi/nspanel-core-native` — validate (CI runs this).
-2. `nxwright build hmi/nspanel-core-native /tmp/out.hmi --overwrite` — emit the
-   Nextion project file.
-3. The HMI→TFT compile runs in the release toolchain (Nextion compiler);
-   the compiled TFT is uploaded to the evergreen release and served to panels
-   via the integration's tft_update flow.
-
-## Current state (P140)
-The source carries the rebranded NSPanel Core UI (boot splash verified on
-hardware, 461,084-byte TFT). Live clock/date on the splash is the next
-authored change — baby steps, verified with a screen photo after every flash.
+This directory used to hold a second, diverging copy (`nspanel-core-native/`)
+— removed in P361 after the repo audit found the two trees drifting. The
+branding picture generator is `branding/make_kit_pictures.py`.

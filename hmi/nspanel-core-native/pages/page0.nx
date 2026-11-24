@@ -1,7 +1,0 @@
-// P248: the boot animation ? the logo fades in (10 frames at 150 ms)
-on anim.timer:
-  if (splash.pic < 9) {
-    splash.pic = splash.pic + 1
-  } else {
-    anim.en = 0
-  }

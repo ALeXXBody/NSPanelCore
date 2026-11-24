@@ -12,7 +12,7 @@ access to fetch the two pinned TTFs (SHA-256 verified).
 Installs the fonts into BOTH HMI source trees and rewrites their ``app.toml``
 font lists identically:
 
-  hmi/nspanel-core-native/fonts/
+  custom_components/nspanel_core/hmi_kit/fonts/
   custom_components/nspanel_core/hmi_kit/fonts/
 
 FONT ORDER IS THE WIRE CONTRACT. The native firmware maps the studio's style
@@ -41,7 +41,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 HMI_TREES = (
-    ROOT / "hmi" / "nspanel-core-native",
+    ROOT / "custom_components/nspanel_core/hmi_kit",
     ROOT / "custom_components" / "nspanel_core" / "hmi_kit",
 )
 TTF_PIN = "ffebf8c1ee449e544955a7e813c54f9b73848eac"  # googlefonts/noto-fonts

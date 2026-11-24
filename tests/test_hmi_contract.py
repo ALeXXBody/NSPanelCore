@@ -7,7 +7,7 @@ import pathlib
 import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-HMI = ROOT / "hmi" / "nspanel-core-native"
+HMI = ROOT / "custom_components/nspanel_core/hmi_kit"
 
 
 def test_hmi_source_layout():
