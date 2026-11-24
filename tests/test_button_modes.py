@@ -36,6 +36,7 @@ def _mgr(panel: PanelConfig):
     mgr._register_accept_reply = lambda pnl: json.dumps({"command": "register_accept"})
     mgr._publish = AsyncMock()
     mgr._publish_panel_status = AsyncMock()
+    mgr._publish_panel_device_config = AsyncMock()
     mgr._maybe_trigger_firmware_ota_cooled = AsyncMock()
     return mgr
 
@@ -154,9 +155,29 @@ def test_send_panel_config_delivers_button_config():
         "config_topic": f"nspanel/{pnl.mac}/config"})
     mgr._publish = AsyncMock()
     mgr._publish_panel_status = AsyncMock()
+    mgr._publish_panel_device_config = AsyncMock()
     mgr._maybe_trigger_firmware_ota_cooled = AsyncMock()
 
     _run(M.NSPanelCoreManager._send_panel_config(mgr, panel))
+
+    # P359: the device config is delegated to the helper (which carries the
+    # modes AND the relay defaults — asserted directly below)
+    mgr._publish_panel_device_config.assert_awaited_once_with(panel)
+
+
+def test_publish_panel_device_config_carries_the_modes():
+    """P359: the helper owns the payload — the modes, the custom topics AND
+    the relay boot defaults (the studio's "default mode" must reach the
+    panel's boot behavior)."""
+    panel = _panel(button1_mode=2, button2_mode=3,
+                   button1_mqtt_topic="home/btn1", button1_mqtt_payload="ON",
+                   button2_mqtt_topic="home/btn2", button2_mqtt_payload="OFF",
+                   relay1_default_mode=True, relay2_default_mode=True)
+    mgr = MagicMock()
+    mgr._panel_cmd_topic = lambda p, s: f"nspanel/{p.wifi_hostname or p.name}/{s}"
+    mgr._publish = AsyncMock()
+
+    _run(M.NSPanelCoreManager._publish_panel_device_config(mgr, panel))
 
     payloads = [c.args[1] for c in mgr._publish.await_args_list]
     btn_cfg = next((p for p in payloads if "set_button_config" in p), None)
@@ -166,6 +187,8 @@ def test_send_panel_config_delivers_button_config():
     assert d["button2_mode"] == 3
     assert d["button1_mqtt_topic"] == "home/btn1"
     assert d["button1_mqtt_payload"] == "ON"
+    assert d["relay1_default_mode"] is True
+    assert d["relay2_default_mode"] is True
     assert d["button2_mqtt_topic"] == "home/btn2"
     assert d["button2_mqtt_payload"] == "OFF"
 

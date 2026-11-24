@@ -57,8 +57,15 @@ void nsp_relay_init(void) {
         io.pin_bit_mask = 1ULL << (int)nsp_relay_gpio(r);
         io.mode = GPIO_MODE_OUTPUT;
         gpio_config(&io);
-        gpio_set_level((gpio_num_t)nsp_relay_gpio(r), 0);
+        /* P359: the boot state comes from the STUDIO (the panel's
+         * "default mode" selection — "always on" boots the relay ON and
+         * it STAYS on). The old code hardcoded OFF: the studio's
+         * selection was dead on the wire. */
+        int def = (r == 1) ? g_cfg.relay1_default : g_cfg.relay2_default;
+        gpio_set_level((gpio_num_t)nsp_relay_gpio(r), def ? 1 : 0);
     }
+    s_relay1 = g_cfg.relay1_default != 0;
+    s_relay2 = g_cfg.relay2_default != 0;
     gpio_config_t btn = {};
     btn.pin_bit_mask = (1ULL << BUTTON1_PIN) | (1ULL << BUTTON2_PIN);
     btn.mode = GPIO_MODE_INPUT;

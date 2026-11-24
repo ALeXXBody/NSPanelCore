@@ -171,6 +171,7 @@ def _real_manager():
     mgr.async_save = AsyncMock()
     mgr._publish = AsyncMock()
     mgr._publish_panel_status = AsyncMock()
+    mgr._publish_panel_device_config = AsyncMock()
     mgr._schedule_save = lambda: None
     mgr._maybe_trigger_firmware_ota_cooled = AsyncMock()
     mgr.dash = MagicMock()

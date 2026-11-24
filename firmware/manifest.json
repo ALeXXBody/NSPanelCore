@@ -1,21 +1,21 @@
 {
-    "version": "0.1.38",
-    "notes": "Native firmware 0.1.38 \u2014 the finishing-write protection: after the last TFT block the display keeps writing its final flash pages INCLUDING the system data area; the fixed 6 s wait let the handshake's serial traffic interrupt that write and corrupt the system data (the display booted into System-Data-ERROR \u2014 the user's report; a power cycle does NOT clear it, the ledger correction is recorded). The code now waits for the display's OWN reboot announcement (the kit HMI's printh 88 ff ff ff, up to 30 s) before any serial, then handshakes. Carries all prior fixes.",
+    "version": "0.1.39",
+    "notes": "Native firmware 0.1.39 \u2014 the relay boot defaults: the studio's 'default mode' selection (always on/off) was dead \u2014 the firmware hardcoded OFF at every boot. The selection now rides the device-config push (set_button_config), persists in NVS and is applied at boot in nsp_relay_init. The manager re-asserts the device config at every register so the panel can never drift from the studio. Carries all prior fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.38/native-firmware-0.1.38.bin",
-            "md5": "ea6e03240ff332d1b89ac6371b8ff52e"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.39/native-firmware-0.1.39.bin",
+            "md5": "b180180dd389edb7f6f48b40c1331919"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.38/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.39/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.38/native-firmware-0.1.38.bin",
-            "md5": "ea6e03240ff332d1b89ac6371b8ff52e"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.39/native-firmware-0.1.39.bin",
+            "md5": "b180180dd389edb7f6f48b40c1331919"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.38/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.39/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

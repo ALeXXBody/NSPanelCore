@@ -36,6 +36,7 @@ def _mgr(panel):
     mgr._register_accept_reply = lambda pnl: json.dumps({"command": "register_accept"})
     mgr._publish = AsyncMock()
     mgr._publish_panel_status = AsyncMock()
+    mgr._publish_panel_device_config = AsyncMock()
     mgr._maybe_trigger_firmware_ota_cooled = AsyncMock()
     mgr.dash = None
     return mgr
@@ -69,6 +70,6 @@ def test_nudge_and_accept_are_not_retained():
 
 def test_button_config_still_pushed():
     mgr = _mgr(_panel())
-    _run(M.NSPanelCoreManager._send_panel_config(mgr, _panel()))
+    _run(M.NSPanelCoreManager._publish_panel_device_config(mgr, _panel()))
     sent = _captured(mgr)
     assert any("set_button_config" in s for s in sent), "the button config is untouched"

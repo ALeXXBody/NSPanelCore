@@ -1191,6 +1191,12 @@ class NSPanelCoreManager:
             dash = getattr(self, "dash", None)
             if dash is not None and dash.has_design(panel.mac):
                 await dash.async_push_config(panel.mac)
+            # P359 (user order): the panel must ALWAYS respect the studio's
+            # settings — the button/relay config is re-asserted at every
+            # register (a panel that missed one push would drift from the
+            # studio forever, and the relay's "default mode" died exactly
+            # that way).
+            await self._publish_panel_device_config(panel)
 
         # Registration carries the panel's current checksums — evaluate OTA
         # here, but ONLY for accepted panels. Flashing an unaccepted (merely
@@ -1211,6 +1217,29 @@ class NSPanelCoreManager:
         # write + the config/dash re-push per register was waste
         if hasattr(self, "_save_timer"):
             self._schedule_save()
+
+    async def _publish_panel_device_config(self, panel: PanelConfig) -> None:
+        """The panel's DEVICE-level behavior config (P312 + P359).
+
+        The button modes/custom topics AND the relay boot defaults — the
+        studio's selections, re-asserted on accept, after every settings
+        save AND at every register: a panel that missed one push would
+        drift from the studio forever (the relay's "default mode" died
+        exactly that way — the user's report)."""
+        await self._publish(
+            self._panel_cmd_topic(panel, "command"),
+            json.dumps({
+                "command": "set_button_config",
+                "button1_mode": panel.button1_mode,
+                "button2_mode": panel.button2_mode,
+                "button1_mqtt_topic": panel.button1_mqtt_topic,
+                "button1_mqtt_payload": panel.button1_mqtt_payload,
+                "button2_mqtt_topic": panel.button2_mqtt_topic,
+                "button2_mqtt_payload": panel.button2_mqtt_payload,
+                "relay1_default_mode": bool(panel.relay1_default_mode),
+                "relay2_default_mode": bool(panel.relay2_default_mode),
+            }),
+        )
 
     async def _send_panel_config(self, panel: PanelConfig) -> None:
         """Deliver config to an accepted panel.
@@ -1236,19 +1265,8 @@ class NSPanelCoreManager:
         # P312: deliver the physical-button configuration — the firmware
         # never consumed the old JSON config, so modes/custom topics were
         # dead at every layer. Sent on accept AND after every settings save
-        # (both paths run through here).
-        await self._publish(
-            self._panel_cmd_topic(panel, "command"),
-            json.dumps({
-                "command": "set_button_config",
-                "button1_mode": panel.button1_mode,
-                "button2_mode": panel.button2_mode,
-                "button1_mqtt_topic": panel.button1_mqtt_topic,
-                "button1_mqtt_payload": panel.button1_mqtt_payload,
-                "button2_mqtt_topic": panel.button2_mqtt_topic,
-                "button2_mqtt_payload": panel.button2_mqtt_payload,
-            }),
-        )
+        # (both paths run through here) — and re-asserted at every register.
+        await self._publish_panel_device_config(panel)
         # The stored checksums (from registration) decide OTA here: accept is
         # the consent gate, so a newly accepted panel updates on the spot
         # instead of waiting for its next register. Cooldown-guarded (see

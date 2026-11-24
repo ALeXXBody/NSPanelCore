@@ -300,6 +300,17 @@ void nsp_mqtt_handle_command(const std::string &payload) {
             g_cfg.button2_mqtt_topic = v;
         if (nsp_provision_field(payload, "button2_mqtt_payload", v))
             g_cfg.button2_mqtt_payload = v;
+        /* P359: the RELAY defaults ride the same config push — the
+         * studio's "default mode" ("always on") must reach the panel's
+         * boot behavior. */
+        if (nsp_provision_field(payload, "relay1_default_mode", v))
+            g_cfg.relay1_default = (uint8_t)(strcmp(v.c_str(), "1") == 0 ||
+                                             strcmp(v.c_str(), "true") == 0 ||
+                                             strcmp(v.c_str(), "True") == 0);
+        if (nsp_provision_field(payload, "relay2_default_mode", v))
+            g_cfg.relay2_default = (uint8_t)(strcmp(v.c_str(), "1") == 0 ||
+                                             strcmp(v.c_str(), "true") == 0 ||
+                                             strcmp(v.c_str(), "True") == 0);
         nsp_config_save();
         nsp_mqtt_publish_log("button config applied");
     }
