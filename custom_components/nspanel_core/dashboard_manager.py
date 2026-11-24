@@ -327,8 +327,12 @@ class DashboardService:
             return
         # non-retained (P326): a retained map replays at every panel boot;
         # the map is RAM-only on the panel and re-pushed at every register.
+        # P355b: the topic is the panel's SUBSCRIBED command topic — the
+        # hostname-based one (P345). The original P234 code published to
+        # nspanel/<mac>/command, which the panel never listens on: the map
+        # never reached ANY panel, on this flow, ever.
         await self.manager._publish(
-            const.panel_topic(mac, "command"),
+            self._cmd_topic(mac),
             json.dumps({"command": "dash_map", "pages": page_ids}),
         )
         _LOGGER.info("dash_map pushed to %s (pages %s)", mac, page_ids)

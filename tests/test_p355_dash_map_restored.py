@@ -62,6 +62,22 @@ def test_dash_map_is_published_non_retained():
             retain = call.kwargs.get("retain", call.args[2] if len(call.args) > 2 else False)
             assert not retain, "the dash_map must be non-retained"
 
+def test_dash_map_is_published_on_the_SUBSCRIBED_topic():
+    """P355b: the panel subscribes on the HOSTNAME topic (P345). The
+    original P234 push went to nspanel/<mac>/command — never received."""
+    svc = _svc([4, 7])
+    from nspanel_core.models import PanelConfig
+    panel = PanelConfig(id=1, mac="e465b849a100", name="KitchenPanel",
+                        wifi_hostname="KitchenPanel", accepted=True)
+    svc.manager.config = MagicMock()
+    svc.manager.config.panels = [panel]
+    svc.manager._panel_cmd_topic = lambda p, s: f"nspanel/{p.wifi_hostname}/{s}"
+    _run(DashboardService.async_push_config(svc, "e465b849a100"))
+    for call in svc.manager._publish.await_args_list:
+        if "dash_map" in call.args[1]:
+            assert call.args[0] == "nspanel/KitchenPanel/command", call.args[0]
+
+
 def test_values_push_still_runs_after_the_map():
     svc = _svc([4, 7])
     _run(DashboardService.async_push_config(svc, "e465b849a100"))
