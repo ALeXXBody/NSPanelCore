@@ -6,7 +6,7 @@ Two independent release trains. Version numbers never collide across them:
 |---|---|---|---|
 | **App** (HA integration) | `vX.Y.Z` | v0.0.1 (epoch baseline) | GitHub release `app-*` + HACS |
 | **Panel firmware** (Arduino line, live) | `0.0.Y` | v0.0.1 (epoch baseline) | evergreen `firmware-latest` + manifest.json |
-| **Panel firmware** (current line) | `0.1.Y` | fw-v0.1.0 (pairs with app-v0.1.0) | GitHub pre-release `fw-*` |
+| **Panel firmware** (current line) | `0.1.Y` | fw-v0.1.0 (pairs with app-v0.1.0) | manifest.json evergreen URLs (the tags are optional; no GitHub release objects are created for the fw line) |
 | **App** (current line) | `0.1.Y` | app-v0.1.0 (pairs with fw-v0.1.0) | GitHub release `app-*` |
 
 Rules:

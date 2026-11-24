@@ -5,7 +5,7 @@
 semantics). Firmware changes NEVER trigger an app release, ever.
 
 **Publishing panel firmware (ESP + data fs + TFT):**
-`firmware/publish.sh <version>` — uploads the 6 OTA files to the evergreen
+The firmware release flow (current): the artifacts land in `firmware/releases/vX/`, `firmware/manifest.json` is bumped (the evergreen raw URLs the panel fetches), the bundled copies under `custom_components/nspanel_core/firmware/` are updated, and the recovery set is regenerated. The old `firmware/publish.sh <version>` — uploads the 6 OTA files to the evergreen
 `firmware-latest` release (stable URLs, overwritten in place) and commits
 the updated `firmware/manifest.json` to `main`. Panels fetch it from there.
 No tag. No HACS release. No version bump in `hacs.json`.

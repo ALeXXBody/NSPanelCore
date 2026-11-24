@@ -23,7 +23,7 @@ on any other firmware must be reflashed first. Everything below that point
 - `esptool.py` (`pip install esptool`) or the PlatformIO setup in
   `firmware/` (`pio run -t upload -e esp32dev`).
 - The NSPanel Core images from this repo:
-  `custom_components/nspanel_core/firmware/sonoff/merged_flash.bin`
+  `custom_components/nspanel_core/firmware/releases/<version>/recovery-merged-flash-<version>.bin (the recovery set — the merged flash image)`
   (ESP + filesystem in one image).
 - Home Assistant with the MQTT integration, NSPanel Core installed, and
   the manager address/port set to your HA host (see
