@@ -1,21 +1,21 @@
 {
-    "version": "0.1.26",
-    "notes": "Native firmware 0.1.26 \u2014 the TFT delivery's first attempt now power-cycles the display (the display's serial goes deaf between power cycles; the handshake on the stale serial always fails 'no comok'). The display restart action proves the display answers after a power cycle. Carries all prior fixes.",
+    "version": "0.1.27",
+    "notes": "Native firmware 0.1.27 \u2014 the TFT transfer at 57600: the display's processor drops bytes at 115200 during the ~160s transfer (the truncated 0x08 at 66%). At 57600 the display keeps up with every byte. The ESP's UART switches to match and restores 115200 after. Carries all prior fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.26/native-firmware-0.1.26.bin",
-            "md5": "92cbdcb30d485d4469fe7ee54f3e0b87"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.27/native-firmware-0.1.27.bin",
+            "md5": "c2bd14de6b1b7df35333325ba98cd9a8"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.26/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.27/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.26/native-firmware-0.1.26.bin",
-            "md5": "92cbdcb30d485d4469fe7ee54f3e0b87"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.27/native-firmware-0.1.27.bin",
+            "md5": "c2bd14de6b1b7df35333325ba98cd9a8"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.26/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.27/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

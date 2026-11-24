@@ -478,8 +478,14 @@ static void nsp_tft_task(void *) {
 
         {
             char cmd[64];
-            snprintf(cmd, sizeof(cmd), "whmi-wris %lld,115200,1", (long long)file_size);
-            nsp_display_send_command(cmd);
+            /* P347: the TFT transfer at 57600 — the display's processor
+             * drops bytes at 115200 during the ~160s transfer (the truncated
+             * 0x08 at 66%). At 57600 the display keeps up with every byte.
+             * The ESP's UART switches to match; it restores 115200 after. */
+            snprintf(cmd, sizeof(cmd), "whmi-wris %lld,57600,1", (long long)file_size);
+            nsp_display_send_now(cmd);
+            extern void nsp_display_set_tft_baud(int baud);  // P347
+            nsp_display_set_tft_baud(57600);
         }
         vTaskDelay(pdMS_TO_TICKS(120));
 
@@ -744,6 +750,8 @@ static void nsp_tft_task(void *) {
             nsp_mqtt_publish_log(hand ? "TFT: display back, handshake OK"
                                       : "TFT: display not answering after reflash");
             s_progress = 100;
+            extern void nsp_display_set_tft_baud(int baud);  // P347
+            nsp_display_set_tft_baud(115200);
             nsp_display_set_raw_mode(false);
             nsp_twdt_resume_after_stream();  // P321c: the crash protection is back
             s_state = OTA_IDLE;

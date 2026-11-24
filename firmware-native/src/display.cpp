@@ -66,6 +66,13 @@ void nsp_display_baud_scan(void);  // P316: defined below
  * every command write; the TFT streamer bypasses it (it owns the UART in
  * raw mode). */
 
+/* P347: the TFT transfer baud switch — the display and the ESP's UART
+ * must match. The normal baud is 115200; the TFT transfer uses 57600 for
+ * reliability (the display drops bytes at 115200 during long transfers). */
+void nsp_display_set_tft_baud(int baud) {
+    uart_set_baudrate(DISPLAY_UART, baud);
+}
+
 void nsp_display_send(const char *data, size_t len) {  // P210: shared with the TFT streamer
     uart_write_bytes(DISPLAY_UART, data, len);
 }
