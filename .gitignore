@@ -11,4 +11,6 @@ firmware/node_modules/
 *.log
 custom_components/**/node_modules/
 firmware-native/.pio/
-firmware-native/.pio/
+MagicMock/
+branding/uploads/
+custom_components/nspanel_core/nxwright_firmware/*.sqlite
