@@ -1110,14 +1110,21 @@ class NSPanelCoreManager:
         # user's curated name and move all command topics. Only adopt the
         # device name for panels that haven't been accepted yet (denied rows
         # keep whatever name they had — a blocked panel shouldn't rename).
-        if not panel.accepted and not panel.denied:
+        if panel.denied:
+            pass  # denied rows keep their name and hostname — no adoption
+        elif not panel.accepted:
             panel.name = data.get("friendly_name") or panel.name
         elif data.get("friendly_name") and data.get("friendly_name") != panel.name:
+            # P345: the wifi_hostname MUST match the panel's actual hostname —
+            # the commands are published to nspanel/{wifi_hostname}/command and
+            # the panel subscribes to its own hostname topic. If the panel was
+            # re-provisioned with a different hostname (the factory reset +
+            # the setup page), the old hostname black-holes every command.
             _LOGGER.warning(
-                "Panel %s reports hostname %r — keeping manager name (fix it on the panel or rename here)",
-                panel.name,
-                data.get("friendly_name"),
+                "Panel %s reports hostname %r — updating wifi_hostname (the old %r black-holed the commands)",
+                panel.name, data.get("friendly_name"), panel.wifi_hostname,
             )
+            panel.name = data.get("friendly_name") or panel.name
         # The wire hostname is tracked separately from the display name so a
         # manager-side rename never moves the command topics (split-brain fix).
         # Not adopted when the firmware reports the compiled default after a
