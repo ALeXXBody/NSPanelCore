@@ -1141,8 +1141,18 @@ class NSPanelCoreManager:
             panel.firmware_md5 = data["md5_firmware"]
         if data.get("md5_tft_file"):
             panel.tft_md5 = data["md5_tft_file"]
-            # P234: a delivered dashboard TFT completes the send slot
-            self.dash.on_tft_md5(panel.mac, data["md5_tft_file"])
+        # P352: the record counter rides the register payload; keep the
+        # last-seen value for the Send flow's staleness snapshot.
+        try:
+            panel.tft_md5_seq = int(data.get("tft_md5_seq") or 0)
+        except (TypeError, ValueError):
+            pass
+        if data.get("md5_tft_file"):
+            # P234: a delivered dashboard TFT completes the send slot —
+            # P352: only a record counted AFTER the send was armed
+            self.dash.on_tft_md5(
+                panel.mac, data["md5_tft_file"],
+                int(data.get("tft_md5_seq") or 0))
         if data.get("md5_data_file"):
             panel.littlefs_md5 = data["md5_data_file"]
 
@@ -1414,7 +1424,9 @@ class NSPanelCoreManager:
                 panel.littlefs_md5 = md5s["md5_littlefs"]
             if md5s["md5_tft_file"]:
                 panel.tft_md5 = md5s["md5_tft_file"]
-                self.dash.on_tft_md5(panel.mac, md5s["md5_tft_file"])
+                self.dash.on_tft_md5(
+                    panel.mac, md5s["md5_tft_file"],
+                    int(preport.get("tft_md5_seq", 0) or 0))
         was_online = panel.online
         panel.online = report.get("state", "") not in ("updating_tft", "updating_fw", "updating_fs")
         caps_changed = False

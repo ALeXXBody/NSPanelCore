@@ -223,6 +223,11 @@ class PanelConfig:
     online: bool = False
     firmware_md5: str = ""
     tft_md5: str = ""
+    # P352: the panel's md5-record counter (the firmware bumps it at every
+    # "delivered md5 recorded"). The Send flow snapshots it when the serving
+    # slot is armed; a later report whose counter is at/below that snapshot
+    # is a PRE-SEND record and must never complete the send.
+    tft_md5_seq: int = 0
     littlefs_md5: str = ""
     wifi_hostname: str = ""
     ip_address: str = ""  # P216: from status telemetry — the provisioning push target

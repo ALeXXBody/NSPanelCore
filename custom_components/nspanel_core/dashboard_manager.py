@@ -141,7 +141,16 @@ class DashboardService:
             if requesting_mac and slot["mac"] != requesting_mac:
                 continue  # the other panels keep their stock TFT
             if os.path.isfile(slot["path"]):
-                self._serving = slot if slot_name == "_serving" else self._serving
+                if slot_name == "_serving":
+                    self._serving = slot
+                else:
+                    setattr(self, slot_name, slot)
+                # P352: SLIDING expiry — a live transfer fetches a block
+                # every ~0.4s for minutes; a fixed clock from the send
+                # armed-time expired the slot MID-TRANSFER and the fallback
+                # silently switched the served file. Every honored fetch
+                # extends the window.
+                slot["ts"] = _t.time()
                 return slot["path"]
         return None
         if os.path.isfile(self._serving["path"]):
@@ -233,7 +242,8 @@ class DashboardService:
             return {"error": f"compile failed: {exc}"}
         import time as _t
 
-        self._serving = {"mac": mac, "path": path, "md5": md5, "ts": _t.time()}
+        self._serving = {"mac": mac, "path": path, "md5": md5, "ts": _t.time(),
+                         "pre_seq": int(getattr(panel, "tft_md5_seq", 0) or 0)}
         self._maps[mac] = cmap
         self._page_ids[mac] = list(page_ids)
         # P279 HIGH fix: route the touches/mirroring against the design the
@@ -249,13 +259,41 @@ class DashboardService:
         return {"ok": True, "md5": md5, "bytes": os.path.getsize(path)}
 
     @callback
-    def on_tft_md5(self, mac: str, md5_tft_file: str) -> dict:
-        """Completion check from a status_report: did the panel take the TFT?"""
+    def on_tft_md5(self, mac: str, md5_tft_file: str, seq: int = 0) -> dict:
+        """Completion check from a status_report: did the panel take the TFT?
+
+        P352: the panel reports its CURRENTLY RECORDED md5 in every register
+        — a value recorded by a PREVIOUS send (a resume-style completion, a
+        prior stock delivery) can EQUAL the expected md5. The old check
+        treated that as "delivered", cleared the serving slot seconds/minutes
+        into the transfer, and every later block GET silently served the
+        STOCK gui.tft: the transfer died at the stock file's EOF (exactly
+        66% of the real one) or, on retry, delivered the stock TFT to the
+        display (the panel recorded its md5 — the manager's books "balanced"
+        with the WRONG image on the glass). The firmware now bumps
+        tft_md5_seq at every record; the send snapshots the counter at arm
+        time and only a record with a HIGHER count can complete the send."""
         if not self._serving or self._serving["mac"] != mac:
             return {}
         sent = self._serving["md5"]
         info = {"expected": sent}
         if md5_tft_file == sent:
+            pre_seq = self._serving.get("pre_seq")
+            if seq is None:
+                seq = 0
+            # No counter evidence at all (legacy payload + never-armed
+            # counter): fall back to the old behavior.
+            if not seq and not pre_seq:
+                fresh = True
+            else:
+                fresh = seq > (pre_seq or 0)
+            if not fresh:
+                _LOGGER.warning(
+                    "Dashboard TFT md5 for %s matches the expected %s but is "
+                    "a PRE-SEND record (seq %s <= armed %s) — the send is "
+                    "still running, the slot stays armed (P352)",
+                    mac, sent[:12], seq, pre_seq)
+                return info
             self._serving = None
             self._pushed_map.pop(mac, None)  # re-push the map for the fresh UI
             info["delivered"] = True

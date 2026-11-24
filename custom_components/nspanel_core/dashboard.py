@@ -1553,6 +1553,16 @@ class OtaFileView(HomeAssistantView):
                 return web.Response(status=400, text="Unknown model")
             _LOGGER.warning("OTA %s/%s: no servable file — 404 (P172 diagnostic)", self._kind, self._filename)
             return web.Response(status=404, text="Not found")
+        # P352: a chosen path that no longer exists must fall through to the
+        # stock file, not 404 — web.FileResponse renders 404 for a missing
+        # file and the panel's OTA logic reads that as "no servable file"
+        # (the slot path outliving its file shadowed the stock gui.tft).
+        if self._filename in ("eu", "us") and not _os.path.isfile(path):
+            _LOGGER.warning("OTA tft/%s: chosen path vanished (%s) — stock fallback", self._filename, path)
+            path = _tft_file(self._filename) or path
+        if not _os.path.isfile(path):
+            _LOGGER.warning("OTA %s/%s: path vanished — 404 (P352)", self._kind, self._filename)
+            return web.Response(status=404, text="Not found")
         if self._kind == "checksum":
             # Serve the startup-computed hash (no disk I/O per request).
             md5 = _ota_checksum(request, kind, name, path)
