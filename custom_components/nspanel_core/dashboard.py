@@ -1626,27 +1626,20 @@ class SaveFirmwareView(OtaUploadView):
 
     @_gated
     async def post(self, request, **kwargs):
-        # P362-DEBUG: the upload 500s since 0.3.0 — report the traceback in
-        # the response so the cause is readable without HA's log.
-        import traceback as _tb
-        try:
-            manager = _manager(request)
-            form = await request.post()
-            model = str(form.get("model", "sonoff"))
-            if model not in ("sonoff", "custom"):
-                return web.Response(text="Unknown model", status=400)
-            dest = _os.path.join(_firmware_dir(), model, "firmware.bin")
-            err = await self._save_upload(request, "firmware", dest)
-            if err is not None:
-                return err
-            await manager.hass.async_add_executor_job(
-                manager.note_custom_file, "firmware", f"{model}/firmware.bin", "manual upload"
-            )
-            await manager.refresh_ota_cache()
-            return _redirect(request, f"{URL_BASE}/settings")
-        except Exception:
-            return web.Response(
-                text="P362-DEBUG TRACEBACK:\n" + _tb.format_exc(), status=500)
+        manager = _manager(request)
+        form = await request.post()
+        model = str(form.get("model", "sonoff"))
+        if model not in ("sonoff", "custom"):
+            return web.Response(text="Unknown model", status=400)
+        dest = _os.path.join(_firmware_dir(), model, "firmware.bin")
+        err = await self._save_upload(request, "firmware", dest)
+        if err is not None:
+            return err
+        await manager.hass.async_add_executor_job(
+            manager.note_custom_file, "firmware", f"{model}/firmware.bin", "manual upload"
+        )
+        await manager.refresh_ota_cache()
+        return _redirect(request, f"{URL_BASE}/settings")
 
 
 class SaveDataFileView(OtaUploadView):
