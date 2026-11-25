@@ -134,20 +134,23 @@ int nsp_dash_map_parse(const std::string &payload, int *pages, int max) {
     for (size_t i = lb + 1; i <= rb; i++) {
         char c = i < rb ? payload[i] : ',';
         if (c >= '0' && c <= '9') {
-            if (digits > 2) return -1;  // ids are 0..15; 4 digits = junk
+            /* P361 (audit M8): dp= accepts 0..255 and the count cap was
+             * already raised to 32 — the id-15 ceiling rejected bigger
+             * designs' whole map (the legacy-chains regression). */
+            if (digits > 3) return -1;  // 4+ digits = junk
             value = (value < 0 ? 0 : value) * 10 + (c - '0');
             digits++;
             any = true;
         } else if (c == ',' || c == ' ') {
             if (digits) {
-                if (value > 15 || count >= max) return -1;
+                if (value > 255 || count >= max) return -1;
                 pages[count++] = value;
                 value = -1;
                 digits = 0;
             }
         } else if (c == ']') {
             if (digits) {
-                if (value > 15 || count >= max) return -1;
+                if (value > 255 || count >= max) return -1;
                 pages[count++] = value;
             }
         } else {
@@ -175,29 +178,47 @@ static int s_dash_pages[32];
 static int s_dash_page_count = 0;
 static volatile uint32_t s_dash_gen = 0;
 
+/* P361 (audit M1): the map is shared between the MQTT task (the writer)
+ * and the touch task (the reader). The old copy-then-count order could
+ * pair a NEW count with OLD page ids (a swipe to a wrong page). The gen
+ * counter existed but was never read — it is a proper seqlock now: the
+ * readers retry while the writer is mid-publish. */
 bool nsp_dash_map_apply(const std::string &payload) {
     int pages[32];
     int n = nsp_dash_map_parse(payload, pages, 32);
     if (n <= 0) return false;
+    s_dash_gen++;                      // odd = a publish in progress
     for (int i = 0; i < n; i++) s_dash_pages[i] = pages[i];
     s_dash_page_count = n;
-    s_dash_gen++;  // publish atomically-ish: the readers re-read the count
+    s_dash_gen++;                      // even = stable
     return true;
 }
 
-void nsp_dash_map_clear(void) { s_dash_page_count = 0; }
 
 /* P269: the dash pages in the pushed order — the swipe walks them. */
-int nsp_dash_page_count(void) { return s_dash_page_count; }
+static int32_t read_gen(void) { return s_dash_gen; }
+
+int nsp_dash_page_count(void) {
+    int32_t g0 = read_gen();
+    int n = s_dash_page_count;
+    if (read_gen() != g0) return nsp_dash_page_count();  // retry on a concurrent publish
+    return n;
+}
 
 int nsp_dash_page_id(int index) {
-    return (index >= 0 && index < s_dash_page_count) ? s_dash_pages[index] : -1;
+    int32_t g0 = read_gen();
+    int v = (index >= 0 && index < s_dash_page_count) ? s_dash_pages[index] : -1;
+    if (read_gen() != g0) return nsp_dash_page_id(index);  // retry
+    return v;
 }
 
 int nsp_dash_page_index(int page) {
+    int32_t g0 = read_gen();
+    int idx = -1;
     for (int i = 0; i < s_dash_page_count; i++)
-        if (s_dash_pages[i] == page) return i;
-    return -1;
+        if (s_dash_pages[i] == page) { idx = i; break; }
+    if (read_gen() != g0) return nsp_dash_page_index(page);  // retry
+    return idx;
 }
 
 bool nsp_dash_is_dash_page(int page) {

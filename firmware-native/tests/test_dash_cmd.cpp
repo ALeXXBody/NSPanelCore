@@ -49,7 +49,11 @@ int main() {
           && pages[0] == 4 && pages[1] == 7 && pages[2] == 8, "dash_map parsed");
     CHECK(nsp_dash_map_parse("{\"command\":\"dash_map\",\"pages\":[]}", pages, 8) == -1,
           "empty dash_map rejected");
-    CHECK(nsp_dash_map_parse("{\"command\":\"dash_map\",\"pages\":[99]}", pages, 8) == -1,
+    /* P361 (audit M8): the dp= contract accepts 0..255 — the old 15 ceiling
+     * rejected bigger designs' whole map. 255 is valid; 999 is junk. */
+    CHECK(nsp_dash_map_parse("{\"command\":\"dash_map\",\"pages\":[99]}", pages, 8) == 1
+          && pages[0] == 99, "page id 255-range accepted");
+    CHECK(nsp_dash_map_parse("{\"command\":\"dash_map\",\"pages\":[999]}", pages, 8) == -1,
           "out-of-range page id rejected");
     CHECK(nsp_dash_map_parse("{\"command\":\"dash_map\",\"pages\":[4,abc]}", pages, 8) == -1,
           "garbage in pages rejected");

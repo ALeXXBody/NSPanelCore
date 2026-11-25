@@ -17,7 +17,6 @@ bool nsp_dash_page(const int *pages, int count, int page);
 /* Runtime state: store/clear the dash page-id map (RAM only; the
  * manager re-pushes it on every register), and the touch-handler check. */
 bool nsp_dash_map_apply(const std::string &payload);
-void nsp_dash_map_clear(void);
 bool nsp_dash_is_dash_page(int page);
 /* P269: the dash pages in the manager's order — the swipe navigates them. */
 int nsp_dash_page_count(void);

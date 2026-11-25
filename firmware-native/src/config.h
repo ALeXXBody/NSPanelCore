@@ -41,7 +41,14 @@ inline bool nsp_config_load() {
     size_t len;
     auto get = [&](const char *key, std::string &out) {
         len = sizeof(buf);
-        if (nvs_get_str(h, key, buf, &len) == ESP_OK) out.assign(buf, len - 1);
+        esp_err_t e = nvs_get_str(h, key, buf, &len);
+        if (e == ESP_OK) out.assign(buf, len - 1);
+        /* P361 (audit L6): a stored string longer than the 127-byte read
+         * buffer was SILENTLY truncated (and re-saved truncated on the
+         * next save — a long MQTT password lost its tail). Log it. */
+        else if (e == ESP_ERR_NVS_INVALID_LENGTH)
+            printf("[app] config: key %s truncated at %u bytes\n", key,
+                   (unsigned)(len - 1));
     };
     get("ssid", g_cfg.wifi_ssid);
     get("psk", g_cfg.wifi_psk);
@@ -70,8 +77,20 @@ inline bool nsp_config_load() {
 }
 
 inline bool nsp_config_save() {
+    /* P361 (audit H3): g_cfg is read-modify-written from four tasks and
+     * the SAVE SEQUENCE (multi-key NVS writes) interleaved — torn field
+     * updates leaked into flash. One mutex serializes every save; the
+     * per-field mutations remain unlocked (single-word writes), the
+     * durable snapshot is now atomic-ish. */
+    static SemaphoreHandle_t s_save_mutex = nullptr;
+    if (s_save_mutex == nullptr) s_save_mutex = xSemaphoreCreateMutex();
+    if (s_save_mutex && xSemaphoreTake(s_save_mutex, pdMS_TO_TICKS(2000)) != pdTRUE)
+        return false;
     nvs_handle_t h;
-    if (nvs_open("nspcfg", NVS_READWRITE, &h) != ESP_OK) return false;
+    if (nvs_open("nspcfg", NVS_READWRITE, &h) != ESP_OK) {
+        if (s_save_mutex) xSemaphoreGive(s_save_mutex);
+        return false;
+    }
     auto set = [&](const char *key, const std::string &v) {
         nvs_set_str(h, key, v.c_str());
     };
@@ -99,15 +118,10 @@ inline bool nsp_config_save() {
     nvs_set_u8(h, "relay2_default", g_cfg.relay2_default);
     esp_err_t err = nvs_commit(h);
     nvs_close(h);
+    if (s_save_mutex) xSemaphoreGive(s_save_mutex);
     return err == ESP_OK;
 }
 
-/* Called after a successful OTA to persist the new checksums. */
-inline void nsp_config_set_md5s(const std::string &fw, const std::string &fs) {
-    g_cfg.md5_firmware = fw;
-    g_cfg.md5_data_file = fs;
-    nsp_config_save();
-}
 
 /* Shared runtime globals (set once in app_main). */
 inline std::string g_mac;

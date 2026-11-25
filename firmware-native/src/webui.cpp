@@ -192,8 +192,9 @@ static esp_err_t on_post_action(httpd_req_t *req) {
     if (len > 0 && len < 256) {
         char buf[256] = "";
         int r = httpd_req_recv(req, buf, len);
-        (void)r;
-        body.assign(buf, len);
+        /* P361 (audit L2): a short/failed recv left zero-filled body
+         * bytes — the action parse saw garbage. Only a full read passes. */
+        if (r == len) body.assign(buf, len);
     }
     int action = nsp_web_parse_action(body);
     const char *msg = "unknown action";
@@ -245,7 +246,6 @@ static esp_err_t on_get_scan(httpd_req_t *req) {
     return nsp_handle_scan(req);
 }
 
-bool nsp_web_up(void) { return s_web_up; }
 
 /* Registers ALL handlers on a fresh httpd and starts it. */
 bool nsp_web_start(bool ap_mode) {

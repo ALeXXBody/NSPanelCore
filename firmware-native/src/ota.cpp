@@ -28,14 +28,11 @@
 extern void nsp_mqtt_publish_log(const char *msg);
 extern void nsp_display_send(const char *data, size_t len);
 extern void nsp_display_drain(int ms);
-extern int nsp_display_uart_baud(void);
 extern void nsp_display_send_command(const char *cmd);
-extern void nsp_display_uart_set_baud(int baud);
 extern void nsp_display_power(int state);
 extern void nsp_display_send_now(const char *cmd);  // P340: the ungated send
 extern int nsp_display_read(uint8_t *buf, int len, int timeout_ms);
 extern bool nsp_display_handshake_pub(int attempts);
-extern void nsp_tft_start(void);
 
 #define OTA_MAX_ATTEMPTS   3
 #define OTA_STALL_TIMEOUT_MS 120000
@@ -253,7 +250,9 @@ static void nsp_ota_fw_task(void *) {
     }
     if (checksum.size() < 32) {
         nsp_mqtt_publish_log("OTA: checksum fetch FAILED after retries");
-        s_state = OTA_IDLE; vTaskDelete(nullptr); return;
+        s_state = OTA_IDLE;
+        nsp_twdt_resume_after_stream();  // P361 (audit H2): the watchdog comes back on EVERY exit
+        vTaskDelete(nullptr); return;
     }
     {
         char l[128];
@@ -298,7 +297,9 @@ static void nsp_ota_fw_task(void *) {
         if (!flashed) {
             nsp_mqtt_publish_log("OTA: firmware flash FAILED after attempts");
             s_state = OTA_IDLE;
+            nsp_twdt_resume_after_stream();  // P361 (audit H2)
             vTaskDelete(nullptr);  // bounded: no infinite retry (P129)
+            return;  // P361 (audit L7): the old code relied on self-delete not returning
         }
         nsp_mqtt_publish_log("OTA: flashed OK, boot slot set — rebooting");
         g_cfg.md5_firmware = checksum.substr(0, 32);
@@ -435,6 +436,13 @@ static void nsp_tft_task(void *) {
      * do the same instead of relying on a serial that's been idle. */
     bool power_cycle_needed = true;
     for (int attempt = 0; attempt < 3; attempt++) {
+        /* P361 (audit CRITICAL C1): the raw-mode ownership was set ONCE
+         * before this loop, but three retry paths inside it (the HTTP init
+         * fail, the unknown file size, the no-ACK retry) cleared it and
+         * NOTHING re-armed it — attempts 2-3 streamed the whole transfer
+         * un-gated while the MQTT task's display writes could interleave
+         * into the block stream. Own the wire at every attempt start. */
+        nsp_display_set_raw_mode(true);
         s_no_reply_strikes = 0;  // P242: fresh count per clean attempt
         /* P310 (the dead-panel incident): every attempt must feed the OTA
          * watchdog — the comok wait, the power-cycle and the retry paths
@@ -715,9 +723,18 @@ static void nsp_tft_task(void *) {
                 continue;
             }
             s_no_reply_strikes = 0;
-            if (resp[0] == 0x08 && rlen >= 5) {
-                uint32_t req_off = (uint32_t)resp[1] | ((uint32_t)resp[2] << 8) |
-                                   ((uint32_t)resp[3] << 16) | ((uint32_t)resp[4] << 24);
+            /* P361 (audit M4): the 0x08 could sit ANYWHERE in the burst (a
+             * stray byte before it) — the old resp[0] check treated such a
+             * resend request as a 0x05 ACK and the stream desynced against
+             * the display's flash pointer. Find the 0x08 and read the
+             * offset that follows it. */
+            int off08 = -1;
+            for (int i = 0; i + 4 < rlen; i++) {
+                if (resp[i] == 0x08) { off08 = i; break; }
+            }
+            if (off08 >= 0) {
+                uint32_t req_off = (uint32_t)resp[off08 + 1] | ((uint32_t)resp[off08 + 2] << 8) |
+                                   ((uint32_t)resp[off08 + 3] << 16) | ((uint32_t)resp[off08 + 4] << 24);
                 if (req_off > (unsigned long long)offset) {
                     if ((long long)req_off <= file_size) {
                         /* P243: the display REMEMBERS a partially-written
@@ -864,13 +881,20 @@ static void nsp_tft_task(void *) {
              * the authored logo has no auto-page code and the failed-
              * handshake case is covered by the revival paths. */
             if (hand) {
+                /* P361 (audit HIGH H1): the navigation ran with raw mode
+                 * still set — nsp_display_send_command returned immediately
+                 * and the screensaver nav + the relay re-sync were silently
+                 * dropped (P358's own path was dead-on-arrival). Clear the
+                 * ownership FIRST, then navigate. */
+                nsp_display_set_raw_mode(false);
                 extern void nsp_display_after_handshake_pub(void);
                 nsp_display_after_handshake_pub();
+            } else {
+                nsp_display_set_raw_mode(false);
             }
             s_progress = 100;
             extern void nsp_display_set_tft_baud(int baud);  // P347
             nsp_display_set_tft_baud(115200);
-            nsp_display_set_raw_mode(false);
             nsp_twdt_resume_after_stream();  // P321c: the crash protection is back
             s_state = OTA_IDLE;
             vTaskDelete(nullptr);
@@ -890,6 +914,7 @@ static void nsp_tft_task(void *) {
     nsp_mqtt_publish_log("TFT: update FAILED after attempts");
     nsp_twdt_resume_after_stream();  // P321c
     s_state = OTA_IDLE;
+    nsp_twdt_resume_after_stream();  // P361 (audit H2)
     vTaskDelete(nullptr);
 }
 

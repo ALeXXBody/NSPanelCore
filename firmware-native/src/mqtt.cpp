@@ -29,7 +29,9 @@ static void nsp_mqtt_connected(void *handler_args, esp_event_base_t base,
     // Subscribe to the command topic (hostname verbatim) + manager command
     std::string cmd = topic_panel_cmd(s_hostname);
     esp_mqtt_client_subscribe(s_mqtt, cmd.c_str(), 1);
-    esp_mqtt_client_subscribe(s_mqtt, TOPIC_MANAGER_COMMAND, 0);
+    /* P361 (audit L11): the manager-command subscription was DEAD — the
+     * dispatch discards that topic (register_request is outbound). Every
+     * connect paid a broker round-trip for nothing. */
     nsp_mqtt_publish_log("stage: subscribed");
     // Screensaver clock topics (the manager publishes them every 60 s)
     esp_mqtt_client_subscribe(s_mqtt, "nspanel/status/time", 0);
@@ -106,8 +108,7 @@ static void nsp_mqtt_data(void *handler_args, esp_event_base_t base,
         s_frag_active = false;
         s_frag_data.clear();
         /* fall through to dispatch with the assembled payload */
-        std::string assembled = payload;
-        payload.swap(assembled);
+
         extern void nsp_mqtt_dispatch(const std::string &topic, const std::string &payload);
         nsp_mqtt_dispatch(topic, payload);
         return;
@@ -228,6 +229,10 @@ void nsp_mqtt_handle_command(const std::string &payload) {
                 char l[128];
                 snprintf(l, sizeof(l), "manager address adopted: %s:%d", addr.c_str(), port);
                 nsp_mqtt_publish_log(l);
+            } else if (!addr.empty() && !valid_quad(addr)) {
+                /* P361 (audit M7): a non-IPv4 manager address was refused
+                 * with a lying "already adopted" line. Say what happened. */
+                nsp_mqtt_publish_log("manager accept refused: not an IPv4 address");
             } else {
                 nsp_mqtt_publish_log("manager accept: address already adopted (no change)");
             }

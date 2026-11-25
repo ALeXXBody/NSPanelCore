@@ -196,8 +196,18 @@ bool nsp_screensaver_parse(const std::string &payload, NspScreensaverConfig &out
      * string — every other field of this contract is a string too).
      * Clamped 5..3600; anything unparsable keeps the 15 s default. */
     if (json_string(payload, "activation_timeout", v)) {
-        int secs = atoi(v.c_str());
-        if (secs >= 5 && secs <= 3600) r.activation_timeout = secs;
+        /* P361 (audit M3): 0 means DISABLED (never sleep) — the old clamp
+         * silently turned "never" into 15 s. Junk ("banana") must keep the
+         * 15 s default, so only an ALL-DIGIT string is trusted (atoi would
+         * read banana as 0 and the explicit-0 case as junk). */
+        bool numeric = !v.empty();
+        for (char ch : v)
+            if (ch < '0' || ch > '9') { numeric = false; break; }
+        if (numeric) {
+            long secs = atol(v.c_str());
+            if (secs == 0) r.activation_timeout = 0;
+            else if (secs >= 5 && (unsigned long)secs <= 3600) r.activation_timeout = (int)secs;
+        }
     }
     r.valid = true;
     out = r;

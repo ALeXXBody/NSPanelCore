@@ -306,15 +306,6 @@ bool nsp_display_restart(void) {
     return s_display_ready;
 }
 
-/* TFT stream to the display with the baked-in offset guard (P104/P177). */
-void nsp_display_start_tft_update(int new_baud) {
-    if (!s_display_ready) return;
-    nsp_display_send_command("whmi-wris 921600,1");
-    // The stream itself is chunked by the manager's /download_tft_eu fetch;
-    // offsets are validated against 0x08-starting garbage (guard) before write.
-}
-
-
 /* ---- Page layer (alpha): clock/date rendering + touch decode ----
  * The panel's HMI (NSPanelManager-style, same object names) exposes:
  *   screensaver.curTime / curDay / curAMPM  (+ the _minimal variants)
@@ -322,7 +313,6 @@ void nsp_display_start_tft_update(int new_baud) {
  * Touch events arrive as 0x65 <page> <component> <event> FF FF FF. */
 
 static const char *SCREENSAVER_PAGE = "screensaver";
-static const char *SCREENSAVER_MINIMAL_PAGE = "mini";
 
 /* P356: the screensaver activation timeout. The screensaver appeared only
  * at boot/handshake; once the user left it nothing returned (the user's
@@ -331,10 +321,19 @@ static const char *SCREENSAVER_MINIMAL_PAGE = "mini";
  * the panel navigates back. The timeout rides the screensaver payload
  * (default 15 s); 0 or negative disables the idle return. */
 static volatile int s_screensaver_idle_timeout = 15;
-static volatile int64_t s_last_touch_us = 0;
+/* P361 (audit M2): a volatile int64_t is TWO 32-bit loads on Xtensa — the
+ * idle poll could read a torn value and navigate mid-interaction. The
+ * touch clock is a wrap-safe uint32_t tick now (49 days at 1000 Hz). */
+static volatile uint32_t s_last_touch_tick = 0;
 static volatile int s_last_component_page = -1;  // the last 0x65 page seen
 
 void nsp_screensaver_set_idle_timeout(int secs) {
+    /* P361 (audit M3): 0 disables the idle return — the old clamp mapped
+     * "never" to 15 s. */
+    if (secs == 0) {
+        s_screensaver_idle_timeout = 0;
+        return;
+    }
     s_screensaver_idle_timeout = (secs >= 5 && secs <= 3600) ? secs : 15;
 }
 
@@ -342,13 +341,15 @@ void nsp_screensaver_idle_poll(void) {
     if (!s_display_ready || s_display_raw_mode) return;
     int timeout_s = s_screensaver_idle_timeout;
     if (timeout_s <= 0) return;
-    int64_t now = esp_timer_get_time();
-    if (now - s_last_touch_us < (int64_t)timeout_s * 1000000LL) return;
+    /* wrap-safe tick difference (P361 M2) */
+    uint32_t now_tick = (uint32_t)xTaskGetTickCount();
+    uint32_t elapsed_ticks = now_tick - s_last_touch_tick;
+    if (elapsed_ticks < (uint32_t)timeout_s * configTICK_RATE_HZ) return;
     int page = s_last_component_page;
     if (page == 1 || page == 3) return;  // already on the screensaver/mini
     nsp_display_show_screensaver();
     s_last_component_page = 1;   // we are on the screensaver now
-    s_last_touch_us = now;       // don't re-fire every housekeeping second
+    s_last_touch_tick = now_tick;  // don't re-fire every housekeeping second
 }
 
 void nsp_display_show_screensaver(void) {
@@ -435,6 +436,16 @@ void nsp_display_touch_task(void *) {
             vTaskDelay(pdMS_TO_TICKS(3000));
             continue;
         }
+        /* P361 (audit CRITICAL C2): the read happened BEFORE the raw-mode
+         * check — while s_display_ready was true the touch task ACTIVELY
+         * read the same UART as the TFT streamer/handshake and CONSUMED
+         * the display's replies (comok, the 0x05 ACKs, the 0x08s): the
+         * "no comok"/"no block reply" strike counters. Park BEFORE
+         * reading; the raw-mode owner drains the wire itself. */
+        if (s_display_raw_mode) {
+            vTaskDelay(pdMS_TO_TICKS(200));
+            continue;
+        }
         int n = uart_read_bytes(DISPLAY_UART, buf, sizeof(buf) - resid_len, pdMS_TO_TICKS(200));
         nsp_rx_count(n);
         if (n > 0 && resid_len) {
@@ -444,8 +455,8 @@ void nsp_display_touch_task(void *) {
             resid_len = 0;
         }
         /* P208#6: a negative UART result cast to size_t scanned out of
-         * bounds; also skip while another sequence owns the UART (P208#5). */
-        if (n <= 0 || s_display_raw_mode) continue;
+         * bounds. */
+        if (n <= 0) continue;
         auto frames = nsp_touch_decode(buf, (size_t)n);
         /* P328: a garbage flood (the floating RX, the baud-mismatched
          * display) decodes to NOTHING — consumed 0 of every chunk (the
@@ -471,7 +482,7 @@ void nsp_display_touch_task(void *) {
             /* P356: every frame is activity — the idle clock restarts. The
              * 0x65 frames also reveal the page (the idle poll needs to know
              * whether the panel is already on the screensaver pages). */
-            s_last_touch_us = esp_timer_get_time();
+            s_last_touch_tick = (uint32_t)xTaskGetTickCount();
             if (f.page >= 0) s_last_component_page = f.page;
             /* P256: every touch frame the panel receives is visible in the
              * log — the relay-latency diagnosis (quick taps lost?) needs
@@ -548,11 +559,17 @@ void nsp_display_touch_task(void *) {
                         char wcmd[24];
                         snprintf(wcmd, sizeof(wcmd), "dp=%d", target);
                         nsp_display_send_command(wcmd);
+                        /* P361 (audit L9): the tracked "last page" must
+                         * follow the navigation, or the idle poll thinks
+                         * the panel is still asleep until the next 0x65. */
+                        s_last_component_page = target;
                     } else {
                         nsp_display_send_command("page home");
+                        s_last_component_page = 2;
                     }
                 } else {
                     nsp_display_send_command("page home");
+                    s_last_component_page = 2;
                 }
             } else if (nsp_dash_is_dash_page(page)) {
                 /* P234: dash pages publish ONLY — the manager owns every
@@ -606,12 +623,8 @@ void nsp_display_relay(int relay, bool state) {
     nsp_display_send_command(cmd);
 }
 
-int nsp_display_uart_baud(void) { return DISPLAY_BAUD; }
-
-/* P211b: the TFT streamer needs the UART baud changes from ota.cpp. */
-void nsp_display_uart_set_baud(int baud) {
-    uart_set_baudrate(DISPLAY_UART, baud);
-}
+/* P361 (audit): nsp_display_uart_baud / nsp_display_uart_set_baud were
+ * unused (the transfer uses nsp_display_set_tft_baud) — removed. */
 
 /* P211b: display power control for the upload sequence (the proven
  * upstream flow power-cycles the display before the escape string). */

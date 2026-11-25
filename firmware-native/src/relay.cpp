@@ -60,9 +60,11 @@ void nsp_relay_init(void) {
         /* P359: the boot state comes from the STUDIO (the panel's
          * "default mode" selection — "always on" boots the relay ON and
          * it STAYS on). The old code hardcoded OFF: the studio's
-         * selection was dead on the wire. */
+         * selection was dead on the wire.
+         * P361 (audit M6): the GPIO driven is the MAPPED relay; the state
+         * statics follow the REQUESTED index (matching nsp_relay_set). */
         int def = (r == 1) ? g_cfg.relay1_default : g_cfg.relay2_default;
-        gpio_set_level((gpio_num_t)nsp_relay_gpio(r), def ? 1 : 0);
+        gpio_set_level((gpio_num_t)nsp_relay_gpio(map_relay(r)), def ? 1 : 0);
     }
     s_relay1 = g_cfg.relay1_default != 0;
     s_relay2 = g_cfg.relay2_default != 0;
@@ -74,15 +76,18 @@ void nsp_relay_init(void) {
 }
 
 void nsp_relay_set(int relay, bool state) {
-    /* P208#7: map ONCE — the old code mapped here, then again inside
-     * nsp_relay_gpio, driving the WRONG pin when reverse_relays=true and
-     * publishing via a dead ternary. One map, one truth. */
+    /* P208#7: map ONCE — the GPIO driven is the MAPPED relay.
+     * P361 (audit M6): the STATE was published under the MAPPED index while
+     * commands arrive on the PHYSICAL (requested) index — with
+     * reverse_relays HA drove r1_cmd and watched r1_state, which tracked
+     * the OTHER relay. The state, the static and the display button now
+     * follow the REQUESTED index; only the GPIO is mapped. */
     int mapped = map_relay(relay);
     gpio_set_level((gpio_num_t)nsp_relay_gpio(mapped), state ? 1 : 0);
-    if (mapped == 1) s_relay1 = state; else s_relay2 = state;
-    nsp_mqtt_publish_relay_state(mapped, state);
+    if (relay == 1) s_relay1 = state; else s_relay2 = state;
+    nsp_mqtt_publish_relay_state(relay, state);
     extern void nsp_display_relay(int relay, bool state);  // P210: buttons follow
-    nsp_display_relay(mapped, state);
+    nsp_display_relay(relay, state);
 }
 
 /* Handle an incoming r{N}_cmd payload ("1"/"0"). */

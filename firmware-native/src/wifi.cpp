@@ -17,7 +17,16 @@ bool nsp_wifi_is_ap_mode(void) { return s_ap_mode_flag; }
 void nsp_wifi_set_ap_mode(bool v) { s_ap_mode_flag = v; }
 
 bool nsp_wifi_connected(void) { return s_connected; }
-int nsp_wifi_rssi(void) { return s_rssi; }
+int nsp_wifi_rssi(void) {
+    /* P361 (audit M10): the RSSI was read once at GOT_IP and carried the
+     * connect-time value for the whole uptime — a degrading link looked
+     * perfect. Refresh on every read (the status report polls every 30 s). */
+    if (s_connected) {
+        wifi_ap_record_t ap;
+        if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) s_rssi = ap.rssi;
+    }
+    return s_rssi;
+}
 std::string nsp_wifi_ip(void) { return s_ip; }
 
 static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data) {

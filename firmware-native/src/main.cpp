@@ -41,7 +41,6 @@ extern "C" void nsp_ota_confirm(void);  // file scope: in-body extern "C"
 extern void nsp_display_touch_task_start(void);
 extern void nsp_relay_init(void);
 extern void nsp_button_task_start(void);  // P259: FILE scope (the extern-C-app_main linkage trap)
-extern void nsp_button_scan(void);        // still referenced by the button task (relay.cpp)
     // declaration inside extern "C" app_main would get C linkage (P160)
 extern float nsp_temperature(void);
 extern void nsp_ota_start(void);  // P187: FILE scope — the extern-"C"-
@@ -163,6 +162,11 @@ extern "C" void app_main(void) {
 
     for (;;) {
         int64_t now = esp_timer_get_time();
+        /* P361 (audit L1): the screensaver idle poll ran INSIDE the
+         * wifi-connected gate — with WiFi down (but the display alive),
+         * the screensaver never re-activated. The poll is display-side:
+         * it runs every housekeeping pass, gate or no gate. */
+        nsp_screensaver_idle_poll();
         if (nsp_wifi_connected()) {
             // P135: re-register every 5 minutes
             if (now - s_last_register_us > (int64_t)REREGISTRATION_PERIOD_MS * 1000) {
@@ -178,9 +182,6 @@ extern "C" void app_main(void) {
                 nsp_ota_start();
                 s_last_otacheck_us = now;
             }
-            /* P356: the screensaver activation timeout — the idle poll
-             * runs at the housekeeping cadence (1 s). */
-            nsp_screensaver_idle_poll();
             // P312: periodic display revival — while the display is dead,
             // retry its handshake every 30 s; the moment it answers, the
             // panel resumes full display operation by itself.
@@ -196,10 +197,13 @@ extern "C" void app_main(void) {
                              (long long)(now / 1000000LL));
                     nsp_web_log(std::string(l));
                 }
-                uint32_t heap = esp_get_minimum_free_heap_size();
-                /* P279 LOW fix: the percentage double-counted the free heap
-                 * and went negative past 320 KB free. */
-                int pct = (int)((100ULL * heap) / 320000);
+                /* P361 (audit M5): ONE heap semantic everywhere — used %,
+                 * from the CURRENT free heap (the web UI's own formula was
+                 * the same but computed from current while the status
+                 * report used the low-water mark of the FREE fraction —
+                 * two contradictory numbers on two surfaces). */
+                uint32_t heap = esp_get_free_heap_size();
+                int pct = 100 - (int)((100ULL * heap) / 320000);
                 if (pct < 0) pct = 0;
                 if (pct > 100) pct = 100;
                 nsp_mqtt_publish_status_report(

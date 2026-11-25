@@ -63,11 +63,13 @@ esp_err_t nsp_handle_scan(httpd_req_t *req) {
 esp_err_t nsp_handle_config_save(httpd_req_t *req) {
     std::string body;
     int len = req->content_len;
-    if (len > 0 && len < 1024) {
+    /* P361 (audit L3): a body of exactly 1024 bytes read NOTHING (the
+     * strict <) and the handler still answered "Saved — restarting" and
+     * rebooted WITHOUT saving. Bound-check with <= and honor the recv. */
+    if (len > 0 && len <= 1024) {
         char buf[1024] = "";
         int r = httpd_req_recv(req, buf, len);
-        (void)r;
-        body.assign(buf, len);
+        if (r == len) body.assign(buf, len);
     }
     // P182: parsing extracted to form_parse.cpp (pure code, HOST-UNIT-TESTED —
     // R1: the setup path is the one that crashed the panel; its input layer
@@ -130,7 +132,6 @@ void nsp_config_server_start(void) {
     if (nsp_web_start(false)) s_server_up = true;
 }
 
-bool nsp_config_server_up(void) { return s_server_up; }
 
 void nsp_setup_ap_start(void) {
     /* P182 crash fix (verified by the panel's own serial log):
@@ -168,4 +169,3 @@ void nsp_setup_ap_start(void) {
     if (nsp_web_start(true)) s_server_up = true;
 }
 
-bool nsp_setup_ap_up(void) { return s_server_up; }

@@ -7,17 +7,11 @@
 
 #include <string>
 
-#define FW_VERSION "0.1.39"
+#define FW_VERSION "0.2.0"
 
 /* Publish topics (built from wifi_hostname, VERBATIM — no sanitization) */
 inline std::string topic_status_report(const std::string &hostname) {
     return "nspanel/" + hostname + "/status_report";
-}
-inline std::string topic_relay(const std::string &hostname, int relay) {
-    return "nspanel/" + hostname + "/r" + std::to_string(relay) + "_state";
-}
-inline std::string topic_screen_cmd(const std::string &hostname) {
-    return "nspanel/" + hostname + "/screen";
 }
 inline std::string topic_panel_cmd(const std::string &hostname) {
     return "nspanel/" + hostname + "/command";

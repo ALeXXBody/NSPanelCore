@@ -1,21 +1,21 @@
 {
-    "version": "0.1.39",
-    "notes": "Native firmware 0.1.39 \u2014 the relay boot defaults: the studio's 'default mode' selection (always on/off) was dead \u2014 the firmware hardcoded OFF at every boot. The selection now rides the device-config push (set_button_config), persists in NVS and is applied at boot in nsp_relay_init. The manager re-asserts the device config at every register so the panel can never drift from the studio. Carries all prior fixes.",
+    "version": "0.2.0",
+    "notes": "Firmware 0.2.0 \u2014 the full-audit release: the touch task can no longer steal the display's replies (it parks BEFORE the UART read when the raw-mode owner has the wire); the raw-mode ownership is re-armed at every TFT attempt (the MQTT display writes can never interleave into a block stream); the post-delivery navigation actually runs (raw mode cleared before it \u2014 the old one was dead-on-arrival); the task watchdog resumes on every OTA exit path (the crash protection no longer silently dies after the first routine check); the relay state follows the requested index under reverse_relays; the relay boot defaults (the studio's 'always on') applied at boot; the dash map ids to 255 + a real seqlock; the idle timeout honors 0=disabled; one heap semantic; the RSSI refreshed on read; the OTA state/progress ride the status report; the config save serialized; a dozen dead-code removals. Carries all prior fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.39/native-firmware-0.1.39.bin",
-            "md5": "b180180dd389edb7f6f48b40c1331919"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.0/native-firmware-0.2.0.bin",
+            "md5": "88106f0713ce23cd8bf51c6f41f4b1d0"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.39/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.0/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.39/native-firmware-0.1.39.bin",
-            "md5": "b180180dd389edb7f6f48b40c1331919"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.0/native-firmware-0.2.0.bin",
+            "md5": "88106f0713ce23cd8bf51c6f41f4b1d0"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.1.39/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.0/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

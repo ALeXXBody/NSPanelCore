@@ -123,18 +123,10 @@
             <label for="tft_file_type" class="block mb-2 text-sm font-medium">TFT file type</label>
             <div class="flex flex-row-reverse">
               <select name="tft_file_type" id="tft_file_type" class="rounded-none bg-base-300 border-neutral rounded-e-md border border-l-0 focus:ring-0 focus:border-accent block flex-1 min-w-0 w-full text-sm p-2.5 peer/room_id">
-                <option value="eu1">EU 1/US Landscape 1 (buttons left)</option>
-                <option value="eu2">EU 2/US Landscape 2 (buttons left)</option>
-                <option value="eu3">EU 3/US Landscape 3 (buttons left)</option>
-                <option value="eu4">EU 4/US Landscape 4 (buttons left)</option>
-                <option value="us1">US 1</option>
-                <option value="us2">US 2</option>
-                <option value="us3">US 3</option>
-                <option value="us4">US 4</option>
-                <option value="us1_horizontal_mirrored">US 1 (landscape mirrored)</option>
-                <option value="us2_horizontal_mirrored">US 2 (landscape mirrored)</option>
-                <option value="us3_horizontal_mirrored">US 3 (landscape mirrored)</option>
-                <option value="us4_horizontal_mirrored">US 4 (landscape mirrored)</option>
+                <!-- P361 (audit LOW): the select offered 11 variants while
+                     the backend collapses them to 2 real files (eu/us). -->
+                <option value="eu">EU panel</option>
+                <option value="us">US panel</option>
               </select>
               <span class="inline-flex items-center px-3 text-sm border border-neutral rounded-e-0 rounded-s-md peer-focus/room_id:border-accent">
                 <svg class="w-4 h-4" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

@@ -29,3 +29,10 @@ g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_edge ../../tests/test_edge_cas
 # P312: the physical button action decision (the canonical modes)
 g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_btn ../../tests/test_button_cmd.cpp ../src/button_cmd.cpp
 /tmp/opencode/nsp_btn
+# P361 (audit): the two tests that existed but were NEVER compiled by this
+# runner — wiring them in so the suite is complete.
+g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_t11 test_mqtt_command_extract.cpp ../src/mqtt.cpp 2>/dev/null || \
+    g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_t11 test_mqtt_command_extract.cpp
+/tmp/opencode/nsp_t11
+g++ -std=c++17 -Wall -Wextra -o /tmp/opencode/nsp_t12 test_touch_flood.cpp ../src/touch_decode.cpp
+/tmp/opencode/nsp_t12
