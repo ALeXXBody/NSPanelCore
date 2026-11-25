@@ -1413,6 +1413,37 @@ class SaveSettingsView(HomeAssistantView):
         return _redirect(request, f"{URL_BASE}/settings")
 
 
+def _firmware_dir():
+    return _os.path.join(_os.path.dirname(__file__), "firmware")
+
+def _firmware_file(model: str, filename: str) -> str | None:
+    """Resolve a firmware-binary path under a strict allowlist.
+
+    Only sonoff/custom models and fixed filenames — no user-controlled path
+    segments, so directory traversal is impossible.
+    """
+    if model not in ("sonoff", "custom"):
+        return None
+    if filename not in ("firmware.bin", "data_file.bin"):
+        return None
+    path = _os.path.join(_firmware_dir(), model, filename)
+    return path if _os.path.exists(path) else None
+
+def _tft_file(region: str) -> str | None:
+    if region not in ("eu", "us"):
+        return None
+    filename = "gui_us.tft" if region == "us" else "gui.tft"
+    path = _os.path.join(_os.path.dirname(__file__), "tft", filename)
+    return path if _os.path.exists(path) else None
+
+def _ota_checksum(request, kind: str, name: str, path: str) -> str:
+    """MD5 for an OTA file: startup cache first, disk fallback."""
+    try:
+        digest = _manager(request).ota_md5(kind, name)
+    except Exception:  # noqa: BLE001 — manager not ready
+        digest = ""
+    return digest or _md5(path)
+
 class OtaFileView(HomeAssistantView):
     """Base for panel OTA endpoints (firmware/TFT).
 
