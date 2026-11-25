@@ -37,6 +37,7 @@ static volatile bool s_display_ready = false;
 static volatile bool s_display_raw_mode = false;  // P208#5: touch/UART ownership
 static char s_warnings[64] = "";
 void nsp_display_set_raw_mode(bool on);  // P208#5: defined below
+int nsp_display_read(uint8_t *buf, int len, int timeout_ms);  // P362: defined below
 extern void nsp_mqtt_publish_log(const char *line);  // P160: file scope only
 void nsp_display_show_screensaver(void);  // P211: defined below (file scope, P160 rule)
 void nsp_display_relay(int relay, bool state);  // P211
@@ -297,6 +298,39 @@ bool nsp_display_restart(void) {
     if (ok) {
         s_display_ready = true;
         nsp_display_after_handshake();
+        /* P362: THE DISPLAY HEALTH CHECK — the kit's HMI announces its own
+         * boot (program.nx: printh 88 ff ff ff) only when the flash content
+         * is valid; a display showing "System-Data-ERROR" never does. The
+         * restart's power-cycle JUST booted the display: if no announcement
+         * arrives, the flash content is broken and the panel can repair
+         * itself by re-delivering the TFT — no human in the loop. Capped at
+         * 2 auto-repairs per boot (a genuinely bad TFT file must not loop
+         * forever; the user is told loudly instead). */
+        {
+            bool announced = false;
+            int64_t dead = esp_timer_get_time() + 4000000LL;
+            while (esp_timer_get_time() < dead) {
+                uint8_t b[16] = {0};
+                int n = nsp_display_read(b, sizeof(b), 400);
+                for (int i = 0; i + 3 < n; i++) {
+                    if (b[i] == 0x88 && b[i + 1] == 0xFF &&
+                        b[i + 2] == 0xFF && b[i + 3] == 0xFF) {
+                        announced = true;
+                        break;
+                    }
+                }
+                if (announced) break;
+            }
+            static int s_auto_repairs = 0;
+            if (!announced && s_auto_repairs < 2) {
+                s_auto_repairs++;
+                nsp_mqtt_publish_log("DISPLAY: no boot announcement — the TFT flash is broken; re-delivering (auto-repair)");
+                extern void nsp_tft_start(void);
+                nsp_tft_start();
+            } else if (!announced) {
+                nsp_mqtt_publish_log("DISPLAY: no boot announcement and the auto-repairs are spent — re-deliver the TFT from the studio");
+            }
+        }
         return true;
     }
     /* P316: the restart failed at the default baud — scan the rest before

@@ -823,6 +823,42 @@ static void nsp_tft_task(void *) {
         }
 
         if (!failed && offset >= file_size) {
+            nsp_mqtt_publish_log("TFT: all blocks written — display finishing");
+            /* P362: THE PERMANENT FIX — the delivery is not "done" until the
+             * display PROVES it: the kit's HMI announces its own reboot
+             * (program.nx: printh 88 ff ff ff) only when the flash content
+             * is valid. Wait up to 30 s for the announcement. A display
+             * that never announces is in the System-Data-ERROR state (a
+             * partial image): the attempt FAILS and the loop power-cycles
+             * and re-delivers — self-repair, no human in the loop. The md5
+             * record happens only AFTER the proof (a broken image never
+             * writes a "delivered" record). */
+            {
+                bool rebooted = false;
+                int64_t finish_dead = esp_timer_get_time() + 30000000LL;
+                while (esp_timer_get_time() < finish_dead) {
+                    uint8_t b[16] = {0};
+                    int n = nsp_display_read(b, sizeof(b), 500);
+                    if (n <= 0) continue;
+                    for (int i = 0; i + 3 < n; i++) {
+                        if (b[i] == 0x88 && b[i + 1] == 0xFF &&
+                            b[i + 2] == 0xFF && b[i + 3] == 0xFF) {
+                            rebooted = true;
+                            break;
+                        }
+                    }
+                    if (rebooted) break;
+                }
+                nsp_mqtt_publish_log(rebooted
+                    ? "TFT: display rebooted into the new TFT"
+                    : "TFT: no boot announcement — the image did not take, re-delivering");
+                if (!rebooted) {
+                    failed = true;
+                    break;
+                }
+                vTaskDelay(pdMS_TO_TICKS(1500));
+            }
+            nsp_display_drain(1500);
             /* P238: record the delivered TFT's md5 — the manager compares
              * this at every registration and drives auto display updates. */
             unsigned char dig[16];
@@ -844,36 +880,6 @@ static void nsp_tft_task(void *) {
                 snprintf(l, sizeof(l), "TFT: delivered md5 recorded (%s)", hex);
                 nsp_mqtt_publish_log(l);
             }
-            nsp_mqtt_publish_log("TFT: all blocks written — display finishing");
-            /* P359: WAIT for the display to finish its flash write. The
-             * display's post-write phase (the remaining pages + the SYSTEM
-             * data area) takes longer than a fixed 6 s; serial traffic
-             * during it corrupts the system data and the display boots
-             * into "System-Data-ERROR" (the user's report). The kit's HMI
-             * announces its own reboot (program.nx: printh 88 ff ff ff) —
-             * wait for that announcement (or 30 s) before ANY serial. */
-            {
-                bool rebooted = false;
-                int64_t finish_dead = esp_timer_get_time() + 30000000LL;
-                while (esp_timer_get_time() < finish_dead) {
-                    uint8_t b[16] = {0};
-                    int n = nsp_display_read(b, sizeof(b), 500);
-                    if (n <= 0) continue;
-                    for (int i = 0; i + 3 < n; i++) {
-                        if (b[i] == 0x88 && b[i + 1] == 0xFF &&
-                            b[i + 2] == 0xFF && b[i + 3] == 0xFF) {
-                            rebooted = true;
-                            break;
-                        }
-                    }
-                    if (rebooted) break;
-                }
-                nsp_mqtt_publish_log(rebooted
-                    ? "TFT: display rebooted into the new TFT"
-                    : "TFT: no reboot announcement — waiting out the finish");
-                vTaskDelay(pdMS_TO_TICKS(1500));
-            }
-            nsp_display_drain(1500);
             bool hand = nsp_display_handshake_pub(3);
             nsp_mqtt_publish_log(hand ? "TFT: display back, handshake OK"
                                       : "TFT: display not answering after reflash");
