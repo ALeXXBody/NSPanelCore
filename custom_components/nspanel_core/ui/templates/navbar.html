@@ -105,31 +105,10 @@
           <a href="/nspanel_core/dashboard" data-active="{% if request.path == '/nspanel_core/dashboard' %}true{% endif %}"
             class="block py-2 px-3 rounded md:p-0 md:hover:text-accent hover:bg-accent hover: md:hover:bg-transparent border-gray-700 data-[active=true]:text-accent ">Dashboard</a>
         </li>
-        <li>
-          <button data-dropdown-toggle="entitiesMenuDropdown" data-active="{% if request.path == '/entities/relay_groups' %}true{% elif request.path == '/entities/global_scenes' %}true{% endif %}"
-            class="cursor-pointer flex items-center justify-between w-full py-2 px-3 rounded md:border-0 md:p-0 md:w-auto  md:hover:text-accent focus: border-gray-700  hover:bg-accent md:hover:bg-transparent data-[active=true]:text-accent ">
-            Entities
-            <svg class="w-2.5 h-2.5 ms-2.5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none"
-              viewBox="0 0 10 6">
-              <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="m1 1 4 4 4-4" />
-            </svg>
-          </button>
-          <!-- Dropdown menu -->
-          <div id="entitiesMenuDropdown"
-            class="z-10 font-normal hidden bg-neutral divide-y devide-neutral-content rounded-lg shadow md:absolute inset-x-auto w-full md:w-44 overflow-hidden">
-            <ul class="py-2 text-sm text-neutral-content" aria-labelledby="dropdownLargeButton">
-              <li>
-                <a href="/nspanel_core/relay_groups" data-active="{% if request.path == '/entities/relay_groups' %}true{% endif %}"
-                  class="block px-4 py-2  hover:bg-accent hover:text-accent-content hover: data-[active=true]:text-accent ">Relay/Light groups</a>
-              </li>
-              <li>
-                <a href="/nspanel_core/global_scenes" data-active="{% if request.path == '/entities/global_scenes' %}true{% endif %}" class="block px-4 py-2  hover:bg-accent hover:text-accent-content hover: data-[active=true]:text-accent ">
-                  Global scenes</a>
-              </li>
-            </ul>
-          </div>
-        </li>
+        <!-- P361 (audit HIGH): the Relay/Light groups and Global scenes pages
+             were inert — no creation path exists (the React component stubs
+             never hydrate; nothing can populate the lists). The dead nav
+             entries are removed; the views remain registered for old links. -->
         <li>
           <a href="/nspanel_core/settings" data-active="{% if request.path == '/nspanel_core/settings' or request.path.startswith('/nspanel_core/settings/') %}true{% endif %}"
             class="block py-2 px-3 rounded md:p-0 md:hover:text-accent hover:bg-accent md:hover:bg-transparent border-gray-700 data-[active=true]:text-accent ">Settings</a>

@@ -336,8 +336,6 @@ class NSPanelCoreManager:
         current = current or {}
         user_input = dict(user_input)
         # The settings form posts the "or" spelling; the model uses "our".
-        if "turn_on_behavior" in user_input and "turn_on_behaviour" not in user_input:
-            user_input["turn_on_behaviour"] = user_input.pop("turn_on_behavior")
         clean: dict = {}
         errors: dict[str, str] = {}
 
@@ -440,27 +438,13 @@ class NSPanelCoreManager:
                     clean[key] = wv
                 else:
                     errors[key] = "must be kmh, ms, mph or kn"
-            elif key in ("use_fahrenheit", "reverse_color_temp", "optimistic_mode",
+            elif key in ("use_fahrenheit", "reverse_color_temp",
                          "clock_us_style", "auto_tft_updates"):
                 b = _bool(value)
                 if b is None:
                     errors[key] = "must be true or false"
                 else:
                     clean[key] = b
-            elif key == "turn_on_behaviour":
-                if str(value) in ("color_temp", "restore"):
-                    clean[key] = str(value)
-                else:
-                    errors[key] = "must be color_temp or restore"
-            elif key in ("light_turn_on_brightness", "raise_to_100_light_level"):
-                n = _int(key, value, 0, 100)
-                if n is not None:
-                    clean[key] = n
-            elif key == "theme":
-                if str(value) in ("nspmwip",):
-                    clean[key] = str(value)
-                else:
-                    errors[key] = "unknown theme"
             elif key in ("outside_temp_sensor_entity", "outside_temp_provider"):
                 clean[key] = str(value or "").strip()
             elif key == "screensaver_mode":
@@ -1002,25 +986,27 @@ class NSPanelCoreManager:
         """
         from .const import topic_safe
 
+        segment_pre = self._topic_segment(msg.topic)
+        try:
+            data_pre = json.loads(msg.payload)
+        except (ValueError, TypeError):
+            data_pre = None
+        # P361 (audit MEDIUM): a legacy register_request must be handled
+        # BEFORE the unknown-panel return — first contact from legacy
+        # firmware registers here (the branch's own comment claimed it).
+        if isinstance(data_pre, dict) and data_pre.get("state") == "register_request":
+            await self._handle_register_request(
+                data_pre.get("mac_origin") or "", data_pre)
+            return
         panel = self._panel_by_msg_topic(msg, "status")  # P319: verbatim fallback
         if panel is None:
             return
-        segment = self._topic_segment(msg.topic)
-        try:
-            data = json.loads(msg.payload)
-        except (ValueError, TypeError):
+        segment = segment_pre
+        data = data_pre if isinstance(data_pre, dict) else None
+        if data is None:
             _LOGGER.debug("Ignoring non-JSON status from %s", segment)
             return
-        if not isinstance(data, dict):
-            return
 
-        state = data.get("state", "")
-        if state == "register_request":
-            # Legacy register path (original bridge); current firmware uses
-            # nspanel/mqttmanager/command instead. Handled for completeness —
-            # works for unknown panels (this is how they first appear).
-            await self._handle_register_request(data.get("mac_origin") or "", data)
-            return
         self._note_panel_hostname(panel, self._topic_segment(msg.topic))
         if state == "online":
             if not panel.online:
@@ -1119,17 +1105,21 @@ class NSPanelCoreManager:
             pass  # denied rows keep their name and hostname — no adoption
         elif not panel.accepted:
             panel.name = data.get("friendly_name") or panel.name
-        elif data.get("friendly_name") and data.get("friendly_name") != panel.name:
+        elif data.get("friendly_name") and data.get("friendly_name") != panel.wifi_hostname:
             # P345: the wifi_hostname MUST match the panel's actual hostname —
             # the commands are published to nspanel/{wifi_hostname}/command and
             # the panel subscribes to its own hostname topic. If the panel was
             # re-provisioned with a different hostname (the factory reset +
             # the setup page), the old hostname black-holes every command.
+            # P361 (audit HIGH): the OLD code also overwrote panel.name —
+            # clobbering the user's curated display name at every register
+            # (the firmware always reports its hostname as friendly_name).
+            # Only the wire hostname is adopted now.
             _LOGGER.warning(
                 "Panel %s reports hostname %r — updating wifi_hostname (the old %r black-holed the commands)",
                 panel.name, data.get("friendly_name"), panel.wifi_hostname,
             )
-            panel.name = data.get("friendly_name") or panel.name
+            panel.wifi_hostname = data.get("friendly_name") or panel.wifi_hostname
         # The wire hostname is tracked separately from the display name so a
         # manager-side rename never moves the command topics (split-brain fix).
         # Not adopted when the firmware reports the compiled default after a
@@ -1241,6 +1231,11 @@ class NSPanelCoreManager:
                 # DROPPED (the defaults would never land). Send strings.
                 "relay1_default_mode": "true" if panel.relay1_default_mode else "false",
                 "relay2_default_mode": "true" if panel.relay2_default_mode else "false",
+                # P361 (audit HIGH): the reverse-relays radio was DEAD-ON-WIRE
+                # — stored, but only sent in the JSON config the firmware never
+                # fetches. The firmware HAS the consumer (relay.cpp map_relay);
+                # it just needed the wire.
+                "reverse_relays": "true" if panel.reverse_relays else "false",
             }),
         )
 
@@ -1587,9 +1582,16 @@ class NSPanelCoreManager:
             self._ota_attempt_md5 = {}
         model = panel.model if panel.model in ("sonoff", "custom") else "sonoff"
         self._ota_attempt_md5[mac] = (panel.firmware_md5, self.ota_md5("firmware", f"{model}/firmware.bin"))
-        # P208#1: record the served tft md5 for the TFT streak on tft triggers
-        if report.get("md5_tft_file") is not None and getattr(self, "_ota_tft_served", None):
-            self._ota_attempt_md5[mac + ":tft"] = (panel.tft_md5, self._ota_tft_served)
+        # P208#1 + P361 (audit HIGH): _ota_tft_served was read but never
+        # written — the TFT attempt record was never created and the
+        # anti-reflash-loop brake could never arm. Record the served TFT
+        # md5 (the current TFT store's checksum) for the TFT streak here.
+        served = getattr(self, "_ota_tft_served", None)
+        if served is None:
+            served = self.ota_md5("tft", "gui.tft") or ""
+            self._ota_tft_served = served
+        if report.get("md5_tft_file") is not None and served:
+            self._ota_attempt_md5[mac + ":tft"] = (panel.tft_md5, served)
 
     @staticmethod
     def _normalize_ota_report(data: dict) -> dict:
@@ -1798,13 +1800,11 @@ class NSPanelCoreManager:
             if report.get("md5_tft_file") == dash_md5:
                 return  # current with its dashboard — leave it alone
             if report.get("md5_tft_file") and report["md5_tft_file"] != dash_md5:
-                stored = os.path.join(self.dash.origins_dir().replace(
-                    "nspanel_core_dashboards", "nspanel_core_dashboards"),
-                    "..")  # the compiled TFT lives beside the origins
                 tft_path = self.dash.stored_tft_path(panel.mac)
                 if tft_path and os.path.isfile(tft_path):
                     import hashlib as _h
-                    got = _h.md5(open(tft_path, "rb").read()).hexdigest()
+                    with open(tft_path, "rb") as _f:  # P361: the handle was never closed
+                        got = _h.md5(_f.read()).hexdigest()
                     if report.get("md5_tft_file") == got:
                         return  # the dash TFT is on the panel already
                     # wiped by the stock auto-push: re-deliver the dashboard

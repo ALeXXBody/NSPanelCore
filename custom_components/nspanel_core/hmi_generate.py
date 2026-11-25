@@ -253,9 +253,9 @@ def generate_source(
             dd.detail_components(design, item, i),
         )
         open(os.path.join(src, "pages", name + ".nx"), "w").close()
-    extra_pictures = extra_pictures + [
-        f"det{i}_sw{k}" for i in range(len(lights)) for k, _c in enumerate(dd.COLOR_PRESETS)
-    ] if False else extra_pictures  # the swatch resources are kit-level (sw_*)
+    # P361: the swatch resources are kit-level (sw_*) — the old
+    # `extra_pictures + [...] if False else extra_pictures` never added the
+    # per-detail swatch names; keep that behavior without the dead expression.
     _write_app_toml(kit_dir, design, src, extra_pictures=extra_pictures)
 
     cmap = dd.component_map(design, show_home_relays=show_home_relays)

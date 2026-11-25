@@ -5,7 +5,7 @@
     var element = document.getElementById(`nspanel-temperature-status-{{ nspanel.data.id }}`);
     var data = JSON.parse(message.body);
     element.state = data.state;
-    element.temperature = Math.round(data.temperature*10)/10;
+    element.temperature = (isFinite(data.temperature) ? Math.round(data.temperature*10)/10 : "--");
   })
 
   define({

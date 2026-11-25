@@ -191,12 +191,7 @@ class PanelConfig:
     show_home_ceiling: bool = True
     show_home_table: bool = True
     show_home_kelvin: bool = True
-    show_home_scenes: bool = True
-    show_home_ceiling: bool = True
-    show_home_table: bool = True
-    show_home_kelvin: bool = True
     raise_to_100_light_level: int = 0
-    optimistic_mode: bool = False
     temperature_unit: str = "celsius"
     inside_temperature_sensor_topic: str = ""
     # P306 — "Build the screensaver": clock/date style + weather details.
@@ -340,7 +335,6 @@ class GlobalSettings:
     # filtered out of discovery results.
     pre_accepted_hostnames: list = field(default_factory=list)
     discovery_denied: list = field(default_factory=list)
-    theme: str = "nspmwip"
     firmware_manifest_url: str = "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/manifest.json"
     firmware_auto_check_hours: int = 24
     firmware_active_version: str = ""
@@ -349,15 +343,12 @@ class GlobalSettings:
     firmware_latest_changes: dict = field(default_factory=dict)
     firmware_last_check: str = ""
     firmware_active_md5s: dict = field(default_factory=dict)
-    mqtt_wait_time: int = 0
     clock_us_style: bool = False
     date_format: str = "%d/%m"
     color_temp_min: int = 2700
     color_temp_max: int = 6500
     reverse_color_temp: bool = False
     optimistic_mode: bool = False
-    turn_on_behaviour: str = "color_temp"  # "color_temp" | "restore"
-    light_turn_on_brightness: int = 0
     use_fahrenheit: bool = False
     weather_update_interval: int = 30
     auto_tft_updates: bool = True
@@ -442,13 +433,16 @@ class IntegrationConfig:
             return cfg
         settings = data.get("settings", {})
         cfg.settings = GlobalSettings(**{k: v for k, v in settings.items() if k in GlobalSettings.__dataclass_fields__})
-        cfg.rooms = [RoomConfig(**r) for r in data.get("rooms", [])]
+        # P361 (audit MEDIUM): the from_dict filters are the contract — a
+        # stored row carrying a field a newer model removed must UPGRADE,
+        # not TypeError the whole integration down.
+        cfg.rooms = [RoomConfig.from_dict(r) for r in data.get("rooms", [])]
         cfg.lights = [LightConfig.from_dict(l) for l in data.get("lights", [])]
         cfg.thermostats = [ThermostatConfig.from_dict(t) for t in data.get("thermostats", [])]
         cfg.relay_groups = [RelayGroupConfig.from_dict(r) for r in data.get("relay_groups", [])]
-        cfg.pages = [EntityPageConfig(**p) for p in data.get("pages", [])]
-        cfg.scenes = [SceneConfig(**s) for s in data.get("scenes", [])]
-        cfg.panels = [PanelConfig(**p) for p in data.get("panels", [])]
-        cfg.messages = [MessageConfig(**m) for m in data.get("messages", [])]
+        cfg.pages = [EntityPageConfig.from_dict(p) for p in data.get("pages", [])]
+        cfg.scenes = [SceneConfig.from_dict(s) for s in data.get("scenes", [])]
+        cfg.panels = [PanelConfig.from_dict(p) for p in data.get("panels", [])]
+        cfg.messages = [MessageConfig.from_dict(m) for m in data.get("messages", [])]
         cfg.next_id = data.get("next_id", cfg.next_id)
         return cfg

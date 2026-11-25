@@ -43,6 +43,9 @@ class FakeManager:
     async def _send_panel_config(self, panel):
         pass
 
+    async def _publish_screensaver(self, panel):
+        pass  # P361: the panel save republishes the screensaver payload
+
     async def _publish_panel_status(self, panel, state):
         pass
 
@@ -268,10 +271,8 @@ async def test_panel_actions(mgr, panel):
     denied_req.headers = {"Referer": "https://x/nspanel_core/denied"}
     r = await act._act(denied_req)
     assert r.status == 200 and r.text == ""
-    panel.accepted = False
-    r = await act._act(_req(None, {"panel_id": "7", "action": "update_firmware"}, manager=mgr))
-    assert r.status == 409
-    panel.accepted = True
+    # P361: the update_firmware/update_tft API actions were removed (the
+    # STOMP path is the wire); the 409-on-unaccepted guard went with them.
     # Seed per-MAC caches, then delete: the route must purge them via
     # remove_panel (inline removal leaked relay/telemetry/OTA state).
     from nspanel_core.const import topic_safe

@@ -27,7 +27,7 @@ from nspanel_core.dashboard_manager import DashboardService  # noqa: E402
 
 def _svc(pre_seq=0):
     svc = object.__new__(DashboardService)
-    svc._pushed_map = {}
+    svc._pushed_map = {}  # P361: the send populates it now (the audit fix)
     svc._serving = {
         "mac": "aabbccddeeff",
         "path": os.path.join(str(REPO), "custom_components", "nspanel_core", "tft", "gui.tft"),
@@ -100,6 +100,7 @@ def test_send_slot_snapshots_the_panel_seq():
     svc._maps = {}
     svc._page_ids = {"aabbccddeeff": [4]}
     svc._delivered = {}
+    svc._pushed_map = {}
     svc._serving = None
     svc._auto_serving = None
     svc._store = MagicMock()

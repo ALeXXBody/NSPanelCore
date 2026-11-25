@@ -64,6 +64,14 @@ class DashboardService:
         }
         self._maps = data.get("maps", {})
         self._page_ids = {m: v for m, v in data.get("page_ids", {}).items()}
+        # P361 (audit HIGH): the DELIVERED design (what the TFT on the glass
+        # matches) must survive a restart — the touch routing fell back to
+        # the EDITED design after a restart, desyncing the routing from the
+        # delivered layout (the wrong-entity presses the P279 fix prevents).
+        self._delivered = {
+            m: dd.PanelDesign.from_dict(d)
+            for m, d in data.get("delivered", {}).items()
+        }
 
     async def _save(self) -> None:
         await self._store.async_save(
@@ -71,6 +79,7 @@ class DashboardService:
                 "designs": {m: d.to_dict() for m, d in self._designs.items()},
                 "maps": self._maps,
                 "page_ids": self._page_ids,
+                "delivered": {m: d.to_dict() for m, d in self._delivered.items()},
             }
         )
 
@@ -99,6 +108,8 @@ class DashboardService:
         self, design: dd.PanelDesign, show_home_relays: bool = True,
     ) -> tuple[str, str, dict, list]:
         """Blocking: design → TFT path + md5 + component map + page ids."""
+        import copy as _copy
+        design = _copy.deepcopy(design)  # P361: generate_source mutates page.background — never write through to the stored design
         with tempfile.TemporaryDirectory(prefix="nspdash") as wd:
             origins = _dash_dir(self.hass)
             cmap = hg.generate_source(design, KIND, wd, origins_dir=origins,
@@ -158,9 +169,6 @@ class DashboardService:
                 slot["ts"] = _t.time()
                 return slot["path"]
         return None
-        if os.path.isfile(self._serving["path"]):
-            return self._serving["path"]
-        return None
 
     def serving_info(self) -> dict:
         # P312+P335: both slots expire on their own 600 s clocks — an
@@ -198,6 +206,7 @@ class DashboardService:
         import time as _t
         self._auto_serving = {"mac": mac, "path": path, "md5": md5,
                               "ts": _t.time()}
+        self._pushed_map[mac] = md5
         return {"ok": True}
 
     async def async_send_to_panel(self, mac: str) -> dict:
@@ -235,7 +244,9 @@ class DashboardService:
                     "ribbon), then Send again"}
         # P279 MEDIUM fix: reserve the slot BEFORE the await — two concurrent
         # sends both passed the check and both published tft_update
-        self._serving = {"mac": mac, "path": "", "md5": "", "ts": 0, "reserving": True}
+        import time as _t2
+        self._serving = {"mac": mac, "path": "", "md5": "", "ts": _t2.time(),
+                         "reserving": True}
         try:
             path, md5, cmap, page_ids = await self.async_generate(
                 design,
@@ -244,13 +255,14 @@ class DashboardService:
             self._serving = None
             _LOGGER.exception("dashboard generate/compile failed for %s", mac)
             return {"error": f"compile failed: {exc}"}
-        except Exception as exc:  # noqa: BLE001
-            _LOGGER.exception("dashboard generate/compile failed for %s", mac)
-            return {"error": f"compile failed: {exc}"}
         import time as _t
 
         self._serving = {"mac": mac, "path": path, "md5": md5, "ts": _t.time(),
                          "pre_seq": int(getattr(panel, "tft_md5_seq", 0) or 0)}
+        # P361 (audit CRITICAL): _pushed_map was pop-only — the auto-TFT
+        # updater's "current with its dashboard" guard could never fire and
+        # a delivered dashboard could be wiped by the stock auto-push.
+        self._pushed_map[mac] = md5
         self._maps[mac] = cmap
         self._page_ids[mac] = list(page_ids)
         # P279 HIGH fix: route the touches/mirroring against the design the
@@ -289,8 +301,11 @@ class DashboardService:
             if seq is None:
                 seq = 0
             # No counter evidence at all (legacy payload + never-armed
-            # counter): fall back to the old behavior.
-            if not seq and not pre_seq:
+            # counter): fall back to the old behavior. P361: a MISSING seq
+            # (0) is "no evidence" regardless of pre_seq — a panel that once
+            # had a counter but whose report carries none must not deadlock
+            # the slot until expiry.
+            if not seq:
                 fresh = True
             else:
                 fresh = seq > (pre_seq or 0)
@@ -546,10 +561,14 @@ class DashboardService:
             if hmap.get("rel2") == component:
                 self._toggle_panel_relay(mac, 2)
                 return
-            if hmap.get("room") == component:
+            # P361 (audit HIGH): the generated layout's component names are
+            # room_btn/scenes_btn (the map derives from home_components) —
+            # the old keys ("room"/"scenes") matched nothing: the nav tiles
+            # were dead on every delivered home page.
+            if hmap.get("room_btn") == component or hmap.get("room_pic") == component:
                 self._dash(mac, "page room")
                 return
-            if hmap.get("scenes") == component:
+            if hmap.get("scenes_btn") == component or hmap.get("scenes_pic") == component:
                 self._dash(mac, "page scenes")
                 return
             return
@@ -638,15 +657,6 @@ class DashboardService:
         if panel is None:
             return const.panel_topic(mac, "command")
         return self.manager._panel_cmd_topic(panel, "command")
-
-    def _design_key(self, mac: str) -> str:
-        """The topic segment -> the design key (the panel's real mac)."""
-        panel = next(
-            (p for p in self.manager.config.panels
-             if const.topic_safe(p.mac) == mac), None)
-        return topic_safe(panel.mac) if panel else mac
-
-    # -- P274: the light detail pages (the entity cards on the panel) -----
 
     def _detail_context(self, mac: str, page: int, cmap: dict, design):
         """The (item, component map) for a light detail page, if |page| is one."""

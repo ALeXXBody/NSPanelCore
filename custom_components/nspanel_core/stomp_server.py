@@ -42,8 +42,13 @@ def decode_frame(data: str):
             command = line
     body = "\n".join(lines[i:])
     if "content-length" in headers:
-        n = int(headers["content-length"])
-        body = body[:n]
+        # P361 (audit MEDIUM): a malformed content-length crashed the whole
+        # decode (and with it the WS loop) — reject the frame instead.
+        try:
+            n = int(headers["content-length"])
+        except (ValueError, TypeError):
+            raise ValueError("malformed content-length header") from None
+        body = body[: max(0, n)]
     elif "\x00" in body:
         body = body[: body.index("\x00")]
     return command, headers, body

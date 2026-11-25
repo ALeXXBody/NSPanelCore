@@ -78,12 +78,12 @@ def test_every_browser_facing_view_has_a_gated_handler():
     names = [
         "AuthSessionView", "HtmxNspanelsSectionView", "PanelActionView",
         "SavePanelSettingsView", "AllowIgnoredMacView", "SaveSettingsView",
-        "DownloadTftView", "ChecksumTftView", "SaveFirmwareView",
+        "SaveFirmwareView",
         "SaveDataFileView", "SaveTftFileView", "FirmwareStatusView",
         "FirmwareCheckView", "FirmwareInstallView", "ReorderRoomsView",
         "GetIpByHostnameView", "EntitiesListView", "EntityPickerModalView",
         "SaveNewRoomView", "UpdateRoomView", "DeleteRoomView", "RestartView",
-        "ThemeView", "MessagesView",
+        "MessagesView",
     ]
     for name in names:
         cls = getattr(D, name)

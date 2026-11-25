@@ -48,6 +48,16 @@ static int64_t s_last_progress_us = 0;
 
 int nsp_ota_progress(void) { return s_progress; }
 
+/* P361: the OTA state name for the status report — the manager's UI
+ * progress bar consumes it ("updating_fw"/"updating_fs"/"" idle). */
+const char *nsp_ota_state_name(void) {
+    switch (s_state) {
+    case OTA_FW: return "updating_fw";
+    case OTA_FS: return "updating_fs";
+    default: return "";
+    }
+}
+
 static bool s_confirmed = false;
 extern "C" void nsp_ota_confirm(void) {
     if (s_confirmed) return;

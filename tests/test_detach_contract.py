@@ -133,11 +133,14 @@ def test_dashboard_update_actions_use_frozen_command_names():
         mgr = _py(INT / "manager.py")
         assert "def send_firmware_update" in mgr and "def send_tft_update" in mgr
     else:
-        src = _py(INT / "dashboard.py")
-        i = src.index('action not in ("accept", "deny", "delete", "update_firmware", "update_tft")')
-        window = src[i:i + 2600]
-        assert '"firmware_update"' in window
+        # P361: the dead PanelActionView update branches were removed (no UI
+        # trigger — the edit page drives updates over the STOMP bridge);
+        # the frozen command names live in the STOMP mapping now.
+        mgr = _py(INT / "manager.py")
+        i = mgr.index('"gui_update"')
+        window = mgr[i:i + 300]
         assert '"tft_update"' in window
+        assert '"firmware_update"' in window
 
 
 # --------------------------------------------------------------------------

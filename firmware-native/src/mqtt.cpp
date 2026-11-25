@@ -375,6 +375,8 @@ void nsp_mqtt_publish_log(const char *msg) {
     esp_mqtt_client_publish(s_mqtt, topic_log(s_hostname).c_str(), msg, 0, 0, false);
 }
 
+extern const char *nsp_ota_state_name(void);  // P361: the OTA progress wiring
+extern int nsp_ota_progress(void);
 void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
                                     int heap_pct, float temperature,
                                     const std::string &warnings) {
@@ -384,9 +386,9 @@ void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
     snprintf(buf, sizeof(buf),
         "{\"version\":\"" FW_VERSION "\",\"rssi\":%d,\"heap_used_pct\":%d,"
         "\"mac\":\"%s\",\"temperature\":\"%.1f\",\"ip\":\"%s\","
-        "\"warnings\":\"%s\"}",
+        "\"warnings\":\"%s\",\"state\":\"%s\",\"progress\":%d}",
         rssi, heap_pct, g_mac.c_str(), temperature, ip.c_str(),
-        warnings.c_str());
+        warnings.c_str(), nsp_ota_state_name(), nsp_ota_progress());
     esp_mqtt_client_publish(s_mqtt, topic_status_report(s_hostname).c_str(),
                             buf, 0, 0, true);
 }

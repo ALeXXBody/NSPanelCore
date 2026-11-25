@@ -174,11 +174,8 @@ def _render(template_name: str, request=None, **context) -> str:
     context.setdefault("static_ver", _STATIC_VERSION)
     context.setdefault("has_unread_messages", False)
     context.setdefault("max_live_log_messages", 100)
-    context.setdefault("mqtt_password", "")
+
     context.setdefault("home_assistant_token", "")
-    context.setdefault("mqtt_server", "")
-    context.setdefault("mqtt_port", 1883)
-    context.setdefault("mqtt_username", "")
     context.setdefault("room", None)
     context.setdefault("enabled_themes", {"nspmwip": "NSPanel Core (dark)"} )
     context.setdefault("theme", "nspmwip")
@@ -663,7 +660,10 @@ class PanelActionView(HomeAssistantView):
         except (KeyError, ValueError, TypeError):
             return web.Response(text="Bad panel id", status=400)
         action = request.match_info.get("action", "")
-        if action not in ("accept", "deny", "delete", "update_firmware", "update_tft"):
+        # P361 (audit LOW): the update_firmware/update_tft actions had no UI
+        # trigger (the edit page uses the STOMP path) and the cooldown pop
+        # below used the wrong key — removed; the STOMP path is the wire.
+        if action not in ("accept", "deny", "delete"):
             return web.Response(text="Unknown action", status=400)
         panel = next((p for p in manager.config.panels if p.id == panel_id), None)
         if panel is None:
@@ -689,19 +689,6 @@ class PanelActionView(HomeAssistantView):
                 await manager.remove_panel(panel.id)
                 await manager._publish_panel_status(panel, "offline")
                 manager.notify_panels_changed()
-            elif action in ("update_firmware", "update_tft"):
-                if not panel.accepted or panel.denied:
-                    return web.Response(text="Panel not accepted", status=409)
-                from .const import panel_mqtt_topic
-
-                command = "firmware_update" if action == "update_firmware" else "tft_update"
-                # Same OTA path the auto-trigger uses: MQTT command, panel
-                # downloads over HTTP and flashes itself.
-                manager._last_ota_trigger.pop(panel.mac, None)
-                await manager._publish(
-                    panel_mqtt_topic(panel.wifi_hostname or panel.name, "command"),
-                    json.dumps({"command": command}),
-                )
         referer = request.headers.get("Referer", "") or ""
         if "denied" in referer and action == "accept":
             # Denied page swaps the row itself: empty body removes it.
@@ -1137,6 +1124,10 @@ class SavePanelSettingsView(HomeAssistantView):
             panel.room_id = room_id
         await manager.async_save()
         await manager._send_panel_config(panel)
+        # P361 (audit MEDIUM): the screensaver activation timeout saved from
+        # the Panel tab sat unpublished until a Screensaver-tab save — the
+        # retained payload kept the old value. Republish it here.
+        await manager._publish_screensaver(panel)
         manager.notify_panels_changed()
         return _redirect(request, UI_PATH)
 
@@ -1208,35 +1199,9 @@ class WeatherTimeView(HomeAssistantView):
 
         return _redirect(request, f"{URL_BASE}/settings?tab=weather")
 
-    async def post(self, request, **kwargs):
-        manager = _manager(request)
-        form = await request.post()
-        data = {
-            "location_latitude": form.get("location_latitude", ""),
-            "location_longitude": form.get("location_longitude", ""),
-            "weather_update_interval": form.get("weather_update_interval", ""),
-            "clock_us_style": form.get("clock_us_style", ""),
-            "date_format": form.get("date_format", ""),
-            "use_fahrenheit": form.get("use_fahrenheit", ""),
-            "precipitation_format": form.get("precipitation_format", ""),
-            "wind_speed_format": form.get("wind_speed_format", ""),
-            "outside_temp_provider": form.get("outside_temp_provider", ""),
-            "outside_temp_sensor_entity": form.get("outside_temp_sensor", ""),
-        }
-        if data["outside_temp_sensor_entity"]:
-            import re as _re
-
-            if not _re.fullmatch(r"[a-z_]+\.[a-z0-9_]+", data["outside_temp_sensor_entity"]):
-                return web.Response(text="Bad outside temperature sensor entity id", status=422)
-        if data["outside_temp_provider"] not in ("", "homeassistant", "openhab", "manual"):
-            return web.Response(text="Bad outside temperature provider", status=422)
-        errors = await manager.apply_settings(data)
-        if errors:
-            return web.Response(
-                text="Weather errors: " + "; ".join(f"{k}: {v}" for k, v in errors.items()),
-                status=422,
-            )
-        return _redirect(request, f"{URL_BASE}/settings?tab=weather")
+    # P361 (audit HIGH): the POST was UNAUTHENTICATED and stale (the live
+    # weather form posts /save_settings) — removed; only the redirect GET
+    # remains for the old links.
 
 
 class DeniedPanelsView(HomeAssistantView):
@@ -1311,16 +1276,10 @@ class SettingsView(HomeAssistantView):
             panel_broker_port=getattr(s, "panel_broker_port", 1883),
             panel_broker_user=getattr(s, "panel_broker_user", ""),
             panel_broker_pass_placeholder="(saved — type a new one to change)" if getattr(s, "panel_broker_pass", "") else "",
-            mqtt_server=getattr(s, "mqtt_server", ""),
-            mqtt_port=getattr(s, "mqtt_port", 1883),
-            mqtt_username=getattr(s, "mqtt_username", ""),
-            mqtt_password=getattr(s, "mqtt_password", ""),
             mqttmanager_log_level=getattr(s, "mqttmanager_log_level", "info"),
             color_temp_min=s.color_temp_min,
             color_temp_max=s.color_temp_max,
             reverse_color_temp=s.reverse_color_temp,
-            optimistic_mode=s.optimistic_mode,
-            turn_on_behaviour=s.turn_on_behaviour,
             turn_on_behavior=s.turn_on_behaviour,
             turn_on_light_behaviour=s.turn_on_behaviour,
             home_assistant_address="",
@@ -1454,69 +1413,6 @@ class SaveSettingsView(HomeAssistantView):
         return _redirect(request, f"{URL_BASE}/settings")
 
 
-class ManagerSettingsView(HomeAssistantView):
-    url = f"{URL_BASE}/manager_settings"
-    name = "nspanel_core:manager_settings"
-    requires_auth = False
-
-    async def get(self, request, **kwargs):
-        if not await _nspanel_auth_ok(request):
-            return web.Response(status=401, text="Unauthorized")
-
-        manager = _manager(request)
-        room_views = []
-        for r in manager.config.rooms:
-            r_nspanels = [type("P", (), {"friendly_name": p.name}) for p in manager.config.panels if p.room_id == r.id]
-            room_views.append(_RoomView(r, nspanels=r_nspanels))
-        html = _render(
-            "manager_settings.html",
-            page_title="Manager settings",
-            nspanels=_panels_context(manager),
-            rooms=room_views,
-        )
-        return web.Response(text=html, content_type="text/html")
-
-
-
-import hashlib as _hashlib
-import os as _os
-
-
-def _firmware_dir():
-    return _os.path.join(_os.path.dirname(__file__), "firmware")
-
-
-def _firmware_file(model: str, filename: str) -> str | None:
-    """Resolve a firmware-binary path under a strict allowlist.
-
-    Only sonoff/custom models and fixed filenames — no user-controlled path
-    segments, so directory traversal is impossible.
-    """
-    if model not in ("sonoff", "custom"):
-        return None
-    if filename not in ("firmware.bin", "data_file.bin"):
-        return None
-    path = _os.path.join(_firmware_dir(), model, filename)
-    return path if _os.path.exists(path) else None
-
-
-def _tft_file(region: str) -> str | None:
-    if region not in ("eu", "us"):
-        return None
-    filename = "gui_us.tft" if region == "us" else "gui.tft"
-    path = _os.path.join(_os.path.dirname(__file__), "tft", filename)
-    return path if _os.path.exists(path) else None
-
-
-def _ota_checksum(request, kind: str, name: str, path: str) -> str:
-    """MD5 for an OTA file: startup cache first, disk fallback."""
-    try:
-        digest = _manager(request).ota_md5(kind, name)
-    except Exception:  # noqa: BLE001 — manager not ready
-        digest = ""
-    return digest or _md5(path)
-
-
 class OtaFileView(HomeAssistantView):
     """Base for panel OTA endpoints (firmware/TFT).
 
@@ -1539,7 +1435,11 @@ class OtaFileView(HomeAssistantView):
             # precedence — for THAT panel only (P279 HIGH fix)
             requester = manager._panel_by_topic(
                 request.query.get("panel", "") or self._filename)
-            override = manager.dash.tft_override(requester.mac if requester else None)
+            # P361 (audit MEDIUM): an anonymous fetch must not receive an
+            # in-flight dashboard slot — the override is per-panel (P279)
+            # and only the identified panel's download is honored.
+            override = (manager.dash.tft_override(requester.mac)
+                        if requester else None)
             path = override if override else (
                 manager.servable_path(kind, name) or _tft_file(self._filename)
             )
@@ -1637,51 +1537,6 @@ def _md5(path: str) -> str:
     return h.hexdigest()
 
 
-
-
-class DownloadTftView(HomeAssistantView):
-    url = f"{URL_BASE}/download_tft/{{panel_id}}"
-    name = "nspanel_core:download_tft"
-    requires_auth = False  # P295: @_gated below — never HA's ban middleware
-
-    @_gated
-    async def get(self, request, **kwargs):
-        manager = _manager(request)
-        try:
-            panel_id = int(request.match_info["panel_id"])
-        except (KeyError, ValueError, TypeError):
-            return web.Response(status=400, text="Bad panel id")
-        panel = next((p for p in manager.config.panels if p.id == panel_id), None)
-        if panel is None:
-            return web.Response(status=404, text="Panel not found")
-        region = "us" if panel.is_us_panel else "eu"
-        path = _tft_file(region)
-        if path is None:
-            return web.Response(status=404, text="TFT not found")
-        return web.FileResponse(path)
-
-
-class ChecksumTftView(HomeAssistantView):
-    url = f"{URL_BASE}/checksum_tft_file/{{panel_id}}"
-    name = "nspanel_core:checksum_tft"
-    requires_auth = False  # P295: @_gated below — never HA's ban middleware
-
-    @_gated
-    async def get(self, request, **kwargs):
-        manager = _manager(request)
-        try:
-            panel_id = int(request.match_info["panel_id"])
-        except (KeyError, ValueError, TypeError):
-            return web.Response(status=400, text="Bad panel id")
-        panel = next((p for p in manager.config.panels if p.id == panel_id), None)
-        if panel is None:
-            return web.Response(status=404, text="Panel not found")
-        region = "us" if panel.is_us_panel else "eu"
-        filename = "gui_us.tft" if panel.is_us_panel else "gui.tft"
-        path = _tft_file(region)
-        if path is None:
-            return web.Response(status=404, text="TFT not found")
-        return web.Response(text=_ota_checksum(request, "tft", filename, path))
 
 
 class OtaUploadView(HomeAssistantView):
@@ -2405,30 +2260,6 @@ class RestartView(HomeAssistantView):
         return web.Response(text="", status=200)
 
 
-class ThemeView(HomeAssistantView):
-    url = f"{URL_BASE}/api/theme"
-    name = "nspanel_core:api:theme"
-    requires_auth = False  # P295: @_gated below — never HA's ban middleware
-
-    @_gated
-    async def post(self, request, **kwargs):
-        manager = _manager(request)
-        form = await request.post()
-        # htmx posts the radio value as theme-controller; be liberal.
-        theme = (
-            form.get("theme")
-            or form.get("theme-controller")
-            or form.get("value")
-            or ""
-        )
-        theme = str(theme).strip()
-        if theme not in ("nspmwip",):
-            return web.Response(text="Unknown theme", status=400)
-        manager.config.settings.theme = theme
-        await manager.async_save()
-        return web.Response(text="", status=200)
-
-
 class MessagesView(HomeAssistantView):
     url = f"{URL_BASE}/api/messages"
     name = "nspanel_core:api:messages"
@@ -2901,9 +2732,7 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         DeniedPanelsView,
         AllowIgnoredMacView,
         SettingsView,
-        ManagerSettingsView,
         RestartView,
-        ThemeView,
         ReorderRoomsView,
         GetIpByHostnameView,
         MessagesView,
@@ -2933,8 +2762,6 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         DownloadTftUsView,
         ChecksumTftEuView,
         ChecksumTftUsView,
-        DownloadTftView,
-        ChecksumTftView,
         FirmwareStatusView,
         FirmwareCheckView,
         FirmwareInstallView,

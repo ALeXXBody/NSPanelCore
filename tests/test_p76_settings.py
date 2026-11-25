@@ -38,18 +38,6 @@ def _required_names() -> set[str]:
     return names
 
 
-def test_p76_brightness_zero_accepted():
-    from nspanel_core.manager import NSPanelCoreManager
-
-    clean, errors = NSPanelCoreManager.validate_settings(
-        {"light_turn_on_brightness": "0"}, {})
-    assert not errors, f"brightness 0 must validate: {errors}"
-    assert clean["light_turn_on_brightness"] == 0
-    clean, errors = NSPanelCoreManager.validate_settings(
-        {"light_turn_on_brightness": "101"}, {})
-    assert errors, "brightness 101 must be rejected"
-
-
 def test_p76_no_required_field_renders_empty():
     """The exact Save-bricking mechanism: render settings.html with
     fresh-install defaults (GlobalSettings()) — every required input must
@@ -68,27 +56,11 @@ def test_p76_no_required_field_renders_empty():
             nspanels=[],
             manager_address=s.manager_address,
             manager_port=s.manager_port,
-            mqtt_server=getattr(s, "mqtt_server", ""),
-            mqtt_port=getattr(s, "mqtt_port", 1883),
-            mqtt_username=getattr(s, "mqtt_username", ""),
             color_temp_min=s.color_temp_min,
             color_temp_max=s.color_temp_max,
             reverse_color_temp=s.reverse_color_temp,
-            optimistic_mode=s.optimistic_mode,
-            turn_on_behaviour=s.turn_on_behaviour,
-            raise_to_100_light_level=0,
-            light_turn_on_brightness=s.light_turn_on_brightness,
-            min_button_push_time=50,
-            button_long_press_time=400,
-            special_mode_trigger_time=350,
-            special_mode_release_time=600,
-            screen_dim_level=100,
             screensaver_dim_level=20,
             screensaver_activation_timeout=15,
-            max_live_log_messages=100,
-            max_log_buffer_size=1000,
-            room_status_backoff_time=0,
-            all_rooms_status_backoff_time=0,
             screensaver_mode="with_background",
             rooms=[],
             auto_tft_updates=True,
@@ -125,9 +97,12 @@ def test_p76_no_required_field_renders_empty():
     )
 
 
-def test_p76_brightness_min_matches_backend():
-    m = re.search(r'name="light_turn_on_brightness"[^>]*min="(\d+)"',
-                  SETTINGS_HTML.read_text(errors="replace"))
-    assert m and m.group(1) == "0", (
-        "brightness input min must be 0 to match backend 0..100"
-    )
+
+def test_p361_removed_fields_have_no_inputs():
+    """P361: the dead GlobalSettings fields were removed (no consumer); the
+    settings page must not render inputs the backend ignores."""
+    html = SETTINGS_HTML.read_text(errors="replace")
+    for name in ("light_turn_on_brightness", "optimistic_mode",
+                 "turn_on_behaviour", "mqtt_wait_time", "mqtt_server",
+                 "mqtt_password", "home_assistant_address"):
+        assert name not in html, f"the removed field {name} still renders an input"

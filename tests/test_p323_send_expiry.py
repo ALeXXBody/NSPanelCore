@@ -52,6 +52,7 @@ def _svc(slot_ts=None, delivered_md5="abc123"):
                         "md5": delivered_md5, "ts": slot_ts, "reserving": False}
     else:
         svc._serving = None
+    svc._pushed_map = {}  # P361: the send populates it (the audit fix)
     # the "compiled" artifact must exist on disk (the code records its size)
     from pathlib import Path as _P
     _art = _P("/tmp/p323/generated.tft")

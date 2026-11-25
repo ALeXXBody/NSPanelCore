@@ -899,6 +899,10 @@ function loadPanelSettings() {
       var form = box.querySelector('form');
       if (!form) return;
       form.id = 'panel_settings_form';
+      // P361 (audit MEDIUM): the injected form keeps data-authed, so the
+      // document-level interceptor in base.js AND this handler both fire —
+      // the save POSTed twice (a duplicate config push on every save).
+      form.removeAttribute('data-authed');
       // P290: the behavior that came WITH the moved fields (button modes,
       // detached lights, panel type) must be bound AFTER they are injected.
       bindPanelSettingsBehavior();
