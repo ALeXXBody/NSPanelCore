@@ -1,21 +1,21 @@
 {
-    "version": "0.2.1",
-    "notes": "Firmware 0.2.1 \u2014 the display self-repair (the permanent fix for the recurring System-Data-ERROR): a TFT delivery is not 'done' until the display PROVES it \u2014 the HMI's boot announcement (printh 88 ff ff ff) only fires when the flash content is valid. A delivery whose display never announces FAILS and the attempt loop power-cycles and re-delivers (the md5 record only happens after the proof). A display restart that finds no announcement detects the broken flash and auto-re-delivers the TFT (capped at 2 per boot). The System-Data-ERROR can no longer wait for a human. Carries all of 0.2.0.",
+    "version": "0.2.2",
+    "notes": "Firmware 0.2.2 \u2014 the screensaver-timeout evidence build (the user's report: the timeout is not working; every static review passed). The idle poll logs its navigation decision (timeout/page/idle seconds) and the payload parser logs the requested-vs-applied timeout. Gate: safety 12/12, host ALL PASS.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.1/native-firmware-0.2.1.bin",
-            "md5": "3f78cdb5c83ac126aae5bb1061deed51"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.2/native-firmware-0.2.2.bin",
+            "md5": "13e28a9742c7a3a6a31c5968d7504c53"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.1/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.2/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.1/native-firmware-0.2.1.bin",
-            "md5": "3f78cdb5c83ac126aae5bb1061deed51"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.2/native-firmware-0.2.2.bin",
+            "md5": "13e28a9742c7a3a6a31c5968d7504c53"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.1/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.2/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

@@ -364,11 +364,21 @@ static volatile int s_last_component_page = -1;  // the last 0x65 page seen
 void nsp_screensaver_set_idle_timeout(int secs) {
     /* P361 (audit M3): 0 disables the idle return — the old clamp mapped
      * "never" to 15 s. */
+    int applied;
     if (secs == 0) {
         s_screensaver_idle_timeout = 0;
-        return;
+        applied = 0;
+    } else {
+        applied = (secs >= 5 && secs <= 3600) ? secs : 15;
+        s_screensaver_idle_timeout = applied;
     }
-    s_screensaver_idle_timeout = (secs >= 5 && secs <= 3600) ? secs : 15;
+    /* P363: the evidence line — the payload's value vs what was applied. */
+    {
+        char l[80];
+        snprintf(l, sizeof(l), "screensaver: timeout requested %d -> applied %ds",
+                 secs, applied);
+        nsp_mqtt_publish_log(l);
+    }
 }
 
 void nsp_screensaver_idle_poll(void) {
@@ -381,6 +391,17 @@ void nsp_screensaver_idle_poll(void) {
     if (elapsed_ticks < (uint32_t)timeout_s * configTICK_RATE_HZ) return;
     int page = s_last_component_page;
     if (page == 1 || page == 3) return;  // already on the screensaver/mini
+    /* P363: the wire-level evidence — the poll's decision is INVISIBLE
+     * otherwise (the user's report: the screensaver timeout is not
+     * working; every static review passed). Log the navigation once per
+     * timeout period. */
+    {
+        char l[96];
+        snprintf(l, sizeof(l),
+                 "screensaver: idle poll firing (timeout=%ds page=%d idle=%us)",
+                 timeout_s, page, (unsigned)(elapsed_ticks / configTICK_RATE_HZ));
+        nsp_mqtt_publish_log(l);
+    }
     nsp_display_show_screensaver();
     s_last_component_page = 1;   // we are on the screensaver now
     s_last_touch_tick = now_tick;  // don't re-fire every housekeeping second
