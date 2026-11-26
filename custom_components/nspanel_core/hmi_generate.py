@@ -101,6 +101,10 @@ def _write_app_toml(kit_dir: str, design: dd.PanelDesign, dest_dir: str,
              + [dd.detail_name(i) for i in range(len(dd.light_items(design)))])
     kit_app = open(os.path.join(kit_dir, "app.toml"), encoding="utf-8").read()
     pictures = _toml_list(kit_app, "pictures")
+    # P363: the studio cards are kit-level resources now
+    for card in ("card_off", "card_on", "card_plain"):
+        if card not in pictures:
+            pictures.append(card)
     # P306: the font list comes from the kit too (the screensaver tab needs
     # real size/weight fonts); no hardcoded resources in the generator.
     fonts = _toml_list(kit_app, "fonts")
@@ -216,10 +220,22 @@ def generate_source(
             "screensaver", scr_toml["component"])
 
     # the menu page — regenerated over the authored room page
+    menu_comps = dd.menu_components(design)
+    # P363: the labels ON the menu cards render as crops OF THE CARD
+    # (sta=2+pic) — the text floats on the card with no bar.
+    card_png = os.path.join(src, "pictures", "card_plain.png")
+    for c in menu_comps:
+        if c["type"] == "text" and c["name"].startswith("ml"):
+            if os.path.isfile(card_png):
+                bgp.crop_rect(card_png, (c["x"], c["y"], c["w"], c["h"])).save(
+                    os.path.join(src, "pictures", f"{c['name']}_crop.png"))
+                c["sta"] = 2
+                c["pic"] = f"{c['name']}_crop"
+                extra_pictures.append(f"{c['name']}_crop")  # P363: register the crop
     _write_toml(
         os.path.join(src, "pages", "room.page.toml"),
         "room",
-        dd.menu_components(design),
+        menu_comps,
     )
     open(os.path.join(src, "pages", "room.nx"), "w").close()
 
@@ -235,10 +251,26 @@ def generate_source(
 
     # dash pages — appended after the base seven
     for page in design.pages:
+        comps = dd.dash_components(design, page)
+        n = design.pages.index(page)
+        dash_photo = os.path.join(src, "pictures", f"p{n}_dash.jpg")
+        if page.background_image and origins_dir is not None and os.path.isfile(dash_photo):
+            # P363: the texts over the photo render as IMAGE CROPS (sta=2) —
+            # the same treatment the photo screensaver gives its clock: no
+            # white bars behind the text. Crop the darkened photo behind
+            # the title.
+            import tomllib as _tl
+            for c in comps:
+                if c["type"] == "text" and c["name"] == "title":
+                    bgp.crop_rect(dash_photo, (c["x"], c["y"], c["w"], c["h"])).save(
+                        os.path.join(src, "pictures", f"p{n}_title.png"))
+                    c["sta"] = 2
+                    c["pic"] = f"p{n}_title"
+                    extra_pictures.append(f"p{n}_title")  # P363: register the crop
         _write_toml(
             os.path.join(src, "pages", page.name + ".page.toml"),
             page.name,
-            dd.dash_components(design, page),
+            comps,
         )
         open(os.path.join(src, "pages", page.name + ".nx"), "w").close()
 

@@ -87,24 +87,23 @@ def test_clean_text_neuters_quotes_and_control():
 # -- component map (the touch contract) ----------------------------------
 
 def test_component_map_matches_firmware_conventions():
+    """P363: the studio look — the menu cards (mc<m> picture, m<m> hotspot,
+    ml<m> label) and the dash tiles carry the label ON the card (no l<n>).
+    The map derives from the SAME layout functions, so it follows."""
     cmap = dd.component_map(_design())
-    # menu page: bg=1, then hotspot/label pairs in page order
     menu = cmap["room"]
     assert menu["bg"] == 1
-    assert menu["m0"] == 2
-    assert menu["ml0"] == 3
-    assert menu["m1"] == 4
-    assert menu["ml1"] == 5
+    assert menu["mc0"] == 2      # the card picture
+    assert menu["m0"] == 3       # the hotspot over it
+    assert menu["ml0"] == 4      # the label ON the card
     assert "back" in menu
-    # dash page: bg=1, title=2, slot items b<n>/l<n>, back last
     k = cmap["dash_kitchen"]
     assert k["bg"] == 1
     assert k["title"] == 2
-    assert k["b0"] == 3  # light1's button (slot 0)
-    assert k["l0"] == 4
-    assert k["b1"] == 5  # temp1's value text (slot 1)
-    assert k["l1"] == 6
-    assert k["back"] == 7
+    assert k["b0"] == 3  # light1's button (slot 0, the label ON the card)
+    assert k["b1"] == 4  # temp1's value text (slot 1)
+    assert k["back"] == 5
+    assert "l0" not in k and "l1" not in k, "the below-labels are gone"
 
 
 def test_page_ids_are_base_seven_plus_dash():

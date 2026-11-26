@@ -248,12 +248,18 @@ def menu_components(design: PanelDesign) -> list[dict]:
         {"name": "bg", "type": "picture", "x": 0, "y": 0, "w": 480, "h": 320,
          "pic": "bg_room"},
     ]
+    # P363: the menu tiles are the STUDIO CARDS too — the card picture, the
+    # hotspot over it, the page title ON the card (the generator crops the
+    # card picture behind the label: sta=2+pic, no white bar).
     for n, page in enumerate(design.pages):
         x, y = GRID_SLOTS[n]
+        comps.append({"name": f"mc{n}", "type": "picture",
+                      "x": x, "y": y, "w": TILE_W, "h": TILE_H,
+                      "pic": "card_plain"})
         comps.append({"name": f"m{n}", "type": "hotspot",
-                      "x": x, "y": y, "w": TILE_W, "h": BTN_H, "sendkey": 3})
+                      "x": x, "y": y, "w": TILE_W, "h": TILE_H, "sendkey": 3})
         comps.append({"name": f"ml{n}", "type": "text",
-                      "x": x, "y": y + BTN_H, "w": TILE_W, "h": LBL_H,
+                      "x": x, "y": y, "w": TILE_W, "h": TILE_H,
                       "text": clean_text(page.title, 24), "font": "NotoSans24",
                       "pco": "#f0f4f8"})
     comps.append({"name": "back", "type": "hotspot",
@@ -276,28 +282,25 @@ def dash_components(design: PanelDesign, page: DashPage) -> list[dict]:
     page_items = sorted(
         (i for i in design.items if i.page == page.name), key=lambda x: x.slot
     )
+    # P363: THE STUDIO'S TILE — the card covers the FULL slot (150x110),
+    # the label rides ON the card (the dual-state's own txt), the small
+    # state square is drawn in the picture (the grey off / the cyan on).
     for it in page_items:
         x, y = GRID_SLOTS[it.slot]
+        label = clean_text(it.label, 24)
         if it.widget in ("switch", "light", "rgb_light"):
             comps.append({"name": f"b{it.slot}", "type": "dual-state-button",
-                          "x": x, "y": y, "w": TILE_W, "h": BTN_H,
-                          "pic": "btn_off", "pic2": "btn_on", "sendkey": 3,
-                          # P357: an EXPLICIT empty txt — the compiler's
-                          # default ("newtxt") leaks onto the tile when the
-                          # attr is unset (the user's screenshot)
-                          "text": ""})
+                          "x": x, "y": y, "w": TILE_W, "h": TILE_H,
+                          "pic": "card_off", "pic2": "card_on", "sendkey": 3,
+                          "text": label})
         elif it.widget == "scene":
             comps.append({"name": f"b{it.slot}", "type": "picture",
-                          "x": x, "y": y, "w": TILE_W, "h": BTN_H,
-                          "pic": "btn_scenes", "sendkey": 3})
+                          "x": x, "y": y, "w": TILE_W, "h": TILE_H,
+                          "pic": "card_plain", "sendkey": 3, "text": label})
         else:  # sensor / climate — a value text (txt= updated at runtime)
             comps.append({"name": f"b{it.slot}", "type": "text",
-                          "x": x, "y": y, "w": TILE_W, "h": BTN_H,
-                          "text": "--", "font": "NotoSans64"})
-        comps.append({"name": f"l{it.slot}", "type": "text",
-                      "x": x, "y": y + BTN_H, "w": TILE_W, "h": LBL_H,
-                      "text": clean_text(it.label, 24), "font": "NotoSans24",
-                      "pco": "#f0f4f8"})
+                          "x": x, "y": y, "w": TILE_W, "h": TILE_H,
+                          "text": "--", "font": "NotoSans64", "pco": "#f0f4f8"})
     comps.append({"name": "back", "type": "hotspot",
                   "x": 395, "y": 20, "w": 75, "h": 30, "sendkey": 3})
     comps.append({"name": "back_pic", "type": "picture",

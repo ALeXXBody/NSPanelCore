@@ -91,11 +91,16 @@ def test_write_toml_sets_txt_maxl_from_the_text():
     assert m and int(m.group(1)) >= 13, "the label's txt_maxl must cover its length"
 
 
-def test_generated_dual_state_tiles_carry_explicit_empty_txt():
+def test_generated_dual_state_tiles_carry_the_label():
+    """P363: the studio look — the label rides ON the card (the dual-state's
+    own txt); the below-label comps are gone."""
     import tempfile
     d = _design()
     wd = tempfile.mkdtemp(prefix="p357-")
     hg.generate_source(d, str(KIT), wd, show_home_relays=True)
     dash = (pathlib.Path(wd) / "hmi" / "pages" / "dash_page.page.toml").read_text()
+    assert 'txt = "Kitchen light"' in dash, "the label rides the card"
+    assert '"l0"' not in dash, "the separate below-label comp is gone"
     for m in re.finditer(r"\[\[component\]\][^\[]*?dual-state-button[^\[]*", dash):
-        assert 'txt = ""' in m.group(0), "the tile must not leak the compiler default"
+        assert "txt = \"" in m.group(0) and 'txt = ""' not in m.group(0) or 'txt = ""' in m.group(0), (
+            "the tile carries its label (or an explicit empty txt)")
