@@ -1,21 +1,21 @@
 {
-    "version": "0.2.2",
-    "notes": "Firmware 0.2.2 \u2014 the screensaver-timeout evidence build (the user's report: the timeout is not working; every static review passed). The idle poll logs its navigation decision (timeout/page/idle seconds) and the payload parser logs the requested-vs-applied timeout. Gate: safety 12/12, host ALL PASS.",
+    "version": "0.2.3",
+    "notes": "Firmware 0.2.3 \u2014 the immediate clock on the screensaver: the panel stores the last time/date it received (the manager's minute-publishes) and writes them the MOMENT the screensaver page opens \u2014 the idle poll no longer shows the compiled '00:00' default for a few seconds (the user's report). Carries all prior fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.2/native-firmware-0.2.2.bin",
-            "md5": "13e28a9742c7a3a6a31c5968d7504c53"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.3/native-firmware-0.2.3.bin",
+            "md5": "2cb271f023f1b197b4f0c23ddc0c48c8"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.2/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.3/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.2/native-firmware-0.2.2.bin",
-            "md5": "13e28a9742c7a3a6a31c5968d7504c53"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.3/native-firmware-0.2.3.bin",
+            "md5": "2cb271f023f1b197b4f0c23ddc0c48c8"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.2/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.3/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

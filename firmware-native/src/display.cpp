@@ -321,14 +321,15 @@ bool nsp_display_restart(void) {
                 }
                 if (announced) break;
             }
-            static int s_auto_repairs = 0;
-            if (!announced && s_auto_repairs < 2) {
-                s_auto_repairs++;
-                nsp_mqtt_publish_log("DISPLAY: no boot announcement — the TFT flash is broken; re-delivering (auto-repair)");
-                extern void nsp_tft_start(void);
-                nsp_tft_start();
-            } else if (!announced) {
-                nsp_mqtt_publish_log("DISPLAY: no boot announcement and the auto-repairs are spent — re-deliver the TFT from the studio");
+            /* P363 (user report: the panel degraded after the restarts): the
+             * auto-repair here misfires — a panel reboot does NOT reboot the
+             * display (it stays powered), so after a plain restart there is
+             * no announcement to find and this check would re-deliver the
+             * STOCK TFT over the user's dashboard. The detection stays
+             * (log-only); the auto-repair lives ONLY in the delivery's own
+             * verdict path, where the display truly rebooted by itself. */
+            if (!announced) {
+                nsp_mqtt_publish_log("DISPLAY: no boot announcement after restart — the TFT flash may be broken (log-only; re-deliver from the studio if the glass shows the error)");
             }
         }
         return true;
@@ -407,10 +408,29 @@ void nsp_screensaver_idle_poll(void) {
     s_last_touch_tick = now_tick;  // don't re-fire every housekeeping second
 }
 
+/* P364: the last-known clock/date strings — the manager publishes them
+ * every minute, but the SCREENSAVER page's text objects hold their
+ * compiled defaults ("00:00") until the NEXT publish lands: after the
+ * idle poll navigates, the user saw 00:00 for a few seconds (their
+ * report). The panel stores the last values and writes them the moment
+ * the screensaver page opens. */
+static std::string s_last_time;
+static std::string s_last_date;
+static std::string s_last_ampm;
+static void nsp_display_set_text(const char *object, const char *value);  // P364: defined below
+
 void nsp_display_show_screensaver(void) {
     if (!s_display_ready) return;
     std::string cmd = std::string("page ") + SCREENSAVER_PAGE;
     nsp_display_send_command(cmd.c_str());
+    /* P364: the clock shows the REAL time immediately — the page's text
+     * objects otherwise hold "00:00" until the next minute-publish. */
+    if (!s_last_time.empty())
+        nsp_display_set_text("screensaver.curTime", s_last_time.c_str());
+    if (!s_last_date.empty())
+        nsp_display_set_text("screensaver.curDay", s_last_date.c_str());
+    if (!s_last_ampm.empty())
+        nsp_display_set_text("screensaver.curAMPM", s_last_ampm.c_str());
 }
 
 /* P208#1: Nextion text objects take .txt= — the v1 did exactly this;
@@ -430,16 +450,20 @@ static void nsp_display_set_text(const char *object, const char *value) {
 }
 
 void nsp_display_set_clock(const std::string &time_str) {
+    /* P364: store for the immediate write on every screensaver navigation. */
+    s_last_time = time_str;
     nsp_display_set_text("screensaver.curTime", time_str.c_str());
     nsp_display_set_text("mini.curTime", time_str.c_str());
 }
 
 void nsp_display_set_date(const std::string &date_str) {
+    s_last_date = date_str;
     nsp_display_set_text("screensaver.curDay", date_str.c_str());
     nsp_display_set_text("mini.curDay", date_str.c_str());
 }
 
 void nsp_display_set_ampm(const std::string &ampm_str) {
+    s_last_ampm = ampm_str;
     nsp_display_set_text("screensaver.curAMPM", ampm_str.c_str());
     nsp_display_set_text("mini.curAMPM", ampm_str.c_str());
 }
