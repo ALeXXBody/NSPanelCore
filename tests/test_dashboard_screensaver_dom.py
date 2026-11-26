@@ -272,6 +272,7 @@ def test_real_dom_studio_tab_controls_preview_and_save_payload():
         "show_ss_forecast": True, "show_ss_wind": True, "show_ss_rain": True,
         "show_ss_sunrise_sunset": True,
         "ss_outside_temp_entity": "sensor.outside", "ss_room_temp_entity": "",
+        "screensaver_activation_timeout": "15",
     }
     assert out["statusText"] == "Saved"
     assert out["errors"] == [], out["errors"]
