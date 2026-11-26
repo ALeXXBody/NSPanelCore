@@ -140,6 +140,16 @@
       </div>
     </div>
 
+    <!-- P363 (user report): the SCREENSAVER activation timeout belongs HERE —
+         the user looks for it on this tab. Seconds; 0 = never sleep. -->
+    <div class="mt-4">
+      <label for="screensaver_activation_timeout" class="block mb-1 text-sm font-medium">Screensaver activation timeout (seconds)</label>
+      <input type="number" id="screensaver_activation_timeout" name="screensaver_activation_timeout"
+             min="0" max="86400" value="{{ panel_info.data.screensaver_activation_timeout }}"
+             class="rounded-none bg-base-300 border border-neutral focus:border-accent block w-full text-sm p-2.5">
+      <span class="text-xs opacity-70">Seconds of no touch before the panel returns to this screensaver. 0 = never.</span>
+    </div>
+
     <div class="flex items-center gap-3 mt-5">
       <button type="submit" class="studio-btn">Save screensaver</button>
       <span id="screensaver_status" class="text-xs opacity-70"></span>

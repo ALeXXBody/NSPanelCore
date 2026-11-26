@@ -977,6 +977,18 @@ class DashboardScreensaverSaveView(HomeAssistantView):
                 errors[key] = "must be a Home Assistant entity id"
             else:
                 updates[key] = value
+        # P363 (user report): the SCREENSAVER activation timeout belongs on
+        # the Screensaver tab — the user looks for it there. Parse it from
+        # the JSON body (the form transport reads the Panel tab's field).
+        if isinstance(body, dict) and "screensaver_activation_timeout" in body:
+            try:
+                secs = int(str(body["screensaver_activation_timeout"]))
+                if secs < 0 or secs > 86400:
+                    errors["screensaver_activation_timeout"] = "must be 0..86400 seconds (0 = never sleep)"
+                else:
+                    panel.screensaver_activation_timeout = secs
+            except (ValueError, TypeError):
+                errors["screensaver_activation_timeout"] = "must be a number of seconds"
         if errors:
             return web.json_response(
                 {"error": "invalid screensaver settings", "fields": errors}, status=422)

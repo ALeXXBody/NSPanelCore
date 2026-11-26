@@ -985,7 +985,8 @@ function readScreensaverSettings() {
    'date_font', 'date_weight', 'date_color', 'date_align',
    'show_ss_outside_temp', 'show_ss_room_temp', 'show_ss_forecast',
    'show_ss_wind', 'show_ss_rain', 'show_ss_sunrise_sunset',
-   'ss_outside_temp_entity', 'ss_room_temp_entity'].forEach(function (name) {
+   'ss_outside_temp_entity', 'ss_room_temp_entity',
+   'screensaver_activation_timeout'].forEach(function (name) {
     var el = form.elements[name];
     if (!el) return;
     data[name] = el.type === 'checkbox' ? !!el.checked : el.value;
