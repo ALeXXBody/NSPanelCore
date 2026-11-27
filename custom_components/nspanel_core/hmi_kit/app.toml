@@ -42,6 +42,13 @@ pictures = [
     "btn_on",
     "btn_room",
     "btn_scenes",
+    "card_off",
+    "card_on",
+    "card_plain",
+    "wx_sun",
+    "wx_cloud",
+    "wx_rain",
+    "wx_snow",
 ]
 fonts = [
     "NotoSans24",

@@ -110,9 +110,19 @@
   }
   /* P306: the weather strip is part of the screensaver preview, so a toggle
    * is visibly on/off before the settings are saved to the panel. */
-  .studio-ss-weather { position:absolute; left:24px; top:20px; right:24px;
-    display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px;
-    letter-spacing:1px; color:#8b9099; }
+  /* P364: the weather block matches the panel's new layout — the icon
+     left, the temps beside it, the forecast rows on the right. */
+  .studio-ss-weather { position:absolute; left:24px; bottom:10px; right:16px;
+    display:flex; align-items:center; gap:10px; }
+  .studio-ss-weather .ss-wx-icon { width:44px; height:44px; }
+  .studio-ss-weather .ss-wx-col { display:flex; flex-direction:column; gap:2px; }
+  .studio-ss-weather .ss-wx-temp { font-size:24px; color:#f0f4f8; }
+  .studio-ss-weather .ss-wx-in { font-size:14px; color:#8b9099; }
+  .studio-ss-forecast { position:absolute; right:16px; bottom:10px;
+    display:flex; flex-direction:column; gap:4px; text-align:left; }
+  .studio-ss-forecast .ss-f-row { display:flex; gap:10px; align-items:center; }
+  .studio-ss-forecast .ss-f-day { font-size:12px; color:#39c8e8; width:42px; }
+  .studio-ss-forecast .ss-f-mm { font-size:13px; color:#c8cbce; }
   .studio-ss-weather span { white-space:nowrap; }
   .studio-tab { cursor: pointer; padding: 8px 18px; border-radius: 10px 10px 0 0;
     border: 1px solid #232833; border-bottom: none; color: #8b9099; background: #141821; }
@@ -1096,14 +1106,17 @@ function renderScreensaverPreview() {
   }
   var strip = document.getElementById('pvs_weather');
   if (strip) {
+    /* P364: the weather block matches the panel's layout — the icon, the
+     * temps beside it, the forecast rows on the right. */
     var rows = [];
-    if (s.show_ss_outside_temp) rows.push('Outside 21°C');
-    if (s.show_ss_room_temp) rows.push('Inside 19.5°C');
-    if (s.show_ss_forecast) rows.push('Mon 23°/9°');
-    if (s.show_ss_wind) rows.push('W 12 km/h');
-    if (s.show_ss_rain) rows.push('R 0.2 mm');
-    if (s.show_ss_sunrise_sunset) rows.push('U06:12 D19:45');
-    strip.innerHTML = rows.map(function (t) { return '<span>' + t + '</span>'; }).join('');
+    if (s.show_ss_outside_temp) rows.push('<div class="ss-f-row"><span class="ss-f-day">Out</span><span class="ss-f-mm">21°C</span></div>');
+    if (s.show_ss_room_temp) rows.push('<div class="ss-f-row"><span class="ss-f-day">In</span><span class="ss-f-mm">19.5°C</span></div>');
+    if (s.show_ss_forecast) {
+      rows.push('<div class="ss-f-row"><span class="ss-f-day">Mon</span><span class="ss-f-mm">23°/9°</span></div>');
+      rows.push('<div class="ss-f-row"><span class="ss-f-day">Tue</span><span class="ss-f-mm">21°/8°</span></div>');
+      rows.push('<div class="ss-f-row"><span class="ss-f-day">Wed</span><span class="ss-f-mm">22°/9°</span></div>');
+    }
+    strip.innerHTML = rows.join('');
   }
 }
 

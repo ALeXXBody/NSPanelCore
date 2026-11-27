@@ -58,6 +58,114 @@ ycen = 1
 txt = "AM"
 
 [[component]]
+name = "wx_sun"
+type = "picture"
+x = 24
+y = 236
+w = 64
+h = 64
+pic = "wx_sun"
+
+[[component]]
+name = "wx_cloud"
+type = "picture"
+x = 24
+y = 236
+w = 64
+h = 64
+pic = "wx_cloud"
+
+[[component]]
+name = "wx_rain"
+type = "picture"
+x = 24
+y = 236
+w = 64
+h = 64
+pic = "wx_rain"
+
+[[component]]
+name = "wx_snow"
+type = "picture"
+x = 24
+y = 236
+w = 64
+h = 64
+pic = "wx_snow"
+
+[[component]]
+name = "wOutTemp"
+type = "text"
+x = 100
+y = 240
+w = 190
+h = 52
+font = "NotoSans64"
+bco = "#0d1016"
+pco = "#f0f4f8"
+txt = "--"
+
+[[component]]
+name = "wRoomTemp"
+type = "text"
+x = 100
+y = 288
+w = 190
+h = 32
+font = "NotoSans24"
+bco = "#0d1016"
+pco = "#8b93a1"
+txt = "--"
+
+[[component]]
+name = "fDay0"
+type = "text"
+x = 310
+y = 236
+w = 160
+h = 24
+font = "NotoSans24"
+bco = "#0d1016"
+pco = "#39c8e8"
+txt = ""
+
+[[component]]
+name = "fMM0"
+type = "text"
+x = 310
+y = 260
+w = 160
+h = 24
+font = "NotoSans24"
+bco = "#0d1016"
+pco = "#f0f4f8"
+txt = ""
+
+[[component]]
+name = "fDay1"
+type = "text"
+x = 310
+y = 288
+w = 160
+h = 24
+font = "NotoSans24"
+bco = "#0d1016"
+pco = "#39c8e8"
+txt = ""
+
+[[component]]
+name = "fMM1"
+type = "text"
+x = 310
+y = 288
+w = 160
+h = 24
+font = "NotoSans24"
+bco = "#0d1016"
+pco = "#f0f4f8"
+txt = ""
+
+[[component]]
 name = "wake"
 type = "hotspot"
 sendkey = 3

@@ -35,6 +35,11 @@ struct NspWeatherFlags {
     bool sunrise_sunset = false;
 };
 
+/* P364: the weather icon groups — the payload's icon string maps to one
+ * of four glyph comps on the screensaver page (wx_sun/wx_cloud/wx_rain/
+ * wx_snow). 0=sun 1=cloud 2=rain 3=snow. */
+enum NspWeatherIcon { WX_SUN = 0, WX_CLOUD = 1, WX_RAIN = 2, WX_SNOW = 3 };
+
 struct NspScreensaverConfig {
     NspTextStyle clock;
     NspTextStyle date;
@@ -46,6 +51,7 @@ struct NspScreensaverConfig {
 };
 
 struct NspWeatherData {
+    int icon_group = WX_CLOUD;  // P364: the glyph group
     std::string temp;
     std::string wind;
     std::string prepro;

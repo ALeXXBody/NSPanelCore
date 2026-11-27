@@ -40,13 +40,18 @@ def test_the_two_trees_are_byte_identical():
 
 
 def test_no_weather_components_in_the_panel_pages():
+    """P364 REVISED: the weather components now EXIST on the screensaver
+    page (the icon glyphs + the temps + the forecast rows — the user's
+    order: bigger, with icons, the forecast visible). The contract: the
+    wake hotspot stays LAST (the firmware's wake logic reads the frames
+    regardless of the component order — the hotspot id is irrelevant)."""
     for tree in (KIT, HMI):
         page = tomllib.load(open(tree / "pages" / "screensaver.page.toml", "rb"))
         names = [c["name"] for c in page["component"]]
-        # the proven order — the firmware's wake logic depends on it
-        assert names == ["bg", "curTime", "curDay", "curAMPM", "wake"], names
-        for w in WEATHER:
-            assert w not in names, w
+        assert names[-1] == "wake", "the wake hotspot stays last"
+        for w in ("wx_sun", "wx_cloud", "wx_rain", "wx_snow",
+                  "wOutTemp", "wRoomTemp", "fDay0", "fMM0"):
+            assert w in names, f"the weather comp {w} is now required"
 
 
 def test_the_served_tft_is_the_proven_release_bytes():

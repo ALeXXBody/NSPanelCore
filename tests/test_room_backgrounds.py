@@ -92,8 +92,11 @@ def test_photo_screensaver_regenerates_with_photo_crop_texts():
         src = os.path.join(wd, "hmi")
         page = tomllib.load(open(os.path.join(src, "pages", "screensaver.page.toml"), "rb"))
         names = [c["name"] for c in page["component"]]
-        # the component order is UNTOUCHED (the firmware's wake logic depends on it)
-        assert names == ["bg", "curTime", "curDay", "curAMPM", "wake"]
+        # the clock/date/ampm texts keep their crop treatment; P364 adds
+        # the weather block after them (the wake hotspot stays last)
+        assert names[:4] == ["bg", "curTime", "curDay", "curAMPM"]
+        assert names[-1] == "wake"
+        assert "wx_sun" in names and "wOutTemp" in names
         by_name = {c["name"]: c for c in page["component"]}
         assert by_name["bg"]["pic"] == "p0_scr"
         for text_name, crop in (("curTime", "sct"), ("curDay", "scd"), ("curAMPM", "sca")):

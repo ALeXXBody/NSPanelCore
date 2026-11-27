@@ -254,9 +254,13 @@ def test_real_dom_studio_tab_controls_preview_and_save_payload():
     assert out["preview"]["date"]["fontWeight"] == "700"
     assert out["preview"]["date"]["color"] in ("#8b93a1", "rgb(139, 147, 161)")
     assert out["preview"]["date"]["textAlign"] == "left"
-    for text in ("Outside 21°C", "Inside 19.5°C", "Mon 23°/9°",
-                 "W 12 km/h", "R 0.2 mm", "U06:12 D19:45"):
+    # P364: the weather block matches the panel's layout — the Out/In
+    # temps beside the icon and the 3 forecast rows.
+    for text in ("Out", "21°C", "In", "19.5°C", "Mon", "23°/9°",
+                 "Tue", "Wed"):
         assert text in out["preview"]["weatherText"], text
+    for gone in ("W 12 km/h", "R 0.2 mm", "U06:12"):
+        assert gone not in out["preview"]["weatherText"], gone
 
     # The submit posts the real form values as JSON to the real endpoint.
     save = out["save"]

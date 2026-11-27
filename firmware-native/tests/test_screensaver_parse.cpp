@@ -118,11 +118,17 @@ int main() {
           "outside temp falls back to the global weather topic");
     CHECK(has(wcmds, "screensaver.wRoomTemp.txt=\"22.5" + DEG + "C\""),
           "per-panel room override beats the panel NTC");
-    CHECK(has(wcmds, "screensaver.wWind.txt=\"W 12 km/h\""), "wind rendered");
-    CHECK(has(wcmds, "screensaver.wRain.txt=\"R 0.2 mm\""), "rain rendered");
-    CHECK(has(wcmds, "screensaver.wSun.txt=\"U06:12 D19:45\""), "sun times rendered");
-    CHECK(has(wcmds, "screensaver.wForecast.txt=\"Mon 23" + DEG + "C/9" + DEG + "C\""),
-          "compact forecast strip fits the 24-byte component");
+    /* P364: the weather redesign — the icons + the forecast rows replaced
+     * the wind/rain/sun-times/summary text objects. */
+    CHECK(has(wcmds, "screensaver.wx_sun.vis=1"), "the sun glyph visible");
+    CHECK(has(wcmds, "screensaver.wx_cloud.vis=0"), "the cloud glyph hidden");
+    CHECK(has(wcmds, "screensaver.wx_rain.vis=0"), "the rain glyph hidden");
+    CHECK(has(wcmds, "screensaver.wx_snow.vis=0"), "the snow glyph hidden");
+    CHECK(has(wcmds, "screensaver.fDay0.txt=\"Mon\""), "the forecast day rendered");
+    CHECK(has(wcmds, "screensaver.fMM0.txt=\"23" + DEG + "C/9" + DEG + "C\""),
+          "the forecast temps rendered");
+    /* the test payload has 2 forecast days — fDay2 gets nothing */
+    CHECK(!has(wcmds, "screensaver.fDay2.txt="), "no third-row write without a third day");
     for (const auto &cmd : wcmds) {
         size_t q = cmd.find("txt=\"");
         if (q == std::string::npos) continue;
@@ -130,13 +136,13 @@ int main() {
         CHECK(text.size() <= 24, "every weather text fits txt_maxl");
     }
 
-    /* hides: flags off => vis=0 and NO text write */
+    /* hides: flags off => the temps hidden, the glyphs hidden */
     NspScreensaverConfig hidden;
     CHECK(nsp_screensaver_parse("{\"weather\":{}}", hidden), "empty weather config accepted");
     auto hcmds = nsp_weather_commands(data, hidden, "19.5" + DEG + "C");
-    CHECK(hcmds.size() == 6, "one visibility write per weather component");
-    CHECK(has(hcmds, "screensaver.wWind.vis=0"), "hidden wind gets vis=0");
-    CHECK(!has(hcmds, "screensaver.wWind.txt=\"W 12 km/h\""), "hidden wind is not written");
+    CHECK(has(hcmds, "screensaver.wOutTemp.vis=0"), "hidden outside temp gets vis=0");
+    CHECK(has(hcmds, "screensaver.wx_cloud.vis=0"), "the glyphs hidden (the default group is cloud)");
+    CHECK(!has(hcmds, "screensaver.wOutTemp.txt=\""), "the hidden temp is not written");
 
     /* NTC fallback when there is no per-panel override */
     NspScreensaverConfig ntc_cfg;

@@ -223,6 +223,20 @@ bool nsp_weather_parse(const std::string &payload, NspWeatherData &out) {
     NspWeatherData r;
     std::string v;
     bool any = false;
+    /* P364: the icon string → the glyph group. The manager's vocabulary:
+     * sunny/partlytuner_day → sun; cloudy_weather_day/overcast/fog → cloud;
+     * rainy/sleet/thunderstorm → rain; snowy → snow. */
+    std::string icon_s;
+    if (json_string(head, "icon", icon_s)) {
+        if (icon_s.find("sunny") != std::string::npos ||
+            icon_s.find("partly") != std::string::npos) r.icon_group = WX_SUN;
+        else if (icon_s.find("snow") != std::string::npos) r.icon_group = WX_SNOW;
+        else if (icon_s.find("rain") != std::string::npos ||
+                 icon_s.find("sleet") != std::string::npos ||
+                 icon_s.find("thunder") != std::string::npos) r.icon_group = WX_RAIN;
+        else r.icon_group = WX_CLOUD;  // cloudy/overcast/fog + the fallback
+        any = true;
+    }
     const char *fields[][2] = {
         {"temp", "temp"}, {"wind", "wind"}, {"prepro", "prepro"},
         {"sunrise", "sunrise"}, {"sunset", "sunset"}, {"maxmin", "maxmin"},
@@ -292,9 +306,21 @@ std::vector<std::string> nsp_weather_commands(const NspWeatherData &data,
         cfg.outside_override.empty() ? data.temp : cfg.outside_override);
     add("wRoomTemp", cfg.flags.room_temp,
         cfg.room_override.empty() ? ntc_temp : cfg.room_override);
-    add("wWind", cfg.flags.wind, "W " + data.wind);
-    add("wRain", cfg.flags.rain, "R " + data.prepro);
-    add("wSun", cfg.flags.sunrise_sunset, "U" + data.sunrise + " D" + data.sunset);
-    add("wForecast", cfg.flags.forecast, forecast_summary(data));
+    /* P364: the icon glyph — vis=1 on the matching comp, vis=0 on the rest.
+     * The comps live at one position on the screensaver page. */
+    const char *icon_objs[4] = {"wx_sun", "wx_cloud", "wx_rain", "wx_snow"};
+    for (int i = 0; i < 4; i++) {
+        const std::string base = std::string("screensaver.") + icon_objs[i];
+        cmds.push_back(base + ".vis=" + (data.icon_group == i ? "1" : "0"));
+    }
+    /* P364: the forecast rows — the day name + the max/min temps for the
+     * first three forecast days (fDay0..2 + fMM0..2 on the page). */
+    for (int i = 0; i < 3 && i < data.day_count; i++) {
+        const std::string base = "screensaver.f";
+        cmds.push_back(base + "Day" + std::to_string(i) + ".txt=\"" +
+                       nsp_display_clean(data.day[i], 12) + "\"");
+        cmds.push_back(base + "MM" + std::to_string(i) + ".txt=\"" +
+                       nsp_display_clean(data.day_maxmin[i], 16) + "\"");
+    }
     return cmds;
 }

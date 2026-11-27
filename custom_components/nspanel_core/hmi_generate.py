@@ -75,6 +75,8 @@ def _write_toml(path: str, page_name: str, comps: list[dict]) -> None:
             lines.append(f"sendkey = {int(c['sendkey'])}")
         if "sta" in c:
             lines.append(f"sta = {int(c['sta'])}")
+        if "vis" in c:
+            lines.append(f"vis = {int(c['vis'])}")
         lines.append("")
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
