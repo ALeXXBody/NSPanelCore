@@ -11,6 +11,31 @@
             <span class="text-xs text-base-content/60">{{ version }}</span>
         </div>
     </a>
+    {% if restart_required %}
+    <div class="flex items-center gap-2 rounded p-2"
+         style="background:rgba(232,112,112,.12); border:1px solid rgba(232,112,112,.5); margin-left:12px;">
+      <span class="text-xs" style="color:#e89090">
+        Update deployed — <b>{{ restart_required }}</b> activates after a restart
+      </span>
+      <button type="button" id="restart_ha_btn" class="btn btn-xs"
+              style="background:#e07070; color:#0d1016; border:none;">Restart Home Assistant</button>
+    </div>
+    <script>
+      /* P369c: one-click restart — the running code never re-reads itself,
+       * only a restart loads the deployed version. */
+      document.getElementById('restart_ha_btn').addEventListener('click', function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Restarting…';
+        fetch('/nspanel_core/api/restart_ha', { method: 'POST', credentials: 'same-origin' })
+          .then(function () {
+            btn.textContent = 'HA is restarting — this page will reload.';
+            setTimeout(function () { location.reload(); }, 15000);
+          })
+          .catch(function () { btn.disabled = false; btn.textContent = 'Restart failed'; });
+      });
+    </script>
+    {% endif %}
     <div class="flex md:order-2 space-x-3 md:space-x-0 rtl:space-x-reverse">
       <div class="flex items-center">
           <button class="btn btn-sm mdi mdi-inbox" hx-get="/nspanel_core/api/messages" hx-swap="none" hx-swap-oob="true">

@@ -66,6 +66,20 @@ _TEMPLATE_CACHE = {}
 _DASHBOARD_VERSION = "v0.0.0"
 
 
+def _on_disk_version() -> str:
+    """P369c: the manifest.json version ON DISK (what the next restart
+    loads) — the running _DASHBOARD_VERSION is what the CURRENT process
+    loaded at startup. When they differ, an update has been deployed but
+    is not active yet (the user's header said 0.3.15 for hours while
+    0.3.16/0.3.17 sat on disk: nothing told them to restart)."""
+    try:
+        import json as _json
+        manifest = pathlib.Path(__file__).parent / "manifest.json"
+        return "v" + str(_json.loads(manifest.read_text()).get("version", ""))
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _static_cache_version() -> str:
     """Cache-buster derived from the CONTENT of the UI static assets.
 
@@ -173,6 +187,13 @@ def _render(template_name: str, request=None, **context) -> str:
     context.setdefault("notifications", [])
     context.setdefault("version", _DASHBOARD_VERSION)
     context.setdefault("static_ver", _STATIC_VERSION)
+    # P369c: the restart-required banner — the on-disk manifest vs the
+    # running code. Shown in the navbar with a one-click restart.
+    _disk = _on_disk_version()
+    if _disk and _disk != _DASHBOARD_VERSION:
+        context.setdefault("restart_required", _disk)
+    else:
+        context.setdefault("restart_required", None)
     context.setdefault("has_unread_messages", False)
     context.setdefault("max_live_log_messages", 100)
 
@@ -2302,6 +2323,32 @@ class DeleteRoomView(HomeAssistantView):
         return _redirect_back(request, f"{URL_BASE}/settings")
 
 
+class RestartHAView(HomeAssistantView):
+    """P369c: restart HOME ASSISTANT — the only way the manager's updated
+    code loads (the manager's own restart endpoint re-runs the startup but
+    keeps the loaded modules). Refuses while a panel delivery is running:
+    an HA restart mid-TFT would kill the stream."""
+    url = f"{URL_BASE}/api/restart_ha"
+    name = "nspanel_core:api:restart_ha"
+    requires_auth = False  # P295: @_gated below
+
+    @_gated
+    async def post(self, request, **kwargs):
+        manager = _manager(request)
+        dash = getattr(manager, "dash", None)
+        if dash is not None and (getattr(dash, "_serving", None) or
+                                 getattr(dash, "_auto_serving", None)):
+            return web.json_response(
+                {"error": "a panel delivery is running — restart after it finishes"},
+                status=409)
+        import asyncio as _aio
+        _aio.get_running_loop().call_later(
+            1.0, lambda: manager.hass.async_create_task(
+                manager.hass.services.async_call("homeassistant", "restart",
+                                                 blocking=False)))
+        return web.json_response({"ok": True})
+
+
 class RestartView(HomeAssistantView):
     url = f"{URL_BASE}/api/restart"
     name = "nspanel_core:api:restart"
@@ -2788,6 +2835,7 @@ def async_register_ui(hass: HomeAssistant, entry_id: str) -> None:
         AllowIgnoredMacView,
         SettingsView,
         RestartView,
+        RestartHAView,
         ReorderRoomsView,
         GetIpByHostnameView,
         MessagesView,
