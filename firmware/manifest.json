@@ -1,21 +1,21 @@
 {
-    "version": "0.2.6",
-    "notes": "Firmware 0.2.6 \u2014 the forecast glyphs: each forecast row carries its own weather glyph (the vis swaps among the stacked comps per row), the row icon parsed from the payload's forecast array. Carries all prior fixes.",
+    "version": "0.2.8",
+    "notes": "Firmware 0.2.8 \u2014 the clock/date show/hide delivered (the user order: remove both Panel-tab screensaver fields, the settings live on the Screensaver tab, with show/hide clock and date): the payload's style blocks carry the hidden flags, the firmware stores the visibility and re-asserts it on every screensaver navigation (the TJC vis is runtime-only). The time writes skip the hidden comps. The no-screensaver mode disables the navigation (0.2.7, carried).",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.6/native-firmware-0.2.6.bin",
-            "md5": "34d651541c844cc8b81bc1919bc121e3"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.8/native-firmware-0.2.8.bin",
+            "md5": "7eeae9e88fc26cae058e93cd29c49842"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.6/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.8/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.6/native-firmware-0.2.6.bin",
-            "md5": "34d651541c844cc8b81bc1919bc121e3"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.8/native-firmware-0.2.8.bin",
+            "md5": "7eeae9e88fc26cae058e93cd29c49842"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.6/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.8/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {
