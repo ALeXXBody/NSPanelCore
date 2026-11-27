@@ -21,6 +21,7 @@
 #include <vector>
 
 struct NspTextStyle {
+    bool visible = true;    // P365 (user order): show/hide the clock/date
     int font_id = 4;        // 0..7; 4 = large regular (the model's default)
     uint16_t pco = 0xCE59;  // RGB565 of #c8cbce (the clock's default)
     int align = 1;          // 0 left, 1 center, 2 right

@@ -179,7 +179,8 @@ def test_post_view_validates_persists_and_publishes_the_real_payload():
     # The builder consumes the very same stored fields the firmware will get.
     payload = build_panel_screensaver_config(panel, cfg.settings)
     assert payload["clock"] == {"font": "medium", "weight": "bold",
-                                "color": "#39c8e8", "align": "left"}
+                                "color": "#39c8e8", "align": "left",
+                                "hidden": "false"}  # P365: the show flag rides
     assert payload["weather"]["outside_temp"] is True
     assert payload["weather"]["wind"] is True
     assert payload["weather"]["rain"] is False

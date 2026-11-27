@@ -72,10 +72,12 @@ def test_payload_shape_is_stable_and_carries_resolved_temps():
     cfg = IntegrationConfig()
     payload = build_panel_screensaver_config(p, cfg.settings,
                                              outside_temp="21.4", room_temp="")
-    assert set(payload) == {"clock", "date", "weather", "activation_timeout"}
+    assert set(payload) == {"clock", "date", "weather", "activation_timeout",
+                            "clock_visible", "date_visible"}
     assert payload["activation_timeout"] == "15"
     assert payload["clock"] == {"font": "medium", "weight": "bold",
-                                "color": "#c8cbce", "align": "center"}
+                                "color": "#c8cbce", "align": "center",
+                                "hidden": "false"}  # P365: the show flag
     assert payload["date"]["color"] == "#39c8e8"
     assert payload["weather"]["outside_temp"] is True
     assert payload["weather"]["forecast"] is True
@@ -94,6 +96,10 @@ def test_activation_timeout_rides_the_payload_and_clamps():
     p.screensaver_activation_timeout = 45
     payload = build_panel_screensaver_config(p, cfg.settings)
     assert payload["activation_timeout"] == "45"
+    # P365: the show/hide flags ride the payload
+    assert payload["clock_visible"] == "true" and payload["date_visible"] == "true"
+    p.show_ss_clock = False
+    assert build_panel_screensaver_config(p, cfg.settings)["clock_visible"] == "false"
     p.screensaver_activation_timeout = 1
     assert build_panel_screensaver_config(p, cfg.settings)["activation_timeout"] == "5"
     p.screensaver_activation_timeout = 99999

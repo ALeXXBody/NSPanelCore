@@ -103,9 +103,13 @@ def test_the_partial_renders_all_three_sections_as_siblings():
     for legacy in ("button1_detached_mode_room", "button2_detached_mode_room",
                    "button1_detached_mode_light", "button2_detached_mode_light"):
         assert legacy not in buttons, f"{legacy} (the lights-in-rooms detour) must be gone"
-    for field in ("screen_dim_level", "screensaver_dim_level",
-                  "screensaver_activation_timeout", "screensaver_mode"):
+    # P365 (user order): the screensaver mode + the activation timeout
+    # REMOVED from the Panel tab — the settings live on the Build the
+    # Screensaver tab. The screen section carries only the dim levels.
+    for field in ("screen_dim_level", "screensaver_dim_level"):
         assert field in screen, f"{field} missing from the screen section"
+    for removed in ("screensaver_activation_timeout", "screensaver_mode"):
+        assert removed not in screen, f"{removed} must not render on the Panel tab"
 
 
 def test_saves_are_authenticated_and_report_errors():

@@ -390,6 +390,10 @@ bool nsp_screensaver_enabled(void) {
     return s_screensaver_mode != "no_screensaver";
 }
 
+/* P365 (user order): show/hide the clock and the date on the screensaver. */
+bool nsp_screensaver_clock_visible(void) { return s_screensaver_cfg.clock.visible; }
+bool nsp_screensaver_date_visible(void) { return s_screensaver_cfg.date.visible; }
+
 void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
                                     int heap_pct, float temperature,
                                     const std::string &warnings) {

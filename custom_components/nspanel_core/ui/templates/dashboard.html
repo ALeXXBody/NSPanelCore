@@ -998,7 +998,8 @@ function readScreensaverSettings() {
    'show_ss_outside_temp', 'show_ss_room_temp', 'show_ss_forecast',
    'show_ss_wind', 'show_ss_rain', 'show_ss_sunrise_sunset',
    'ss_outside_temp_entity', 'ss_room_temp_entity',
-   'screensaver_activation_timeout'].forEach(function (name) {
+   'screensaver_activation_timeout',
+   'show_clock', 'show_date'].forEach(function (name) {
     var el = form.elements[name];
     if (!el) return;
     data[name] = el.type === 'checkbox' ? !!el.checked : el.value;
@@ -1191,6 +1192,19 @@ function renderPreview() {
       if (sbg.removeAttribute) sbg.removeAttribute('src');
     }
   }
+  var clockHidden = false, dateHidden = false;
+  try {
+    var form = document.getElementById('screensaver_form');
+    if (form) {
+      var c = form.elements['show_clock'], dd2 = form.elements['show_date'];
+      if (c) clockHidden = !c.checked;
+      if (dd2) dateHidden = !dd2.checked;
+    }
+  } catch (e) {}
+  ['pvs_clock', 'pvs_date', 'pvs_ampm'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el && el.style) el.style.visibility = 'visible';
+  });
   tickClock();
   if (typeof renderScreensaverPreview === 'function') renderScreensaverPreview();
 

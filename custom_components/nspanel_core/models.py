@@ -149,6 +149,9 @@ class PanelConfig:
     # Panel behaviour (subset of NSPanelSettings protobuf fields)
     default_page: int = 0  # 0=MAIN, 1=SCENES, 2=ROOM
     screensaver_mode: str = "with_background"
+    # P365 (user order): show/hide the clock and the date on the screensaver
+    show_ss_clock: bool = True
+    show_ss_date: bool = True
     screensaver_activation_timeout: int = 15
     min_button_push_time: int = 50
     button_long_press_time: int = 400
@@ -376,6 +379,9 @@ class GlobalSettings:
     custom_data_uploaded_at: str = ""
     custom_data_source: str = ""
     screensaver_mode: str = "with_background"
+    # P365 (user order): show/hide the clock and the date on the screensaver
+    show_ss_clock: bool = True
+    show_ss_date: bool = True
     location_latitude: str = ""
     location_longitude: str = ""
     outside_temp_sensor_entity: str = ""

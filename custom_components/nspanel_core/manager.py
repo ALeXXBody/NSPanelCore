@@ -87,17 +87,25 @@ def build_panel_screensaver_config(
         # as a string — every field of this contract is a string on the wire.
         "activation_timeout": str(max(5, min(3600, int(
             panel.screensaver_activation_timeout or 15)))),
+        # P365 (user order): show/hide the clock and the date — the flags
+        # ride their style blocks (strings, like everything on this wire).
+        "clock_visible": "true" if panel.show_ss_clock else "false",
+        "date_visible": "true" if panel.show_ss_date else "false",
+        # P365 (user order): the show/hide flags ride the style blocks as
+        # "hidden" strings (the inverse of the user's show checkboxes).
         "clock": {
             "font": panel.clock_font,
             "weight": panel.clock_weight,
             "color": panel.clock_color,
             "align": panel.clock_align,
+            "hidden": "true" if not panel.show_ss_clock else "false",
         },
         "date": {
             "font": panel.date_font,
             "weight": panel.date_weight,
             "color": panel.date_color,
             "align": panel.date_align,
+            "hidden": "true" if not panel.show_ss_date else "false",
         },
         "weather": {
             "outside_temp": bool(panel.show_ss_outside_temp),

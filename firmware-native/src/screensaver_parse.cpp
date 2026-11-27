@@ -108,6 +108,8 @@ void parse_style(const std::string &obj, bool is_date, NspTextStyle &s) {
     s.font_id = base + (bold ? 1 : 0);
     s.pco = style_color(obj, default_color);
     s.align = json_string(obj, "align", v) ? align_id(v) : 1;
+    /* P365 (user order): show/hide the clock and the date. */
+    s.visible = !json_string(obj, "hidden", v) || v != "true";
 }
 
 /* A compact forecast strip that fits the component's 24-byte .txt limit. */

@@ -440,13 +440,28 @@ void nsp_display_show_screensaver(void) {
     if (!s_display_ready) return;
     std::string cmd = std::string("page ") + SCREENSAVER_PAGE;
     nsp_display_send_command(cmd.c_str());
+    /* P365 (user order): the clock/date VISIBILITY — the hidden comps get
+     * vis=0 on every navigation (the TJC vis is runtime-only: after a
+     * display reboot the page's compiled defaults return, so the vis
+     * state must be re-asserted each time the page opens). */
+    extern bool nsp_screensaver_clock_visible(void);
+    extern bool nsp_screensaver_date_visible(void);
+    std::string vis = "screensaver.curTime.vis=";
+    vis += nsp_screensaver_clock_visible() ? "1" : "0";
+    nsp_display_send_command(vis.c_str());
+    vis = "screensaver.curDay.vis=";
+    vis += nsp_screensaver_date_visible() ? "1" : "0";
+    nsp_display_send_command(vis.c_str());
+    vis = "screensaver.curAMPM.vis=";
+    vis += nsp_screensaver_date_visible() ? "1" : "0";
+    nsp_display_send_command(vis.c_str());
     /* P364: the clock shows the REAL time immediately — the page's text
      * objects otherwise hold "00:00" until the next minute-publish. */
-    if (!s_last_time.empty())
+    if (!s_last_time.empty() && nsp_screensaver_clock_visible())
         nsp_display_set_text("screensaver.curTime", s_last_time.c_str());
-    if (!s_last_date.empty())
+    if (!s_last_date.empty() && nsp_screensaver_date_visible())
         nsp_display_set_text("screensaver.curDay", s_last_date.c_str());
-    if (!s_last_ampm.empty())
+    if (!s_last_ampm.empty() && nsp_screensaver_date_visible())
         nsp_display_set_text("screensaver.curAMPM", s_last_ampm.c_str());
 }
 
