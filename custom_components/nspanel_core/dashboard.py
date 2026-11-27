@@ -1292,22 +1292,12 @@ class SettingsView(HomeAssistantView):
             color_temp_min=s.color_temp_min,
             color_temp_max=s.color_temp_max,
             reverse_color_temp=s.reverse_color_temp,
-            turn_on_behavior=s.turn_on_behaviour,
-            turn_on_light_behaviour=s.turn_on_behaviour,
-            home_assistant_address="",
-            home_assistant_token="",
-            raise_to_100_light_level=0,
-            min_button_push_time=50,
-            button_long_press_time=400,
-            special_mode_trigger_time=350,
-            special_mode_release_time=600,
-            screensaver_activation_timeout=s.screensaver_activation_timeout if hasattr(s, "screensaver_activation_timeout") else 15,
-            screen_dim_level=100,
-            screensaver_dim_level=20,
+            # P365: the dead-field context keys removed with the fields
+            # (the P361 cleanup removed the model fields; the view kept
+            # reading them — the Settings page 500'd).
+            screensaver_activation_timeout=getattr(
+                s, "screensaver_activation_timeout", 15),
             screensaver_mode=getattr(s, "screensaver_mode", "with_background"),
-            show_screensaver_inside_temperature=True,
-            show_screensaver_outside_temperature=True,
-            light_turn_on_brightness=s.light_turn_on_brightness,
             room_status_backoff_time=0,
             all_rooms_status_backoff_time=0,
             max_live_log_messages=100,
@@ -1392,9 +1382,7 @@ class SaveSettingsView(HomeAssistantView):
         manager = _manager(request)
         form = await request.post()
         data = dict(form)
-        # The form uses turn_on_behavior (or); the model uses our spelling.
-        if "turn_on_behavior" in data and "turn_on_behaviour" not in data:
-            data["turn_on_behaviour"] = data["turn_on_behavior"]
+        # P365: the turn_on_behaviour alias removed with the dead field.
         errors = await manager.apply_settings(data)
         if errors:
             return web.Response(

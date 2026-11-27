@@ -107,6 +107,48 @@ def studio_card(on: bool | None, w: int = 150, h: int = 110) -> Image.Image:
     return im
 
 
+import math as _math
+
+def weather_icon(kind: str, size: int = 64) -> Image.Image:
+    """P364: the weather glyphs in the brand style — the cyan/white shapes
+    on transparent. kind: sun | cloud | rain | snow."""
+    s = 4
+    W = H = size * s
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    WHITE = (240, 244, 248, 255)
+    if kind == "sun":
+        c = (W // 2, H // 2)
+        r = int(W * 0.22)
+        for i in range(8):
+            ang = _math.pi / 4 * i
+            x1 = c[0] + int(r * 1.5 * _math.cos(ang))
+            y1 = c[1] + int(r * 1.5 * _math.sin(ang))
+            x2 = c[0] + int(r * 1.95 * _math.cos(ang))
+            y2 = c[1] + int(r * 1.95 * _math.sin(ang))
+            d.line((x1, y1, x2, y2), fill=WHITE, width=3 * s)
+        d.ellipse((c[0] - r, c[1] - r, c[0] + r, c[1] + r), fill=WHITE)
+    elif kind in ("cloud", "rain", "snow"):
+        # the cloud body
+        d.ellipse((int(W * 0.18), int(H * 0.28), int(W * 0.52), int(H * 0.62)), fill=WHITE)
+        d.ellipse((int(W * 0.34), int(H * 0.18), int(W * 0.74), int(H * 0.56)), fill=WHITE)
+        d.rounded_rectangle((int(W * 0.18), int(H * 0.42), int(W * 0.74), int(H * 0.60)),
+                            radius=int(W * 0.09), fill=WHITE)
+        if kind == "rain":
+            for i, dx in enumerate((0.28, 0.42, 0.56)):
+                x = int(W * dx)
+                y1 = int(H * 0.66)
+                d.line((x, y1, x - int(W * 0.05), y1 + int(H * 0.16)),
+                       fill=(57, 200, 232, 255), width=3 * s)
+        else:  # snow
+            for i, dx in enumerate((0.28, 0.42, 0.56)):
+                x = int(W * dx)
+                y = int(H * 0.74)
+                r = int(W * 0.045)
+                d.ellipse((x - r, y - r, x + r, y + r), fill=(57, 200, 232, 255))
+    return im.resize((size, size), Image.LANCZOS)
+
+
 def nav_tile(kind: str, w: int = 210, h: int = 64) -> Image.Image:
     """The home page's navigation tile: a dark card + a cyan glyph.
 
@@ -187,6 +229,9 @@ def main() -> None:
     save(studio_card(False), "card_off.png")
     save(studio_card(True), "card_on.png")
     save(studio_card(None), "card_plain.png")
+    # P364: the weather glyphs
+    for wkind in ("sun", "cloud", "rain", "snow"):
+        save(weather_icon(wkind), f"wx_{wkind}.png")
     save(round_button("minus"), "btn_minus.png")
     save(round_button("plus"), "btn_plus.png")
     save(nav_tile("room"), "btn_room.png")
