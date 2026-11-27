@@ -102,7 +102,7 @@ def test_component_map_matches_firmware_conventions():
     assert k["title"] == 2
     assert k["b0"] == 3  # light1's button (slot 0, the label ON the card)
     assert k["b1"] == 4  # temp1's value text (slot 1)
-    assert k["back"] == 5
+    assert "back" not in k, "P363e: the dash back button is removed"
     assert "l0" not in k and "l1" not in k, "the below-labels are gone"
 
 
@@ -163,11 +163,13 @@ def test_generated_menu_and_dash_pages_declare_back_last():
     with tempfile.TemporaryDirectory() as wd:
         hg.generate_source(d, KIT, wd)
         src = os.path.join(wd, "hmi")
-        for name in ("room", "dash_kitchen"):
-            toml = tomllib.load(open(os.path.join(src, "pages", name + ".page.toml"), "rb"))
-            comps = toml["component"]
-            assert comps[-2]["name"] == "back"
-            assert comps[-1]["name"] == "back_pic"
+        room = tomllib.load(open(os.path.join(src, "pages", "room.page.toml"), "rb"))
+        assert room["component"][-2]["name"] == "back"
+        assert room["component"][-1]["name"] == "back_pic"
+        # P363e: the DASH pages have NO back button (the unrecognisable blue
+        # rect; the swipe reaches the menu)
+        dash = tomllib.load(open(os.path.join(src, "pages", "dash_kitchen.page.toml"), "rb"))
+        assert all(c["name"] not in ("back", "back_pic") for c in dash["component"])
 
 
 # -- the real compile (the pipeline proof) --------------------------------

@@ -258,13 +258,13 @@ def test_touch_press_ignored_releases_only():
     assert svc.hass.services.calls == []
 
 
-def test_touch_back_goes_to_menu():
+def test_touch_unknown_component_publishes_nothing():
+    """P363e: the dash back button was removed — an unknown component id on
+    a dash page must publish no navigation (no chains can misfire)."""
     svc, mgr = _svc()
-    comp = svc._maps["e465b849a100"]["dash_kitchen"]["back"]
-    svc.on_touch("e465b849a100", 7, comp, 0)
-    import json as _json
-    nav = [p for t, p in mgr.published if p.get("command") == "dash"]
-    assert any(p.get("payload") == "page room" for p in nav)
+    svc.on_touch("e465b849a100", 7, 999, 0)
+    nav = [p for t, p in mgr.published if p.get("command") == "dash" and "page" in str(p.get("payload", ""))]
+    assert not nav
 
 
 def test_send_rejects_unknown_panel():
