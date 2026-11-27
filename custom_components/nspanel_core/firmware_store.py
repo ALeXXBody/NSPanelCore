@@ -127,6 +127,22 @@ async def download_and_activate(hass, manager, manifest: dict) -> tuple[bool, st
     version = str(manifest.get("version", "")).strip()
     if not version:
         return False, "manifest has no version"
+    # P367c: a STALE manifest must never DOWNGRADE the served firmware.
+    # The P366 release script crashed halfway and left the manifest at
+    # 0.2.6 for a day: every auto-check re-activated the old release and
+    # the panels flashed the OLD binary over the NEW one (the version went
+    # BACKWARDS twice). A manifest strictly older than what is served is
+    # refused; an equal version still activates (the P252 reused-number
+    # re-cut flow is checksum-driven and must keep working).
+    current = getattr(manager, "_ota_active_version", "") or ""
+    if not current:
+        try:
+            current = bundled_version(os.path.dirname(__file__))
+        except Exception:  # noqa: BLE001
+            current = ""
+    if current and _version_tuple(version) < _version_tuple(current):
+        return True, (f"manifest {version} is older than the served "
+                      f"{current} — downgrade refused (P367c)")
     files = manifest.get("files", {})
     missing = [k for k in SERVABLE_FILES if k not in files]
     if missing:
