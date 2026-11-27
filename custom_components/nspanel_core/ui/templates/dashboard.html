@@ -106,12 +106,15 @@
      opaque dark bco (#0d1016) so what you drag is what the glass shows.
      Positions come from the panel's saved drag layout (or the kit's). */
   #pvs_scr { position:absolute; inset:0; }
-  .ss-item { position:absolute; box-sizing:border-box; cursor:move;
-    user-select:none; -webkit-user-select:none; touch-action:none; }
-  .ss-item:hover, .ss-item.ss-drag { outline:1px dashed rgba(57,200,232,.9);
+  /* P372 (user feedback): the drag HANDLE hugs the text — the item keeps
+     the real comp geometry (invisible), the handle is the text itself. */
+  .ss-item { position:absolute; box-sizing:border-box;
+    user-select:none; -webkit-user-select:none; touch-action:none;
+    pointer-events:none; }
+  .ss-handle { position:absolute; cursor:move; pointer-events:auto;
+    white-space:nowrap; touch-action:none; }
+  .ss-handle:hover, .ss-handle.ss-drag { outline:1px dashed rgba(57,200,232,.9);
     outline-offset:2px; z-index:6; }
-  .ss-item .ss-box { background:#0d1016; width:100%; height:100%;
-    overflow:hidden; display:flex; align-items:center; }
   .ss-item .ss-center { width:100%; text-align:center; }
   .ss-clock { color:#c8cbce; letter-spacing:2px; font-weight:300; }
   .ss-date  { color:#8b93a1; letter-spacing:3px; }
@@ -220,6 +223,10 @@
     <div class="studio-preview-grid">
       <div class="studio-preview-cell">
         <div class="studio-preview-label">Screensaver</div>
+        <div class="text-xs" style="color:#8b93a1; max-width:480px; text-align:center;">
+          Drag any block directly in the preview — each position is saved the moment you drop it,
+          and is baked into the display file you send from the Screensaver tab.
+        </div>
         <div class="pv-device" id="pvs_device" data-dev="eu">
           <div class="pv-btnzone pv-bz-left" id="pvs_bz_left"></div>
           <div class="pv-btnzone pv-bz-right" id="pvs_bz_right"></div>
@@ -1188,7 +1195,9 @@ function ssEnableDragging() {
   var scr = document.getElementById('pvs_scr');
   if (!scr) return;
   Array.prototype.forEach.call(scr.querySelectorAll('.ss-item'), function (item) {
-    item.addEventListener('pointerdown', function (ev) {
+    var handle = item.querySelector('.ss-handle');
+    if (!handle) return;
+    handle.addEventListener('pointerdown', function (ev) {
       ev.preventDefault();
       var group = item.dataset.group;
       var pos = ssGroupPos(group);
@@ -1275,6 +1284,16 @@ function renderScreensaverPreview() {
   var scr = document.getElementById('pvs_scr');
   if (!scr) return;
   ssLayout = ssLayoutFromForm();
+  /* P372 (user: "Clock is showing 24h, why is there a PM text?"): the
+   * AM/PM comp exists for the 12h style only — render it only when the
+   * Panel settings carry clock_us_style (and hide it on the glass the
+   * same way, fw 0.2.10). */
+  var usClock = false;
+  try {
+    var pf = document.getElementById('panel_settings_form');
+    var cb = pf ? pf.elements['clock_us_style'] : null;
+    if (cb) usClock = !!cb.checked;
+  } catch (e) {}
   var parts = [];
 
   /* P369: the align setting drives the REAL page's xcen (0/1/2) — the
@@ -1289,35 +1308,35 @@ function renderScreensaverPreview() {
            'text-align:' + ssAlignCss(align) + ';';
   };
 
-  var addText = function (group, cls, show, style, content, center) {
+  /* the handle hugs the text: the item is the invisible real geometry,
+     the handle is the text itself (the dashed outline appears on the
+     text, not on a huge empty box). */
+  var addText = function (group, cls, show, style, content, posCss) {
     if (!show) return;
     var p = ssGroupPos(group);
-    var inner = center
-      ? '<div class="ss-center" style="' + style + '">' + content + '</div>'
-      : '<div style="' + style + '">' + content + '</div>';
     parts.push('<div class="ss-item ' + cls + '" data-group="' + group + '"' +
       ' data-cx="' + p.x + '" data-cy="' + p.y + '"' +
       ' style="left:' + p.x + 'px; top:' + p.y + 'px; width:' + p.w + 'px; height:' + p.h + 'px;">' +
-      inner + '</div>');
+      '<div class="ss-handle" style="' + posCss + '">' +
+      '<span style="' + style + '">' + content + '</span></div>' +
+      '</div>');
   };
+  var centerHandle = 'left:50%; top:50%; transform:translate(-50%,-50%);';
+  var leftHandle = 'left:0; top:50%; transform:translateY(-50%);';
 
   /* the clock/date/AMPM — transparent over the photo (the real page crops
    * the photo behind these texts), centered like the kit's xcen/ycen. */
   /* the clock/date/AMPM — transparent over the photo (the real page
    * crops the photo behind these texts); vertical centering like the
    * kit's ycen, horizontal per the align setting. */
-  var clockStyle = textStyle(s.clock_font, 64, s.clock_weight, s.clock_color, s.clock_align) +
-    'width:100%;height:100%;display:flex;align-items:center;justify-content:' +
-    ({ left: 'flex-start', right: 'flex-end' }[ssAlignCss(s.clock_align)] || 'center') + ';';
-  var dateStyle = textStyle(s.date_font, 24, s.date_weight, s.date_color, s.date_align) +
-    'width:100%;height:100%;display:flex;align-items:center;justify-content:' +
-    ({ left: 'flex-start', right: 'flex-end' }[ssAlignCss(s.date_align)] || 'center') + ';';
+  var clockStyle = textStyle(s.clock_font, 64, s.clock_weight, s.clock_color, s.clock_align);
+  var dateStyle = textStyle(s.date_font, 24, s.date_weight, s.date_color, s.date_align);
   addText('clock', 'ss-clock', s.show_clock !== false, clockStyle,
-          '<span id="pvs_clock">20:39</span>', false);
+          '<span id="pvs_clock">20:39</span>', centerHandle);
   addText('date', 'ss-date', s.show_date !== false, dateStyle,
-          '<span id="pvs_date">27 NOV</span>', false);
-  addText('ampm', 'ss-ampm', s.show_date !== false, dateStyle,
-          '<span id="pvs_ampm">PM</span>', false);
+          '<span id="pvs_date">27 NOV</span>', centerHandle);
+  addText('ampm', 'ss-ampm', s.show_date !== false && usClock, dateStyle,
+          '<span id="pvs_ampm">PM</span>', centerHandle);
 
   /* the weather row — the kit's opaque dark boxes (bco #0d1016), the
    * stacked glyph group as ONE draggable item. */
@@ -1329,10 +1348,8 @@ function renderScreensaverPreview() {
       ' style="left:' + g.x + 'px; top:' + g.y + 'px; width:' + g.w + 'px; height:' + g.h + 'px;">' +
       icon + '</div>');
   }
-  addText('outside', 'ss-wout', s.show_ss_outside_temp,
-          'width:100%;height:100%;', '21.5°C', false);
-  addText('inside', 'ss-win', s.show_ss_room_temp,
-          'width:100%;height:100%;', '19.5°C', false);
+  addText('outside', 'ss-wout', s.show_ss_outside_temp, '', '21.5°C', leftHandle);
+  addText('inside', 'ss-win', s.show_ss_room_temp, '', '19.5°C', leftHandle);
   if (s.show_ss_forecast) {
     /* per row: [group, glyph, day, mm, glyphDy, textDy] — the kit's own
      * deltas inside the group box (row0: both at the top; row1: the glyph
@@ -1344,14 +1361,15 @@ function renderScreensaverPreview() {
       parts.push('<div class="ss-item" data-group="' + group + '"' +
         ' data-cx="' + p.x + '" data-cy="' + p.y + '"' +
         ' style="left:' + p.x + 'px; top:' + p.y + 'px; width:' + p.w + 'px; height:' + p.h + 'px;">' +
-        '<div style="position:absolute; left:0; top:' + glyphDy + 'px; width:40px; height:40px;">' + row[1] + '</div>' +
-        '<div class="ss-f-day" style="position:absolute; left:48px; top:' + textDy + 'px; width:160px;">' + row[2] + '</div>' +
-        '<div class="ss-f-mm" style="position:absolute; left:48px; top:' + (textDy + 24) + 'px; width:160px;">' + row[3] + '</div>' +
+        '<div style="position:absolute; left:0; top:' + glyphDy + 'px; width:40px; height:40px; pointer-events:none;">' + row[1] + '</div>' +
+        '<div class="ss-handle" style="left:48px; top:' + textDy + 'px; width:160px;">' +
+        '<div class="ss-f-day">' + row[2] + '</div>' +
+        '<div class="ss-f-mm">' + row[3] + '</div>' +
+        '</div>' +
         '</div>');
     });
   }
 
-  parts.push('<div class="ss-hint">drag any block · positions save on drop · "Send to panel" on the Screensaver tab</div>');
   scr.innerHTML = parts.join('');
   ssEnableDragging();
   tickClock();

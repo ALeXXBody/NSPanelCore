@@ -1,21 +1,21 @@
 {
-    "version": "0.2.9",
-    "notes": "Firmware 0.2.9 - the FULL screensaver state re-asserted on every entry into the page (P368, the user's photo: empty dark boxes + all stacked weather glyphs visible after a display reboot/power cycle, because the weather row re-rendered only when a new payload arrived - up to 30 min): the cached style + weather commands now re-render on every screensaver navigation. Carries 0.2.8 (the clock/date show-hide) and 0.2.7 (the no-screensaver consumption).",
+    "version": "0.2.10",
+    "notes": "Firmware 0.2.10 - the AM/PM comp hides whenever the manager publishes no ampm string (a 24h clock): the compiled 'AM' default / empty dark box no longer lingers on the screensaver (the user: 'Clock is showing 24h, why is there a PM text?'). Both write paths (the minute publish and the page navigation) assert the visibility. Carries 0.2.9 (the full screensaver re-assert on entry) and 0.2.8.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.9/native-firmware-0.2.9.bin",
-            "md5": "96875a0d883c88d38356cfc6fa487e59"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.10/native-firmware-0.2.10.bin",
+            "md5": "2c874b106549adccdc10c6f82efd251e"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.9/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.10/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.9/native-firmware-0.2.9.bin",
-            "md5": "96875a0d883c88d38356cfc6fa487e59"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.10/native-firmware-0.2.10.bin",
+            "md5": "2c874b106549adccdc10c6f82efd251e"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.9/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.10/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {
