@@ -1803,28 +1803,44 @@ class NSPanelCoreManager:
         # matches; a panel reporting the STOCK md5 with an active design
         # gets its dashboard re-delivered (self-healing).
         dash = getattr(self, "dash", None)
+        # P367 (user: "AGAIN.... the panel has a black background and
+        # unresponsive touchscreen"): a panel bearing a design must NEVER
+        # fall through to the stock comparison below. The expected md5 is
+        # the DELIVERED one (the persisted pushed_map - P367) or the stored
+        # dashboard TFT on disk; an empty map after a restart used to drop
+        # the check entirely, compare the design md5 against the STOCK md5,
+        # and trigger the stock flash over the design (the recurring
+        # black-glass corruption: the two kept fighting until the flash
+        # wore out).
         dash_md5 = (getattr(dash, "_pushed_map", {}) or {}).get(panel.mac) if dash else None
-        if dash is not None and dash.has_design(panel.mac) and dash_md5:
-            if report.get("md5_tft_file") == dash_md5:
-                return  # current with its dashboard — leave it alone
-            if report.get("md5_tft_file") and report["md5_tft_file"] != dash_md5:
-                tft_path = self.dash.stored_tft_path(panel.mac)
-                if tft_path and os.path.isfile(tft_path):
-                    import hashlib as _h
-                    with open(tft_path, "rb") as _f:  # P361: the handle was never closed
-                        got = _h.md5(_f.read()).hexdigest()
-                    if report.get("md5_tft_file") == got:
-                        return  # the dash TFT is on the panel already
-                    # wiped by the stock auto-push: re-deliver the dashboard
-                    if report.get("md5_tft_file") == tft_md5 and self.config.settings.auto_tft_updates:
-                        _LOGGER.info("Panel %s lost its dashboard TFT — re-delivering", panel.name)
-                        dash.rearm_serving(panel.mac)
-                        await self._publish(self._panel_cmd_topic(panel, "command"),
-                                            json.dumps({"command": "tft_update"}))
-                        return
-        # P239: an EMPTY reported md5 is "never delivered", not "nothing to
-        # compare" — a fresh panel (or one running the pre-0.1.4 firmware,
-        # which never recorded the field) must still get the display image.
+        if dash is not None and dash.has_design(panel.mac):
+            tft_path = self.dash.stored_tft_path(panel.mac)
+            if not dash_md5 and tft_path and os.path.isfile(tft_path):
+                import hashlib as _h
+                with open(tft_path, "rb") as _f:  # P361: the handle was never closed
+                    dash_md5 = _h.md5(_f.read()).hexdigest()
+            if dash_md5:
+                if report.get("md5_tft_file") == dash_md5:
+                    return  # current with its dashboard - leave it alone
+                # wiped by the stock auto-push: re-deliver the dashboard
+                if report.get("md5_tft_file") == tft_md5 and self.config.settings.auto_tft_updates:
+                    _LOGGER.info("Panel %s lost its dashboard TFT - re-delivering", panel.name)
+                    dash.rearm_serving(panel.mac)
+                    await self._publish(self._panel_cmd_topic(panel, "command"),
+                                        json.dumps({"command": "tft_update"}))
+                    return
+                # P367: an EMPTY or UNKNOWN md5 with a design on the books
+                # is never a reason to flash the stock - log and leave the
+                # glass alone (the old fall-through delivered the stock
+                # over the design).
+                _LOGGER.info(
+                    "Panel %s reports TFT md5 %r - dashboard expects %s; "
+                    "not touching the glass", panel.name,
+                    report.get("md5_tft_file") or "", dash_md5[:12])
+                return
+            # no map and no stored TFT: the design was never delivered to
+            # this panel - the stock auto-update below is safe (the glass
+            # is stock)
         if tft_cooled and tft_md5 and (not report.get("md5_tft_file") or report["md5_tft_file"] != tft_md5):
             # P312: a panel whose display is not answering CANNOT take the
             # stream — triggering it wedged the user's panel (the delivery's

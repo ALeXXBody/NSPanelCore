@@ -72,6 +72,13 @@ class DashboardService:
             m: dd.PanelDesign.from_dict(d)
             for m, d in data.get("delivered", {}).items()
         }
+        # P367 (user: "AGAIN.... the panel has a black background and
+        # unresponsive touchscreen"): the delivered-md5 map must SURVIVE a
+        # restart — an empty map made the register's auto-TFT evaluation
+        # fall through to the stock comparison and flash the STOCK over the
+        # design (the recurring black-glass corruption: every "AGAIN" was
+        # an HA restart between the last send and the next register).
+        self._pushed_map = dict(data.get("pushed_map", {}))
 
     async def _save(self) -> None:
         await self._store.async_save(
@@ -80,6 +87,7 @@ class DashboardService:
                 "maps": self._maps,
                 "page_ids": self._page_ids,
                 "delivered": {m: d.to_dict() for m, d in self._delivered.items()},
+                "pushed_map": dict(self._pushed_map),
             }
         )
 
@@ -207,6 +215,7 @@ class DashboardService:
         self._auto_serving = {"mac": mac, "path": path, "md5": md5,
                               "ts": _t.time()}
         self._pushed_map[mac] = md5
+        self.hass.async_create_task(self._save())  # P367: persist immediately
         return {"ok": True}
 
     async def async_send_to_panel(self, mac: str) -> dict:
@@ -317,7 +326,13 @@ class DashboardService:
                     mac, sent[:12], seq, pre_seq)
                 return info
             self._serving = None
-            self._pushed_map.pop(mac, None)  # re-push the map for the fresh UI
+            # P367: KEEP the map — the panel now carries exactly this md5,
+            # and the auto-TFT guard needs it on the next register. The old
+            # pop emptied the books the moment a delivery completed: the
+            # next register then compared the design md5 against the STOCK
+            # md5 and triggered the stock flash over the design.
+            self._pushed_map[mac] = sent
+            # No save needed here: the send already persisted this exact md5.
             info["delivered"] = True
             _LOGGER.info("Dashboard TFT delivered to panel %s", mac)
         return info
