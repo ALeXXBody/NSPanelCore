@@ -120,11 +120,9 @@ const tick = function () { return new Promise(function (r) { setTimeout(r, 0); }
   set('clock_font', 'xlarge');
   set('clock_weight', 'bold');
   set('clock_color', '#39c8e8');
-  set('clock_align', 'right');
   set('date_font', 'medium');
   set('date_weight', 'bold');
   set('date_color', '#8b93a1');
-  set('date_align', 'left');
   set('show_ss_outside_temp', true, true);
   set('show_ss_room_temp', true, true);
   set('show_ss_forecast', true, true);
@@ -261,11 +259,12 @@ def test_real_dom_studio_tab_controls_preview_and_save_payload():
     assert out["preview"]["clock"]["fontSize"] == "64px"
     assert out["preview"]["clock"]["fontWeight"] == "700"
     assert out["preview"]["clock"]["color"] in ("#39c8e8", "rgb(57, 200, 232)")
-    assert out["preview"]["clock"]["textAlign"] == "right"
+    # P372: the align controls are gone — the stored value (center) rules
+    assert out["preview"]["clock"]["textAlign"] == "center"
     assert out["preview"]["date"]["fontSize"] == "32px"
     assert out["preview"]["date"]["fontWeight"] == "700"
     assert out["preview"]["date"]["color"] in ("#8b93a1", "rgb(139, 147, 161)")
-    assert out["preview"]["date"]["textAlign"] == "left"
+    assert out["preview"]["date"]["textAlign"] == "center"
     # P369: the preview is the DRAG CANVAS — the weather row items are the
     # real page's comps (the toggled-on ones rendered, the off ones gone).
     assert out["preview"]["outside"] == "21.5°C", out["preview"]["outside"]
@@ -274,7 +273,9 @@ def test_real_dom_studio_tab_controls_preview_and_save_payload():
     assert "23°/9°" in out["preview"]["forecast0"], out["preview"]["forecast0"]
     # the full drag canvas: clock, date, ampm, wx_icon, outside, inside,
     # forecast0, forecast1
-    assert out["preview"]["dragItems"] == 8, out["preview"]["dragItems"]
+    # P372: the ampm item renders only for a 12h clock (the panel here is
+    # 24h) — 7 items: clock, date, wx_icon, outside, inside, forecast0/1
+    assert out["preview"]["dragItems"] == 7, out["preview"]["dragItems"]
 
     # The submit posts the real form values as JSON to the real endpoint.
     save = out["save"]
@@ -284,8 +285,8 @@ def test_real_dom_studio_tab_controls_preview_and_save_payload():
     assert save["contentType"] == "application/json"
     assert save["body"] == {
         "clock_font": "xlarge", "clock_weight": "bold", "clock_color": "#39c8e8",
-        "clock_align": "right", "date_font": "medium", "date_weight": "bold",
-        "date_color": "#8b93a1", "date_align": "left",
+        "date_font": "medium", "date_weight": "bold",
+        "date_color": "#8b93a1",
         "show_ss_outside_temp": True, "show_ss_room_temp": True,
         "show_ss_forecast": True, "show_ss_wind": True, "show_ss_rain": True,
         "show_ss_sunrise_sunset": True,

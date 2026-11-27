@@ -105,8 +105,10 @@ def test_get_view_renders_real_stored_values_and_real_entity_options():
     assert 'value="xlarge" selected' in html
     assert 'value="bold" selected' in html
     assert 'value="#39c8e8"' in html
-    assert 'value="right" selected' in html
     assert 'value="medium" selected' in html
+    # P372 (user): the alignment controls are gone — the kit's centered
+    # clock/date is the look; the stored align values simply persist.
+    assert 'clock_align' not in html and 'date_align' not in html
     for flag in ("show_ss_wind", "show_ss_sunrise_sunset"):
         assert re.search(r'name="%s"[^>]*\bchecked\b' % flag, html), flag
     # P308: the entity choice is a type-to-filter box — the stored value lives
@@ -119,8 +121,8 @@ def test_get_view_renders_real_stored_values_and_real_entity_options():
 
     # All fifteen persisted fields are editable, and the form targets the
     # matching save endpoint for this panel.
-    for field in ("clock_font", "clock_weight", "clock_color", "clock_align",
-                  "date_font", "date_weight", "date_color", "date_align",
+    for field in ("clock_font", "clock_weight", "clock_color",
+                  "date_font", "date_weight", "date_color",
                   "show_ss_outside_temp", "show_ss_room_temp", "show_ss_forecast",
                   "show_ss_wind", "show_ss_rain", "show_ss_sunrise_sunset",
                   "ss_outside_temp_entity", "ss_room_temp_entity"):

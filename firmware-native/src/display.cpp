@@ -461,7 +461,10 @@ void nsp_display_show_screensaver(void) {
     vis += nsp_screensaver_date_visible() ? "1" : "0";
     nsp_display_send_command(vis.c_str());
     vis = "screensaver.curAMPM.vis=";
-    vis += nsp_screensaver_date_visible() ? "1" : "0";
+    /* P372: the ampm comp shows only with a date AND an actual ampm
+     * string - a 24h clock has none, the comp must be hidden on every
+     * navigation (the vis is runtime-only). */
+    vis += (nsp_screensaver_date_visible() && !s_last_ampm.empty()) ? "1" : "0";
     nsp_display_send_command(vis.c_str());
     /* P364: the clock shows the REAL time immediately — the page's text
      * objects otherwise hold "00:00" until the next minute-publish. */
@@ -504,8 +507,18 @@ void nsp_display_set_date(const std::string &date_str) {
 
 void nsp_display_set_ampm(const std::string &ampm_str) {
     s_last_ampm = ampm_str;
-    nsp_display_set_text("screensaver.curAMPM", ampm_str.c_str());
-    nsp_display_set_text("mini.curAMPM", ampm_str.c_str());
+    /* P372 (user: "Clock is showing 24h, why is there a PM text?"): with a
+     * 24h clock the manager publishes an EMPTY ampm - the old code wrote
+     * an empty text but left the comp VISIBLE, so the compiled "AM"
+     * default (or the empty dark box) stayed on the glass forever. An
+     * empty ampm HIDES the comp; a real one shows it. */
+    std::string vis = (ampm_str.empty() ? "0" : "1");
+    nsp_display_send_command(("screensaver.curAMPM.vis=" + vis).c_str());
+    nsp_display_send_command(("mini.curAMPM.vis=" + vis).c_str());
+    if (!ampm_str.empty()) {
+        nsp_display_set_text("screensaver.curAMPM", ampm_str.c_str());
+        nsp_display_set_text("mini.curAMPM", ampm_str.c_str());
+    }
 }
 
 /* Touch listener: decode 0x65 events, wake the screen on touch. */
