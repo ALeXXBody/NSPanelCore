@@ -20,7 +20,14 @@
 #      made HACS rank '0.3.18' below '0.3.9' (a STRING compare: '1' < '9')
 #
 # Usage: scripts/release_app.sh <version> [title] [notes-file]
-#   (version without the app- prefix, e.g. 0.3.19)
+#
+# P373 (user order, after the 0.4.0-then-0.4.1 stacking): WHILE A RELEASE
+# IS NOT INSTALLED BY THE USER, ITS CHANGES FORCE-MOVE THE SAME VERSION —
+# same tag, clobbered asset — NEVER a new version number. A new version
+# number is only allowed once the user has deployed the current one (or
+# explicitly authorizes the bump). This script enforces it: if the tag
+# already exists, the release is force-moved (asset --clobber), not
+# duplicated.
 set -euo pipefail
 
 VER="${1:?usage: release_app.sh <version> [title] [notes-file]}"
