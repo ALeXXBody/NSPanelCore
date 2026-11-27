@@ -1,21 +1,21 @@
 {
-    "version": "0.2.5",
-    "notes": "Firmware 0.2.5 \u2014 the screensaver weather: the icon glyph group (sun/cloud/rain/snow \u2014 the vis swaps on the four stacked glyph comps), the temps beside the icon (the big outside, the room under it), and the forecast rows (the day + the max/min for the first two forecast days). The kit page carries the comps; the manager's payload drives them. Carries all prior fixes.",
+    "version": "0.2.6",
+    "notes": "Firmware 0.2.6 \u2014 the forecast glyphs: each forecast row carries its own weather glyph (the vis swaps among the stacked comps per row), the row icon parsed from the payload's forecast array. Carries all prior fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.5/native-firmware-0.2.5.bin",
-            "md5": "5454349b4e14d0c5801383810b88bcb5"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.6/native-firmware-0.2.6.bin",
+            "md5": "34d651541c844cc8b81bc1919bc121e3"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.5/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.6/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.5/native-firmware-0.2.5.bin",
-            "md5": "5454349b4e14d0c5801383810b88bcb5"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.6/native-firmware-0.2.6.bin",
+            "md5": "34d651541c844cc8b81bc1919bc121e3"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.5/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.6/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

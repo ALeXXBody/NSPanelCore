@@ -259,11 +259,25 @@ bool nsp_weather_parse(const std::string &payload, NspWeatherData &out) {
                 size_t cb = payload.find('}', ob);
                 if (cb == std::string::npos) break;
                 const std::string row = payload.substr(ob, cb - ob + 1);
-                std::string day, maxmin;
+                std::string day, maxmin, row_icon;
                 json_string(row, "day", day);
                 json_string(row, "maxmin", maxmin);
+                json_string(row, "icon", row_icon);
                 r.day[r.day_count] = nsp_display_clean(day, 5);
                 r.day_maxmin[r.day_count] = nsp_display_clean(maxmin, 16);
+                /* P365: the row's own glyph — the same mapping as the
+                 * current conditions. */
+                if (row_icon.find("sunny") != std::string::npos ||
+                    row_icon.find("partly") != std::string::npos)
+                    r.row_icon[r.day_count] = WX_SUN;
+                else if (row_icon.find("snow") != std::string::npos)
+                    r.row_icon[r.day_count] = WX_SNOW;
+                else if (row_icon.find("rain") != std::string::npos ||
+                         row_icon.find("sleet") != std::string::npos ||
+                         row_icon.find("thunder") != std::string::npos)
+                    r.row_icon[r.day_count] = WX_RAIN;
+                else
+                    r.row_icon[r.day_count] = WX_CLOUD;
                 r.day_count++;
                 any = true;
                 i = cb + 1;
@@ -313,14 +327,20 @@ std::vector<std::string> nsp_weather_commands(const NspWeatherData &data,
         const std::string base = std::string("screensaver.") + icon_objs[i];
         cmds.push_back(base + ".vis=" + (data.icon_group == i ? "1" : "0"));
     }
-    /* P364: the forecast rows — the day name + the max/min temps for the
-     * first three forecast days (fDay0..2 + fMM0..2 on the page). */
-    for (int i = 0; i < 3 && i < data.day_count; i++) {
+    /* P364+P365: the forecast rows — the day name + the max/min temps,
+     * and the row's own glyph (the vis swaps among the stacked comps). */
+    const char *fglyph[4] = {"fSun", "fCloud", "fRain", "fSnow"};
+    for (int row = 0; row < 2 && row < data.day_count; row++) {
         const std::string base = "screensaver.f";
-        cmds.push_back(base + "Day" + std::to_string(i) + ".txt=\"" +
-                       nsp_display_clean(data.day[i], 12) + "\"");
-        cmds.push_back(base + "MM" + std::to_string(i) + ".txt=\"" +
-                       nsp_display_clean(data.day_maxmin[i], 16) + "\"");
+        cmds.push_back(base + "Day" + std::to_string(row) + ".txt=\"" +
+                       nsp_display_clean(data.day[row], 12) + "\"");
+        cmds.push_back(base + "MM" + std::to_string(row) + ".txt=\"" +
+                       nsp_display_clean(data.day_maxmin[row], 16) + "\"");
+        for (int gi = 0; gi < 4; gi++) {
+            const std::string gbase = base + fglyph[gi] + std::to_string(row);
+            cmds.push_back(gbase + ".vis=" +
+                           (data.row_icon[row] == gi ? "1" : "0"));
+        }
     }
     return cmds;
 }

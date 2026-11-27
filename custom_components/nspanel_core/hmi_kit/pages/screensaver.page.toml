@@ -166,6 +166,78 @@ pco = "#f0f4f8"
 txt = ""
 
 [[component]]
+name = "fSun0"
+type = "picture"
+x = 262
+y = 236
+w = 40
+h = 40
+pic = "wx_sun"
+
+[[component]]
+name = "fCloud0"
+type = "picture"
+x = 262
+y = 236
+w = 40
+h = 40
+pic = "wx_cloud"
+
+[[component]]
+name = "fRain0"
+type = "picture"
+x = 262
+y = 236
+w = 40
+h = 40
+pic = "wx_rain"
+
+[[component]]
+name = "fSnow0"
+type = "picture"
+x = 262
+y = 236
+w = 40
+h = 40
+pic = "wx_snow"
+
+[[component]]
+name = "fSun1"
+type = "picture"
+x = 262
+y = 278
+w = 40
+h = 40
+pic = "wx_sun"
+
+[[component]]
+name = "fCloud1"
+type = "picture"
+x = 262
+y = 278
+w = 40
+h = 40
+pic = "wx_cloud"
+
+[[component]]
+name = "fRain1"
+type = "picture"
+x = 262
+y = 278
+w = 40
+h = 40
+pic = "wx_rain"
+
+[[component]]
+name = "fSnow1"
+type = "picture"
+x = 262
+y = 278
+w = 40
+h = 40
+pic = "wx_snow"
+
+[[component]]
 name = "wake"
 type = "hotspot"
 sendkey = 3

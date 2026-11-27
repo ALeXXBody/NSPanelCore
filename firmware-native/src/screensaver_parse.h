@@ -52,6 +52,7 @@ struct NspScreensaverConfig {
 
 struct NspWeatherData {
     int icon_group = WX_CLOUD;  // P364: the glyph group
+    int row_icon[5] = {WX_CLOUD, WX_CLOUD, WX_CLOUD, WX_CLOUD, WX_CLOUD};
     std::string temp;
     std::string wind;
     std::string prepro;

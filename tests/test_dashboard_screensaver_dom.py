@@ -256,8 +256,9 @@ def test_real_dom_studio_tab_controls_preview_and_save_payload():
     assert out["preview"]["date"]["textAlign"] == "left"
     # P364: the weather block matches the panel's layout — the Out/In
     # temps beside the icon and the 3 forecast rows.
-    for text in ("Out", "21°C", "In", "19.5°C", "Mon", "23°/9°",
-                 "Tue", "Wed"):
+    # P365: the temps + the forecast rows render; the icon glyphs are SVG
+    # (the node-side text extraction strips them — assert the visible text)
+    for text in ("21°C", "19.5°C", "Mon", "23°/9°", "Tue", "Wed"):
         assert text in out["preview"]["weatherText"], text
     for gone in ("W 12 km/h", "R 0.2 mm", "U06:12"):
         assert gone not in out["preview"]["weatherText"], gone

@@ -122,6 +122,8 @@
     display:flex; flex-direction:column; gap:4px; text-align:left; }
   .studio-ss-forecast .ss-f-row { display:flex; gap:10px; align-items:center; }
   .studio-ss-forecast .ss-f-day { font-size:12px; color:#39c8e8; width:42px; }
+  .ss-wx-glyph { width:40px; height:40px; }
+  .ss-f-icon .ss-wx-glyph { width:22px; height:22px; }
   .studio-ss-forecast .ss-f-mm { font-size:13px; color:#c8cbce; }
   .studio-ss-weather span { white-space:nowrap; }
   .studio-tab { cursor: pointer; padding: 8px 18px; border-radius: 10px 10px 0 0;
@@ -1106,15 +1108,30 @@ function renderScreensaverPreview() {
   }
   var strip = document.getElementById('pvs_weather');
   if (strip) {
-    /* P364: the weather block matches the panel's layout — the icon, the
-     * temps beside it, the forecast rows on the right. */
+    /* P365: the weather block matches the panel's layout — the glyph ICON,
+     * the temps beside it, and the forecast rows each with their own icon. */
+    var svg = {
+      sun: '<svg viewBox="0 0 64 64" class="ss-wx-glyph"><circle cx="32" cy="32" r="12" fill="#f0f4f8"/><g stroke="#f0f4f8" stroke-width="3"><line x1="32" y1="8" x2="32" y2="16"/><line x1="32" y1="48" x2="32" y2="56"/><line x1="8" y1="32" x2="16" y2="32"/><line x1="48" y1="32" x2="56" y2="32"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="43" y1="43" x2="49" y2="49"/><line x1="15" y1="49" x2="21" y2="43"/><line x1="43" y1="21" x2="49" y2="15"/></g></svg>',
+      cloud: '<svg viewBox="0 0 64 64" class="ss-wx-glyph"><path d="M20 44 h24 a8 8 0 0 0 0-16 a12 12 0 0 0-22-4 a9 9 0 0 0-2 20z" fill="#f0f4f8"/></svg>',
+      rain: '<svg viewBox="0 0 64 64" class="ss-wx-glyph"><path d="M20 36 h24 a8 8 0 0 0 0-16 a12 12 0 0 0-22-4 a9 9 0 0 0-2 20z" fill="#f0f4f8"/><g stroke="#39c8e8" stroke-width="3"><line x1="20" y1="42" x2="16" y2="52"/><line x1="30" y1="42" x2="26" y2="52"/><line x1="40" y1="42" x2="36" y2="52"/></g></svg>',
+      snow: '<svg viewBox="0 0 64 64" class="ss-wx-glyph"><path d="M20 36 h24 a8 8 0 0 0 0-16 a12 12 0 0 0-22-4 a9 9 0 0 0-2 20z" fill="#f0f4f8"/><g fill="#39c8e8"><circle cx="20" cy="48" r="3"/><circle cx="30" cy="50" r="3"/><circle cx="40" cy="48" r="3"/></g></svg>'
+    };
     var rows = [];
-    if (s.show_ss_outside_temp) rows.push('<div class="ss-f-row"><span class="ss-f-day">Out</span><span class="ss-f-mm">21°C</span></div>');
-    if (s.show_ss_room_temp) rows.push('<div class="ss-f-row"><span class="ss-f-day">In</span><span class="ss-f-mm">19.5°C</span></div>');
+    var iconHtml = function (kind) { return svg[kind] || svg.cloud; };
+    if (s.show_ss_outside_temp || s.show_ss_room_temp) {
+      rows.push('<div class="ss-wx-col"><div class="ss-wx-icon">' + iconHtml(s.ss_icon || 'cloud') + '</div></div>');
+    }
+    var cols = [];
+    if (s.show_ss_outside_temp) cols.push('<div class="ss-wx-temp">21°C</div>');
+    if (s.show_ss_room_temp) cols.push('<div class="ss-wx-in">19.5°C</div>');
+    if (cols.length) rows.push('<div class="ss-wx-col">' + cols.join('') + '</div>');
     if (s.show_ss_forecast) {
-      rows.push('<div class="ss-f-row"><span class="ss-f-day">Mon</span><span class="ss-f-mm">23°/9°</span></div>');
-      rows.push('<div class="ss-f-row"><span class="ss-f-day">Tue</span><span class="ss-f-mm">21°/8°</span></div>');
-      rows.push('<div class="ss-f-row"><span class="ss-f-day">Wed</span><span class="ss-f-mm">22°/9°</span></div>');
+      var frows = [];
+      [['Mon', '23°/9°', 'sun'], ['Tue', '21°/8°', 'rain'], ['Wed', '22°/9°', 'cloud']].forEach(function (f) {
+        frows.push('<div class="ss-f-row"><span class="ss-f-icon">' + iconHtml(f[2]) + '</span>' +
+                   '<span class="ss-f-day">' + f[0] + '</span><span class="ss-f-mm">' + f[1] + '</span></div>');
+      });
+      rows.push('<div class="studio-ss-forecast">' + frows.join('') + '</div>');
     }
     strip.innerHTML = rows.join('');
   }
