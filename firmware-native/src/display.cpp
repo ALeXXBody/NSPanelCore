@@ -440,6 +440,14 @@ void nsp_display_show_screensaver(void) {
     if (!s_display_ready) return;
     std::string cmd = std::string("page ") + SCREENSAVER_PAGE;
     nsp_display_send_command(cmd.c_str());
+    /* P368: re-assert the FULL screensaver state from the cached payloads -
+     * the style commands (the fonts/colors of the clock/date row) AND the
+     * weather row (the vis of every comp + the stacked glyph swaps + the
+     * texts). A fresh/flashed display boots with the compiled defaults;
+     * without this the bottom third stayed empty-dark-boxes-plus-blobs
+     * until the next weather poll (up to 30 min). */
+    extern void nsp_screensaver_reassert(void);
+    nsp_screensaver_reassert();
     /* P365 (user order): the clock/date VISIBILITY — the hidden comps get
      * vis=0 on every navigation (the TJC vis is runtime-only: after a
      * display reboot the page's compiled defaults return, so the vis

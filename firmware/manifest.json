@@ -1,21 +1,21 @@
 {
-    "version": "0.2.8",
-    "notes": "Firmware 0.2.8 \u2014 the clock/date show/hide delivered (the user order: remove both Panel-tab screensaver fields, the settings live on the Screensaver tab, with show/hide clock and date): the payload's style blocks carry the hidden flags, the firmware stores the visibility and re-asserts it on every screensaver navigation (the TJC vis is runtime-only). The time writes skip the hidden comps. The no-screensaver mode disables the navigation (0.2.7, carried).",
+    "version": "0.2.9",
+    "notes": "Firmware 0.2.9 - the FULL screensaver state re-asserted on every entry into the page (P368, the user's photo: empty dark boxes + all stacked weather glyphs visible after a display reboot/power cycle, because the weather row re-rendered only when a new payload arrived - up to 30 min): the cached style + weather commands now re-render on every screensaver navigation. Carries 0.2.8 (the clock/date show-hide) and 0.2.7 (the no-screensaver consumption).",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.8/native-firmware-0.2.8.bin",
-            "md5": "7eeae9e88fc26cae058e93cd29c49842"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.9/native-firmware-0.2.9.bin",
+            "md5": "96875a0d883c88d38356cfc6fa487e59"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.8/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.9/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.8/native-firmware-0.2.8.bin",
-            "md5": "7eeae9e88fc26cae058e93cd29c49842"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.9/native-firmware-0.2.9.bin",
+            "md5": "96875a0d883c88d38356cfc6fa487e59"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.8/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.9/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

@@ -394,6 +394,17 @@ bool nsp_screensaver_enabled(void) {
 bool nsp_screensaver_clock_visible(void) { return s_screensaver_cfg.clock.visible; }
 bool nsp_screensaver_date_visible(void) { return s_screensaver_cfg.date.visible; }
 
+/* P368 (user photo: black bars + white blobs on the bottom third after the
+ * display's power cycle): the screensaver page's weather row - the dark
+ * text boxes (wOutTemp, wRoomTemp, fDay0-1, fMM0-1) and the STACKED glyph comps -
+ * held the compiled defaults after every display reboot: empty dark boxes
+ * and ALL stacked glyphs visible at once (the white blobs). The full state
+ * re-rendered only when a NEW payload arrived (up to 30 min). Expose the
+ * cached re-render so the display's navigation re-asserts everything. */
+void nsp_screensaver_reassert(void) {
+    nsp_screensaver_apply(true);
+}
+
 void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
                                     int heap_pct, float temperature,
                                     const std::string &warnings) {
