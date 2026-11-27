@@ -252,19 +252,19 @@ def test_real_dom_studio_tab_controls_preview_and_save_payload():
     assert out["settingsFetched"] is True
     assert out["controlCount"] >= 16
     assert out["previewAtLoad"]["fontSize"] == "48px"   # default large clock
-    assert out["previewAtLoad"]["textAlign"] == "center"
+    assert out["previewAtLoad"]["textAlign"] == "left"  # P377: free text
 
     # Live preview follows every control, without a save (jsdom normalises
     # hex colours to rgb(), so accept either spelling).
     assert out["preview"]["clock"]["fontSize"] == "64px"
     assert out["preview"]["clock"]["fontWeight"] == "700"
     assert out["preview"]["clock"]["color"] in ("#39c8e8", "rgb(57, 200, 232)")
-    # P372: the align controls are gone — the stored value (center) rules
-    assert out["preview"]["clock"]["textAlign"] == "center"
+    # P377: the align concept retired — the text is left-anchored
+    assert out["preview"]["clock"]["textAlign"] == "left"
     assert out["preview"]["date"]["fontSize"] == "32px"
     assert out["preview"]["date"]["fontWeight"] == "700"
     assert out["preview"]["date"]["color"] in ("#8b93a1", "rgb(139, 147, 161)")
-    assert out["preview"]["date"]["textAlign"] == "center"
+    assert out["preview"]["date"]["textAlign"] == "left"
     # P369: the preview is the DRAG CANVAS — the weather row items are the
     # real page's comps (the toggled-on ones rendered, the off ones gone).
     assert out["preview"]["outside"] == "21.5°C", out["preview"]["outside"]

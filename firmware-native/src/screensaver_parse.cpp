@@ -302,7 +302,15 @@ std::vector<std::string> nsp_screensaver_style_commands(const NspScreensaverConf
             const std::string base = std::string(page) + "." + object;
             cmds.push_back(base + ".font=" + std::to_string(s.font_id));
             cmds.push_back(base + ".pco=" + std::to_string(s.pco));
-            cmds.push_back(base + ".xcen=" + std::to_string(s.align));
+            /* P377 (user: "remove the alignments so the text can be free"):
+             * the screensaver page's clock/date/ampm are LEFT-ANCHORED in
+             * the generated HMI - the drag moves the box and the text
+             * corner follows 1:1. The xcen command would re-center them
+             * and break the geometry, so it applies to the screensaver
+             * page only; the mini page keeps its authored (centered)
+             * alignment. */
+            if (std::string(page) == "screensaver")
+                cmds.push_back(base + ".xcen=" + std::to_string(s.align));
         }
     }
     return cmds;

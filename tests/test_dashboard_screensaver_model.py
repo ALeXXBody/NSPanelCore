@@ -75,8 +75,9 @@ def test_payload_shape_is_stable_and_carries_resolved_temps():
     assert set(payload) == {"clock", "date", "weather", "activation_timeout",
                             "clock_visible", "date_visible"}
     assert payload["activation_timeout"] == "15"
+    # P377: the align retires to left (the free-text left anchor)
     assert payload["clock"] == {"font": "medium", "weight": "bold",
-                                "color": "#c8cbce", "align": "center",
+                                "color": "#c8cbce", "align": "left",
                                 "hidden": "false"}  # P365: the show flag
     assert payload["date"]["color"] == "#39c8e8"
     assert payload["weather"]["outside_temp"] is True

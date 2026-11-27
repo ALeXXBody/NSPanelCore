@@ -18,43 +18,43 @@ pic = "bg_plain"
 [[component]]
 name = "curTime"
 type = "text"
-x = 40
-y = 80
-w = 400
-h = 110
+x = 150
+y = 91
+w = 200
+h = 88
 font = "NotoSans64"
 bco = "#0d1016"
 pco = "#c8cbce"
-xcen = 1
-ycen = 1
+xcen = 0
+ycen = 0
 txt = "00:00"
 
 [[component]]
 name = "curDay"
 type = "text"
-x = 40
-y = 210
-w = 400
-h = 40
+x = 175
+y = 202
+w = 300
+h = 56
 font = "NotoSans24"
 bco = "#0d1016"
 pco = "#8b93a1"
-xcen = 1
-ycen = 1
+xcen = 0
+ycen = 0
 txt = "date"
 
 [[component]]
 name = "curAMPM"
 type = "text"
-x = 40
+x = 205
 y = 260
-w = 400
+w = 80
 h = 40
 font = "NotoSans24"
 bco = "#0d1016"
 pco = "#39c8e8"
-xcen = 1
-ycen = 1
+xcen = 0
+ycen = 0
 txt = "AM"
 
 [[component]]

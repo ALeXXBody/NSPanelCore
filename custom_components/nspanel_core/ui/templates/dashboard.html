@@ -210,6 +210,8 @@
             title="Save the design in Home Assistant. The panel keeps its current screen until you send it.">Save</button>
     <button class="studio-btn" onclick="sendPanel()"
             title="Generate the screen files and deliver them to the panel.">Send to panel</button>
+    <button class="studio-btn ghost" id="ss_layout_reset"
+            title="Put every screensaver block back at its default position.">Reset layout</button>
   </div>
 </div>
 <div id="status" class="text-sm" style="min-height:1.4rem;color:#39c8e8"></div>
@@ -223,10 +225,6 @@
     <div class="studio-preview-grid">
       <div class="studio-preview-cell">
         <div class="studio-preview-label">Screensaver</div>
-        <div class="text-xs" style="color:#8b93a1; max-width:480px; text-align:center;">
-          Drag any block directly in the preview — each position is saved the moment you drop it,
-          and is baked into the display file you send from the Screensaver tab.
-        </div>
         <div class="pv-device" id="pvs_device" data-dev="eu">
           <div class="pv-btnzone pv-bz-left" id="pvs_bz_left"></div>
           <div class="pv-btnzone pv-bz-right" id="pvs_bz_right"></div>
@@ -239,31 +237,32 @@
                    static blocks below are the fallback before a panel is
                    chosen (and what the drag preview overwrites). -->
               <div id="pvs_scr">
-                <div class="ss-item ss-clock" data-group="clock" data-cx="40" data-cy="80"
-                     style="left:40px; top:80px; width:400px; height:110px;">
-                  <div class="ss-center" style="font-size:64px; font-weight:300; color:#c8cbce;
-                       width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
-                    <span id="pvs_clock">20:39</span>
+                <div class="ss-item ss-clock" data-group="clock" data-cx="150" data-cy="91"
+                     style="left:150px; top:91px; width:200px; height:88px;">
+                  <div class="ss-handle" style="left:0; top:0;">
+                    <span id="pvs_clock" style="font-size:64px; font-weight:300; color:#c8cbce;">20:39</span>
                   </div>
                 </div>
-                <div class="ss-item ss-date" data-group="date" data-cx="40" data-cy="210"
-                     style="left:40px; top:210px; width:400px; height:40px;">
-                  <div class="ss-center" style="font-size:24px; font-weight:300; color:#8b93a1;
-                       width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
-                    <span id="pvs_date">27 NOV</span>
+                <div class="ss-item ss-date" data-group="date" data-cx="175" data-cy="202"
+                     style="left:175px; top:202px; width:300px; height:56px;">
+                  <div class="ss-handle" style="left:0; top:0;">
+                    <span id="pvs_date" style="font-size:24px; font-weight:300; color:#8b93a1;">27 NOV</span>
                   </div>
                 </div>
-                <div class="ss-item ss-ampm" data-group="ampm" data-cx="40" data-cy="260"
-                     style="left:40px; top:260px; width:400px; height:40px;">
-                  <div class="ss-center" style="font-size:24px; font-weight:300; color:#39c8e8;
-                       width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
-                    <span id="pvs_ampm">PM</span>
+                <div class="ss-item ss-ampm" data-group="ampm" data-cx="205" data-cy="260"
+                     style="left:205px; top:260px; width:80px; height:40px;">
+                  <div class="ss-handle" style="left:0; top:0;">
+                    <span id="pvs_ampm" style="font-size:24px; font-weight:300; color:#39c8e8;">PM</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+      <div class="text-xs" style="color:#8b93a1; text-align:center; margin-top:6px;">
+        Drag any block directly in the preview — each position is saved the moment you drop it,
+        and is baked into the display file you send from the Screensaver tab.
+      </div>
       </div>
       <div class="studio-preview-cell">
         <div class="studio-preview-label">Dashboard</div>
@@ -280,9 +279,9 @@
             </div>
           </div>
         </div>
+      <p class="text-xs" style="color:#8b93a1; text-align:center; margin-top:6px;">This is what the panel shows. Click an empty tile to pick where a Home Assistant entity goes; the dots below the tiles are your pages.</p>
       </div>
     </div>
-    <p class="studio-preview-hint">This is what the panel shows. Click an empty tile to pick where a Home Assistant entity goes; the dots below the tiles are your pages.</p>
   </div>
 
   <!-- THE EDITORS: same wide card, sitting under the preview -->
@@ -1042,12 +1041,8 @@ function bindScreensaverBehavior() {
     el.addEventListener('change', renderScreensaverPreview);
   });
   ssBindEntityPickers(form);
-  /* P369: the drag-layout toolbar — reset + send-to-panel. */
-  var resetBtn = document.getElementById('ss_layout_reset');
-  if (resetBtn) resetBtn.addEventListener('click', resetSSLayout);
-  var sendBtn = document.getElementById('ss_send_btn');
-  if (sendBtn) sendBtn.addEventListener('click', sendScreensaverToPanel);
-}
+  /* P377: the Reset layout button lives in the page header (next to the
+   * top Send to panel) and is wired at boot — see studioBoot. */}
 
 /* P308: the weather-detail sensor pickers — type-to-filter search boxes over
  * the server-rendered option list ([data-ss-source]). The hidden input keeps
@@ -1137,9 +1132,9 @@ var SS_GLYPHS = {
   snow: '<svg viewBox="0 0 64 64" class="ss-wx-glyph"><path d="M20 36 h24 a8 8 0 0 0 0-16 a12 12 0 0 0-22-4 a9 9 0 0 0-2 20z" fill="#f0f4f8"/><g fill="#39c8e8"><circle cx="20" cy="48" r="3"/><circle cx="30" cy="50" r="3"/><circle cx="40" cy="48" r="3"/></g></svg>'
 };
 var SS_GROUPS = {
-  clock:     { x: 40,  y: 80,  w: 400, h: 110 },
-  date:      { x: 40,  y: 210, w: 400, h: 40 },
-  ampm:      { x: 40,  y: 260, w: 400, h: 40 },
+  clock:     { x: 150, y: 91,  w: 200, h: 88 },
+  date:      { x: 175, y: 202, w: 300, h: 56 },
+  ampm:      { x: 205, y: 260, w: 80,  h: 40 },
   wx_icon:   { x: 24,  y: 236, w: 64,  h: 64 },
   outside:   { x: 100, y: 240, w: 190, h: 52 },
   inside:    { x: 100, y: 288, w: 190, h: 32 },
@@ -1252,33 +1247,6 @@ function resetSSLayout() {
   });
 }
 
-function sendScreensaverToPanel() {
-  var form = screensaverForm();
-  var mac = form ? form.dataset.panelMac : '';
-  var btn = document.getElementById('ss_send_btn');
-  if (!mac) {
-    setStatus('No panel on the Screensaver tab — pick a panel first.', true);
-    return;
-  }
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-  setStatus('Compiling the display file and delivering it — the panel shows the new layout in about a minute.', false);
-  return nspanelFetch('/nspanel_core/dashboard_send', {
-    method: 'POST', credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mac: mac })
-  }).then(studioJson).then(function (out) {
-    if (out && out.error) {
-      setStatus('Send failed: ' + out.error, true);
-    } else {
-      setStatus('Delivery started — the panel pulls the new display file now.', false);
-    }
-  }).catch(function (e) {
-    setStatus('Send failed: ' + e, true);
-  }).then(function () {
-    if (btn) { btn.disabled = false; btn.textContent = 'Send to panel'; }
-  });
-}
-
 function renderScreensaverPreview() {
   var s = readScreensaverSettings();
   var scr = document.getElementById('pvs_scr');
@@ -1299,7 +1267,8 @@ function renderScreensaverPreview() {
   /* P369: the align setting drives the REAL page's xcen (0/1/2) — the
    * preview must follow it, not hardcode the kit's centered default. */
   var ssAlignCss = function (align) {
-    return ({ left: 'left', center: 'center', right: 'right' })[align] || 'center';
+    /* P377: the align concept is retired - the text is left-anchored. */
+    return 'left';
   };
   var textStyle = function (font, fallback, weight, color, align) {
     return 'font-size:' + ssFontSize(font, fallback) + 'px;' +
@@ -1321,8 +1290,10 @@ function renderScreensaverPreview() {
       '<span style="' + style + '">' + content + '</span></div>' +
       '</div>');
   };
-  var centerHandle = 'left:50%; top:50%; transform:translate(-50%,-50%);';
-  var leftHandle = 'left:0; top:50%; transform:translateY(-50%);';
+  /* P377 (user: "remove the alignments so the text can be free"): the
+   * text is LEFT-ANCHORED - the handle's top-left = the box's top-left =
+   * the comp's origin. Dragging moves the text corner 1:1; no offsets. */
+  var leftHandle = 'left:0; top:0;';
 
   /* the clock/date/AMPM — transparent over the photo (the real page crops
    * the photo behind these texts), centered like the kit's xcen/ycen. */
@@ -1332,21 +1303,24 @@ function renderScreensaverPreview() {
   var clockStyle = textStyle(s.clock_font, 64, s.clock_weight, s.clock_color, s.clock_align);
   var dateStyle = textStyle(s.date_font, 24, s.date_weight, s.date_color, s.date_align);
   addText('clock', 'ss-clock', s.show_clock !== false, clockStyle,
-          '<span id="pvs_clock">20:39</span>', centerHandle);
+          '<span id="pvs_clock">20:39</span>', leftHandle);
   addText('date', 'ss-date', s.show_date !== false, dateStyle,
-          '<span id="pvs_date">27 NOV</span>', centerHandle);
+          '<span id="pvs_date">27 NOV</span>', leftHandle);
   addText('ampm', 'ss-ampm', s.show_date !== false && usClock, dateStyle,
-          '<span id="pvs_ampm">PM</span>', centerHandle);
+          '<span id="pvs_ampm">PM</span>', leftHandle);
 
   /* the weather row — the kit's opaque dark boxes (bco #0d1016), the
    * stacked glyph group as ONE draggable item. */
   var icon = SS_GLYPHS.cloud;
+  /* P372#5 (user: "text is movable but the weather icons are not"): the
+   * icon glyph IS the handle. */
   if (s.show_ss_outside_temp || s.show_ss_room_temp) {
     var g = ssGroupPos('wx_icon');
     parts.push('<div class="ss-item ss-wx" data-group="wx_icon"' +
       ' data-cx="' + g.x + '" data-cy="' + g.y + '"' +
       ' style="left:' + g.x + 'px; top:' + g.y + 'px; width:' + g.w + 'px; height:' + g.h + 'px;">' +
-      icon + '</div>');
+      '<div class="ss-handle" style="left:0; top:0; width:' + g.w + 'px; height:' + g.h + 'px;">' +
+      icon + '</div></div>');
   }
   addText('outside', 'ss-wout', s.show_ss_outside_temp, '', '21.5°C', leftHandle);
   addText('inside', 'ss-win', s.show_ss_room_temp, '', '19.5°C', leftHandle);
@@ -1596,6 +1570,9 @@ function studioBoot() {
   // the static fallback blocks had no drag handlers. Build the canvas now;
   // every later tab load re-builds it with the panel's saved layout.
   if (typeof renderScreensaverPreview === 'function') renderScreensaverPreview();
+  // P377: the header's Reset layout button (next to the top Send to panel)
+  var resetBtn = document.getElementById('ss_layout_reset');
+  if (resetBtn) resetBtn.addEventListener('click', resetSSLayout);
   // P312 ANALYSIS: the gallery's <img> URLs embed the credential AT RENDER
   // TIME — if auth lands after the first render, the thumbs 401'd forever.
   // Re-render the gallery (and the live preview's photo) once auth is up.

@@ -149,11 +149,11 @@ class SceneConfig:
 # leave the page — and every kit default below is legal under its own
 # clamp (asserted by the tests).
 SS_LAYOUT_GROUPS: dict[str, dict] = {
-    "clock":     {"box": (40, 80, 400, 110), "comps": {
+    "clock":     {"box": (150, 91, 200, 88), "comps": {
         "curTime": (0, 0)}},
-    "date":      {"box": (40, 210, 400, 40), "comps": {
+    "date":      {"box": (175, 202, 300, 56), "comps": {
         "curDay": (0, 0)}},
-    "ampm":      {"box": (40, 260, 400, 40), "comps": {
+    "ampm":      {"box": (205, 260, 80, 40), "comps": {
         "curAMPM": (0, 0)}},
     "wx_icon":   {"box": (24, 236, 64, 64), "comps": {
         "wx_sun": (0, 0), "wx_cloud": (0, 0), "wx_rain": (0, 0),

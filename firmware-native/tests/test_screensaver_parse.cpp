@@ -71,14 +71,19 @@ int main() {
     CHECK(cfg.room_override == "22.5" + DEG + "C", "override degree decoded");
 
     auto cmds = nsp_screensaver_style_commands(cfg);
-    CHECK(cmds.size() == 18, "style writes 3 attrs x 3 objects x 2 pages");
+    /* P377: xcen applies to the SCREENSAVER page only - that page's
+     * clock/date/ampm are left-anchored free text in the generated HMI;
+     * the mini page keeps its authored (centered) alignment. */
+    CHECK(cmds.size() == 15, "style writes 3 attrs x 3 objects (+xcen screensaver-only)");
     CHECK(safe(cmds), "style commands carry no injected bytes");
     CHECK(has(cmds, "screensaver.curTime.font=7"), "screensaver clock font written");
     CHECK(has(cmds, "screensaver.curTime.pco=63488"), "screensaver clock colour written");
     CHECK(has(cmds, "screensaver.curTime.xcen=2"), "screensaver clock alignment written");
     CHECK(has(cmds, "mini.curDay.font=2"), "mini date font written");
     CHECK(has(cmds, "mini.curDay.pco=35988"), "mini date colour written");
-    CHECK(has(cmds, "mini.curAMPM.xcen=2"), "mini AMPM follows the clock style");
+    CHECK(!has(cmds, "mini.curTime.xcen=2"), "mini clock keeps its authored alignment");
+    CHECK(!has(cmds, "mini.curDay.xcen=0"), "mini date keeps its authored alignment");
+    CHECK(!has(cmds, "mini.curAMPM.xcen=2"), "mini AMPM keeps its authored alignment");
 
     /* hostile / partial style never passes a raw value to the display */
     NspScreensaverConfig bad;

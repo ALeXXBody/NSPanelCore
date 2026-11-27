@@ -60,7 +60,9 @@ def test_both_preview_devices_share_one_wide_card():
     assert 'id="pv_device"' in HTML       # dashboard (interactive)
     assert 'id="pvs_bg"' in HTML and 'id="pvs_clock"' in HTML
     assert 'id="pv_dots"' in HTML
-    grid = _body('class="studio-preview-grid"', "</div>\n    <p class=\"studio-preview-hint\"")
+    # P377: the hint lives INSIDE the dashboard cell now (under the device)
+    grid = _body('class="studio-preview-grid"',
+                 'the dots below the tiles are your pages.</p>')
     assert "Screensaver" in grid and "Dashboard" in grid
     # the old single-device toggle is gone
     assert "setView(" not in HTML

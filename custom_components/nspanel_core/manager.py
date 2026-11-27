@@ -97,14 +97,20 @@ def build_panel_screensaver_config(
             "font": panel.clock_font,
             "weight": panel.clock_weight,
             "color": panel.clock_color,
-            "align": panel.clock_align,
+            # P377 (user: "remove the alignments so the text can be free"):
+            # the screensaver page's clock/date/ampm are LEFT-ANCHORED free
+            # text - the drag moves the box and the text corner follows
+            # 1:1. The stored align values are retired; the mini page keeps
+            # its authored centered alignment (the firmware skips xcen for
+            # it).
+            "align": "left",
             "hidden": "true" if not panel.show_ss_clock else "false",
         },
         "date": {
             "font": panel.date_font,
             "weight": panel.date_weight,
             "color": panel.date_color,
-            "align": panel.date_align,
+            "align": "left",  # P377: free text - see the clock block
             "hidden": "true" if not panel.show_ss_date else "false",
         },
         "weather": {

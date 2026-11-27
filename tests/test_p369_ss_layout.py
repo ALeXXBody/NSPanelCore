@@ -85,7 +85,7 @@ def test_normalizer_filters_and_clamps():
         "ampm": {"x": "junk", "y": 1},      # dropped (not ints)
         "outside": "garbage",               # dropped
     })
-    assert out["clock"] == {"x": 80, "y": 0}
+    assert out["clock"] == {"x": 280, "y": 0}
     assert out["date"] == {"x": 30, "y": 200}
     assert "bogus" not in out and "ampm" not in out and "outside" not in out
 
@@ -115,7 +115,7 @@ def test_generate_bakes_the_layout_no_photo():
         assert (comps["fDay0"]["x"], comps["fDay0"]["y"]) == (88, 100)
         assert (comps["fMM0"]["x"], comps["fMM0"]["y"]) == (88, 124)
         # the untouched groups keep the kit positions
-        assert (comps["curDay"]["x"], comps["curDay"]["y"]) == (40, 210)
+        assert (comps["curDay"]["x"], comps["curDay"]["y"]) == (175, 202)
         assert (comps["wOutTemp"]["x"], comps["wOutTemp"]["y"]) == (100, 240)
         # the ORDER is untouched
         names = [c["name"] for c in tomllib.load(open(src, "rb"))["component"]]
@@ -128,7 +128,7 @@ def test_generate_without_layout_keeps_the_kit():
         hg.generate_source(d, KIT, wd)
         src = os.path.join(wd, "hmi", "pages", "screensaver.page.toml")
         comps = {c["name"]: c for c in tomllib.load(open(src, "rb"))["component"]}
-        assert (comps["curTime"]["x"], comps["curTime"]["y"]) == (40, 80)
+        assert (comps["curTime"]["x"], comps["curTime"]["y"]) == (150, 91)
 
 
 # -------------------------------------------------------------- the endpoint
