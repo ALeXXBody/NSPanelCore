@@ -1573,6 +1573,11 @@ function studioBoot() {
   _nspStudioBooted = true;
   autoSelectPanelStart();
   loadEntities();  // P292: import HA entities on load, independent of any design
+  // P369 (user report: "nothing is movable"): the drag canvas must be LIVE
+  // from the first paint — before the Screensaver tab (or a design) loads,
+  // the static fallback blocks had no drag handlers. Build the canvas now;
+  // every later tab load re-builds it with the panel's saved layout.
+  if (typeof renderScreensaverPreview === 'function') renderScreensaverPreview();
   // P312 ANALYSIS: the gallery's <img> URLs embed the credential AT RENDER
   // TIME — if auth lands after the first render, the thumbs 401'd forever.
   // Re-render the gallery (and the live preview's photo) once auth is up.
