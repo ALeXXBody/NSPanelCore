@@ -14,14 +14,17 @@
 #   3. the zip asset (custom_components/nspanel_core/ at the root) is
 #      UPLOADED — HACS installs from the asset, not from "the repo"
 #   4. the firmware tags stay PRERELEASES — HACS must never offer them as
-#      integration updates
+#      integration updates; NO new fw-* releases at all (the firmware ships
+#      via the evergreen manifest, never via GitHub releases)
+#   5. the tag is PLAIN semver (v0.4.0, not app-v0.4.0) — the app-v* prefix
+#      made HACS rank '0.3.18' below '0.3.9' (a STRING compare: '1' < '9')
 #
 # Usage: scripts/release_app.sh <version> [title] [notes-file]
 #   (version without the app- prefix, e.g. 0.3.19)
 set -euo pipefail
 
 VER="${1:?usage: release_app.sh <version> [title] [notes-file]}"
-TAG="app-v$VER"
+TAG="v$VER"
 TITLE="${2:-NSPanel Core $VER}"
 NOTES="${3:-}"
 
