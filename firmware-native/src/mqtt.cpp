@@ -154,6 +154,10 @@ void nsp_mqtt_dispatch(const std::string &topic, const std::string &payload) {
     } else if (topic == topic_panel_screensaver_mode(s_hostname)) {
         if (!payload.empty() && payload.size() <= 32)
             s_screensaver_mode = payload;
+            /* P365 (user: "are them used?"): the mode was stored but its
+             * behavior was never delivered — "no screensaver" still
+             * navigated on idle. The accessor below is checked by the
+             * idle poll and the boot navigation. */
     } else if (topic == topic_relay_cmd(s_hostname, 1)) {
         extern void nsp_relay_handle_cmd(int, const std::string &);
         nsp_relay_handle_cmd(1, payload);
@@ -382,6 +386,10 @@ void nsp_mqtt_publish_log(const char *msg) {
 
 extern const char *nsp_ota_state_name(void);  // P361: the OTA progress wiring
 extern int nsp_ota_progress(void);
+bool nsp_screensaver_enabled(void) {
+    return s_screensaver_mode != "no_screensaver";
+}
+
 void nsp_mqtt_publish_status_report(const std::string &ip, int rssi,
                                     int heap_pct, float temperature,
                                     const std::string &warnings) {

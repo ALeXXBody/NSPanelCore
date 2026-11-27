@@ -231,7 +231,10 @@ static void nsp_display_after_handshake(void) {
      * navigates mid-upload. With the suppression, every boot sat on the
      * splash forever (the user's report: the logo stuck, the switches dead —
      * the button zones live on home, which nothing ever reached). */
-    nsp_display_show_screensaver();
+    /* P365: the mode gates the boot navigation — "no screensaver" keeps
+     * the panel on the dashboard (the relay sync still runs). */
+    extern bool nsp_screensaver_enabled(void);
+    if (nsp_screensaver_enabled()) nsp_display_show_screensaver();
     extern int nsp_relay_state(int relay);
     nsp_display_relay(1, nsp_relay_state(1));
     nsp_display_relay(2, nsp_relay_state(2));
@@ -394,6 +397,10 @@ void nsp_screensaver_set_idle_timeout(int secs) {
 
 void nsp_screensaver_idle_poll(void) {
     if (!s_display_ready || s_display_raw_mode) return;
+    /* P365 (user: "are them used?"): the Panel tab's Screensaver mode is
+     * now DELIVERED — "no screensaver" means the panel never navigates. */
+    extern bool nsp_screensaver_enabled(void);
+    if (!nsp_screensaver_enabled()) return;
     int timeout_s = s_screensaver_idle_timeout;
     if (timeout_s <= 0) return;
     /* wrap-safe tick difference (P361 M2) */
