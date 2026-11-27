@@ -114,6 +114,7 @@ class DashboardService:
 
     def _generate_and_compile(
         self, design: dd.PanelDesign, show_home_relays: bool = True,
+        ss_layout: dict | None = None,
     ) -> tuple[str, str, dict, list]:
         """Blocking: design → TFT path + md5 + component map + page ids."""
         import copy as _copy
@@ -121,7 +122,8 @@ class DashboardService:
         with tempfile.TemporaryDirectory(prefix="nspdash") as wd:
             origins = _dash_dir(self.hass)
             cmap = hg.generate_source(design, KIND, wd, origins_dir=origins,
-                                      show_home_relays=show_home_relays)
+                                      show_home_relays=show_home_relays,
+                                      ss_layout=ss_layout)
             tft_tmp = os.path.join(wd, "panel.tft")
             hg.compile_tft(wd, tft_tmp)
             data = open(tft_tmp, "rb").read()
@@ -136,9 +138,12 @@ class DashboardService:
 
     async def async_generate(
         self, design: dd.PanelDesign, show_home_relays: bool = True,
+        ss_layout: dict | None = None,
     ) -> tuple[str, str, dict, list]:
+        # P369 (user request): the screensaver drag layout rides the send —
+        # the generated HMI bakes the moved positions in.
         return await self.hass.async_add_executor_job(
-            self._generate_and_compile, design, show_home_relays
+            self._generate_and_compile, design, show_home_relays, ss_layout
         )
 
     # -- send to panel -----------------------------------------------------
@@ -259,7 +264,8 @@ class DashboardService:
         try:
             path, md5, cmap, page_ids = await self.async_generate(
                 design,
-                show_home_relays=bool(getattr(panel, "show_home_relays", True)))
+                show_home_relays=bool(getattr(panel, "show_home_relays", True)),
+                ss_layout=dict(getattr(panel, "ss_layout", None) or {}) or None)
         except Exception as exc:  # noqa: BLE001
             self._serving = None
             _LOGGER.exception("dashboard generate/compile failed for %s", mac)

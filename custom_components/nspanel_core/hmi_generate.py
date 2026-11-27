@@ -16,8 +16,10 @@ import os
 import shutil
 import subprocess
 import sys
+import tomllib
 
 from . import dashboard_design as dd
+from .models import SS_LAYOUT_GROUPS, normalize_ss_layout
 
 # Base page order — the FIRMWARE's positional ids depend on it
 # (page0=0, screensaver=1, home=2, mini=3, room=4, spare=5, scenes=6).
@@ -132,10 +134,35 @@ def _write_app_toml(kit_dir: str, design: dd.PanelDesign, dest_dir: str,
         f.write("\n".join(out) + "\n")
 
 
+def _apply_ss_layout(comps: list, ss_layout: dict | None) -> None:
+    """P369: move the screensaver components per the user's drag layout.
+
+    Each group's box-origin override positions every component in the
+    group at (box.x + dx, box.y + dy) - a stack (the weather glyphs, the
+    forecast rows) moves as ONE item, preserving the kit's authored deltas
+    relative to the group's bounding box. The layout is normalized first
+    (closed keys, clamped coords — the same rule as the model)."""
+    if not ss_layout:
+        return
+    layout = normalize_ss_layout(ss_layout)
+    if not layout:
+        return
+    by_name = {c.get("name"): c for c in comps if isinstance(c, dict)}
+    for group, pos in layout.items():
+        spec = SS_LAYOUT_GROUPS[group]
+        for name, (dx, dy) in spec["comps"].items():
+            comp = by_name.get(name)
+            if comp is None:
+                continue
+            comp["x"] = pos["x"] + dx
+            comp["y"] = pos["y"] + dy
+
+
 def generate_source(
     design: dd.PanelDesign, kit_dir: str, workdir: str,
     origins_dir: str | None = None,
     show_home_relays: bool = True,
+    ss_layout: dict | None = None,
 ) -> dict[str, dict[str, int]]:
     """Build the per-panel HMI source folder; return the component map.
 
@@ -144,6 +171,13 @@ def generate_source(
     resources per page: the darkened variant backs the dashboard, and the
     full-brightness variant + the clock-text crops back the screensaver
     when that page is the panel's screensaver room.
+
+    P369 (user request): ss_layout carries the drag layout of the
+    screensaver preview ({group: {x, y}}) — the positions are baked into
+    the screensaver page's components. Component ORDER is untouched (the
+    firmware's object-name addressing and the page's positional
+    dependencies survive), only x/y move, and the clock-text photo crops
+    follow the moved positions (the crops read the rects AFTER the moves).
     """
     from . import bg_process as bgp
 
@@ -200,9 +234,11 @@ def generate_source(
         and os.path.isfile(os.path.join(origins_dir, scr_design_page.background_image))
     )
     if scr_ready:
-        import tomllib
         scr_toml = tomllib.load(
             open(os.path.join(kit_dir, "pages", "screensaver.page.toml"), "rb"))
+        # P369: the drag layout BEFORE the crop rects — the photo crops
+        # behind the clock texts must follow the moved positions.
+        _apply_ss_layout(scr_toml["component"], ss_layout)
         n = design.pages.index(scr_design_page)
         rects = {c["name"]: (c["x"], c["y"], c["w"], c["h"])
                  for c in scr_toml["component"] if c["type"] == "text"}
@@ -220,6 +256,15 @@ def generate_source(
         _write_toml(
             os.path.join(src, "pages", "screensaver.page.toml"),
             "screensaver", scr_toml["component"])
+
+    # P369: no photo on the screensaver page — the drag layout still
+    # applies to the copied kit file (the photo path above already did it).
+    if ss_layout and not scr_ready:
+        _scr_copy = os.path.join(src, "pages", "screensaver.page.toml")
+        if os.path.isfile(_scr_copy):
+            _toml_data = tomllib.load(open(_scr_copy, "rb"))
+            _apply_ss_layout(_toml_data["component"], ss_layout)
+            _write_toml(_scr_copy, "screensaver", _toml_data["component"])
 
     # the menu page — regenerated over the authored room page
     menu_comps = dd.menu_components(design)

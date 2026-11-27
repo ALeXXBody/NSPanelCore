@@ -104,8 +104,9 @@ const tick = function () { return new Promise(function (r) { setTimeout(r, 0); }
     }),
     previewAtLoad: (function () {
       var c = w.document.getElementById('pvs_clock');
-      return {fontSize: c.style.fontSize, color: c.style.color,
-              textAlign: c.style.textAlign};
+      return c ? {fontSize: c.parentElement.style.fontSize,
+                  color: c.parentElement.style.color,
+                  textAlign: c.parentElement.style.textAlign} : null;
     })()
   };
   if (!form) throw new Error('the real partial was not injected');
@@ -131,15 +132,26 @@ const tick = function () { return new Promise(function (r) { setTimeout(r, 0); }
   set('show_ss_rain', true, true);
   set('show_ss_sunrise_sunset', true, true);
 
+  /* P369: the preview is the drag canvas — the comps live as .ss-item
+   * blocks at the page coordinates; the styles ride the inner text div. */
   var clock = w.document.getElementById('pvs_clock');
   var dateEl = w.document.getElementById('pvs_date');
-  var strip = w.document.getElementById('pvs_weather');
+  var insideItem = w.document.querySelector('.ss-item[data-group="inside"]');
+  var outItem = w.document.querySelector('.ss-item[data-group="outside"]');
+  var fRow0 = w.document.querySelector('.ss-item[data-group="forecast0"]');
   out.preview = {
-    clock: {fontSize: clock.style.fontSize, fontWeight: clock.style.fontWeight,
-            color: clock.style.color, textAlign: clock.style.textAlign},
-    date: {fontSize: dateEl.style.fontSize, fontWeight: dateEl.style.fontWeight,
-           color: dateEl.style.color, textAlign: dateEl.style.textAlign},
-    weatherText: strip.textContent
+    clock: {fontSize: clock.parentElement.style.fontSize,
+            fontWeight: clock.parentElement.style.fontWeight,
+            color: clock.parentElement.style.color,
+            textAlign: clock.parentElement.style.textAlign},
+    date: {fontSize: dateEl.parentElement.style.fontSize,
+           fontWeight: dateEl.parentElement.style.fontWeight,
+           color: dateEl.parentElement.style.color,
+           textAlign: dateEl.parentElement.style.textAlign},
+    inside: insideItem ? insideItem.textContent : null,
+    outside: outItem ? outItem.textContent : null,
+    forecast0: fRow0 ? fRow0.textContent : null,
+    dragItems: w.document.querySelectorAll('#pvs_scr .ss-item').length
   };
 
   form.dispatchEvent(new w.Event('submit', {bubbles: true, cancelable: true}));
@@ -254,14 +266,15 @@ def test_real_dom_studio_tab_controls_preview_and_save_payload():
     assert out["preview"]["date"]["fontWeight"] == "700"
     assert out["preview"]["date"]["color"] in ("#8b93a1", "rgb(139, 147, 161)")
     assert out["preview"]["date"]["textAlign"] == "left"
-    # P364: the weather block matches the panel's layout — the Out/In
-    # temps beside the icon and the 3 forecast rows.
-    # P365: the temps + the forecast rows render; the icon glyphs are SVG
-    # (the node-side text extraction strips them — assert the visible text)
-    for text in ("21°C", "19.5°C", "Mon", "23°/9°", "Tue", "Wed"):
-        assert text in out["preview"]["weatherText"], text
-    for gone in ("W 12 km/h", "R 0.2 mm", "U06:12"):
-        assert gone not in out["preview"]["weatherText"], gone
+    # P369: the preview is the DRAG CANVAS — the weather row items are the
+    # real page's comps (the toggled-on ones rendered, the off ones gone).
+    assert out["preview"]["outside"] == "21.5°C", out["preview"]["outside"]
+    assert out["preview"]["inside"] == "19.5°C", out["preview"]["inside"]
+    assert "Mon" in out["preview"]["forecast0"], out["preview"]["forecast0"]
+    assert "23°/9°" in out["preview"]["forecast0"], out["preview"]["forecast0"]
+    # the full drag canvas: clock, date, ampm, wx_icon, outside, inside,
+    # forecast0, forecast1
+    assert out["preview"]["dragItems"] == 8, out["preview"]["dragItems"]
 
     # The submit posts the real form values as JSON to the real endpoint.
     save = out["save"]

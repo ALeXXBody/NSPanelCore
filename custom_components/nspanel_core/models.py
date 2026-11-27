@@ -136,6 +136,68 @@ class SceneConfig:
         return cls(**{k: v for k, v in data.items() if k in known})
 
 
+# P369 (user request): the DRAG LAYOUT of the screensaver page — the
+# "Build the Screensaver" preview's items are selectable and movable with
+# the mouse, and the generated HMI bakes the positions in. The firmware
+# drives the screensaver by OBJECT NAME (screensaver.<comp>.vis/txt), so a
+# moved component keeps working — only its coordinates change.
+# Each group is one draggable item: "box" = the kit's default bounding box
+# (x, y, w, h), "comps" = {component name: (dx, dy) from the box origin}.
+# The saved layout stores the new box origin per group; absent groups keep
+# the kit's positions. The preview, the endpoint and the model clamp the
+# origin identically (0..480-w, 0..320-h) so a dragged item can never
+# leave the page — and every kit default below is legal under its own
+# clamp (asserted by the tests).
+SS_LAYOUT_GROUPS: dict[str, dict] = {
+    "clock":     {"box": (40, 80, 400, 110), "comps": {
+        "curTime": (0, 0)}},
+    "date":      {"box": (40, 210, 400, 40), "comps": {
+        "curDay": (0, 0)}},
+    "ampm":      {"box": (40, 260, 400, 40), "comps": {
+        "curAMPM": (0, 0)}},
+    "wx_icon":   {"box": (24, 236, 64, 64), "comps": {
+        "wx_sun": (0, 0), "wx_cloud": (0, 0), "wx_rain": (0, 0),
+        "wx_snow": (0, 0)}},
+    "outside":   {"box": (100, 240, 190, 52), "comps": {
+        "wOutTemp": (0, 0)}},
+    "inside":    {"box": (100, 288, 190, 32), "comps": {
+        "wRoomTemp": (0, 0)}},
+    "forecast0": {"box": (262, 236, 208, 48), "comps": {
+        "fDay0": (48, 0), "fMM0": (48, 24), "fSun0": (0, 0),
+        "fCloud0": (0, 0), "fRain0": (0, 0), "fSnow0": (0, 0)}},
+    "forecast1": {"box": (262, 278, 208, 40), "comps": {
+        "fDay1": (48, 10), "fMM1": (48, 10), "fSun1": (0, 0),
+        "fCloud1": (0, 0), "fRain1": (0, 0), "fSnow1": (0, 0)}},
+}
+
+
+def normalize_ss_layout(value: object) -> dict:
+    """Closed keys, int coords, clamped to the 480x320 page. Anything else
+    (stored garbage, a hostile POST, a string transport) is dropped."""
+    if isinstance(value, str):
+        import json as _json
+        try:
+            value = _json.loads(value or "{}")
+        except ValueError:
+            return {}
+    if not isinstance(value, dict):
+        return {}
+    clean: dict = {}
+    for group, pos in value.items():
+        spec = SS_LAYOUT_GROUPS.get(group)
+        if spec is None or not isinstance(pos, dict):
+            continue
+        try:
+            x, y = int(pos.get("x")), int(pos.get("y"))
+        except (TypeError, ValueError):
+            continue
+        bw, bh = spec["box"][2], spec["box"][3]
+        x = max(0, min(480 - bw, x))
+        y = max(0, min(320 - bh, y))
+        clean[group] = {"x": x, "y": y}
+    return clean
+
+
 @dataclass
 class PanelConfig:
     id: int
@@ -216,6 +278,9 @@ class PanelConfig:
     show_ss_sunrise_sunset: bool = False
     ss_outside_temp_entity: str = ""
     ss_room_temp_entity: str = ""
+    # P369 (user request): the drag layout — group -> {"x": int, "y": int}
+    # anchors; absent groups keep the kit's default positions.
+    ss_layout: dict = field(default_factory=dict)
     rooms: list[int] = field(default_factory=list)
     relay1_group: list[int] = field(default_factory=list)
     relay2_group: list[int] = field(default_factory=list)
@@ -292,6 +357,8 @@ class PanelConfig:
         for name in ("ss_outside_temp_entity", "ss_room_temp_entity"):
             value = getattr(self, name)
             setattr(self, name, value if isinstance(value, str) else "")
+        # P369: the drag layout — closed keys + clamped coords.
+        self.ss_layout = normalize_ss_layout(self.ss_layout)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

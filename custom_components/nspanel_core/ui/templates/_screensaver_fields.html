@@ -23,8 +23,25 @@
 </select>
 {%- endmacro %}
 <form id="screensaver_form" data-panel-id="{{ panel_info.data.id }}"
+      data-panel-mac="{{ panel_info.data.mac }}"
+      data-ss-layout="{{ panel_info.data.ss_layout | tojson }}"
       action="/nspanel_core/api/screensaver_save/{{ panel_info.data.id }}" method="post">
   <div class="p-4 bg-base-100 rounded-md shadow-lg w-full" data-section="screensaver">
+
+  <!-- P369 (user request): the drag layout — move any block directly in the
+       Screensaver preview above with the mouse, then send it to the panel. -->
+  <div class="flex flex-wrap items-center gap-2 mb-3 p-2 rounded"
+       style="background:rgba(57,200,232,.06); border:1px solid rgba(57,200,232,.25);">
+    <span class="text-xs" style="color:#8b93a1">
+      Drag any block directly in the <b style="color:#39c8e8">Screensaver</b> preview above —
+      each position is saved the moment you drop it, and is baked into the display file.
+    </span>
+    <span class="flex-1"></span>
+    <button type="button" id="ss_layout_reset"
+            class="btn btn-xs" style="background:#141821; color:#c8cbce; border:1px solid #2a2f3a;">Reset layout</button>
+    <button type="button" id="ss_send_btn"
+            class="btn btn-xs btn-primary">Send to panel</button>
+  </div>
 
     <span class="block mb-2 text-xl">Clock and date</span>
     <p class="text-xs opacity-60 mb-3">Font, weight, colour and alignment are written to the real panel — the preview above follows every change.</p>

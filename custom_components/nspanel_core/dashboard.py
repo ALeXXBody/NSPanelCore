@@ -24,6 +24,7 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
+from .models import normalize_ss_layout  # P369: the drag-layout normalizer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -989,6 +990,22 @@ class DashboardScreensaverSaveView(HomeAssistantView):
                     panel.screensaver_activation_timeout = secs
             except (ValueError, TypeError):
                 errors["screensaver_activation_timeout"] = "must be a number of seconds"
+        # P369 (user request): the drag layout of the screensaver preview —
+        # a JSON object {group: {x, y}} posted by the drag end; the model's
+        # normalizer filters the closed keys and clamps the coords. An
+        # explicit empty object resets to the kit's default positions.
+        if "ss_layout" in body:
+            value = body["ss_layout"]
+            if isinstance(value, str):
+                import json as _json
+                try:
+                    value = _json.loads(value or "{}")
+                except ValueError:
+                    value = None
+            if value is None or not isinstance(value, dict):
+                errors["ss_layout"] = "must be an object {group: {x, y}}"
+            else:
+                panel.ss_layout = normalize_ss_layout(value)
         if errors:
             return web.json_response(
                 {"error": "invalid screensaver settings", "fields": errors}, status=422)
