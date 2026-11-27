@@ -292,19 +292,19 @@ def dash_components(design: PanelDesign, page: DashPage) -> list[dict]:
             comps.append({"name": f"b{it.slot}", "type": "dual-state-button",
                           "x": x, "y": y, "w": TILE_W, "h": TILE_H,
                           "pic": "card_off", "pic2": "card_on", "sendkey": 3,
-                          "text": label})
+                          "text": label, "pco": "#f0f4f8"})
         elif it.widget == "scene":
             comps.append({"name": f"b{it.slot}", "type": "picture",
                           "x": x, "y": y, "w": TILE_W, "h": TILE_H,
-                          "pic": "card_plain", "sendkey": 3, "text": label})
+                          "pic": "card_plain", "sendkey": 3, "text": label,
+                          "pco": "#f0f4f8"})
         else:  # sensor / climate — a value text (txt= updated at runtime)
             comps.append({"name": f"b{it.slot}", "type": "text",
                           "x": x, "y": y, "w": TILE_W, "h": TILE_H,
                           "text": "--", "font": "NotoSans64", "pco": "#f0f4f8"})
-    comps.append({"name": "back", "type": "hotspot",
-                  "x": 395, "y": 20, "w": 75, "h": 30, "sendkey": 3})
-    comps.append({"name": "back_pic", "type": "picture",
-                  "x": 395, "y": 20, "w": 75, "h": 30, "pic": "btn_scenes"})
+    # P363e: the back button REMOVED — the user didn't recognise the blue
+    # rect at the screen edge (it was btn_scenes unlabelled), and the swipe
+    # reaches the menu (the dash_map's first entry IS the menu page).
     return comps
 
 

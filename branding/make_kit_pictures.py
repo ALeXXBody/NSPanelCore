@@ -92,11 +92,13 @@ def studio_card(on: bool | None, w: int = 150, h: int = 110) -> Image.Image:
     W, H, R = w * s, h * s, 10 * s
     im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
+    # P363e: OPAQUE — the display's alpha handling flattened the cards to
+    # light blocks; the studio's 82% dark over a photo IS a dark card.
     d.rounded_rectangle((0, 0, W - 1, H - 1), radius=R,
-                        fill=(13, 16, 22, 209))          # .82 alpha
+                        fill=(18, 22, 29, 255))
     d.rounded_rectangle((1 * s, 1 * s, W - 1 - 1 * s, H - 1 - 1 * s),
                         radius=R - 1 * s,
-                        outline=(57, 200, 232, 64), width=1 * s)
+                        outline=(57, 200, 232, 110), width=1 * s)
     if on is not None:
         sw = 26 * s
         d.rounded_rectangle((12 * s, 10 * s, 12 * s + sw, 10 * s + sw),
