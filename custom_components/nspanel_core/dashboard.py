@@ -1314,7 +1314,9 @@ class SettingsView(HomeAssistantView):
                 for r in manager.config.rooms
             ],
             themes=themes,
-            theme=s.theme,
+            # P365: the theme field was removed with the dead ThemeView —
+            # the template's theme-controller block reads the default.
+            theme="nspmwip",
             # denied tab context
             nspanels=[asdict(p) for p in manager.config.panels],
             # deleted panels (MACs the manager ignores) — the tab renders them
