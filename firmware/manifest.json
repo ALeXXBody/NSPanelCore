@@ -1,21 +1,21 @@
 {
-    "version": "0.2.3",
-    "notes": "Firmware 0.2.3 \u2014 the immediate clock on the screensaver: the panel stores the last time/date it received (the manager's minute-publishes) and writes them the MOMENT the screensaver page opens \u2014 the idle poll no longer shows the compiled '00:00' default for a few seconds (the user's report). Carries all prior fixes.",
+    "version": "0.2.4",
+    "notes": "Firmware 0.2.4 \u2014 the bootloop root cause mitigated: during every ESP reset the display-power GPIO FLOATS and the display's supply browns out (the P122 lesson) \u2014 a brownout during a display-side config save corrupts the flash (the recurring System-Data-ERROR, always around panel updates). The RTC-domain hold keeps the display powered through every reset. Carries all prior fixes.",
     "files": {
         "firmware/sonoff/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.3/native-firmware-0.2.3.bin",
-            "md5": "2cb271f023f1b197b4f0c23ddc0c48c8"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.4/native-firmware-0.2.4.bin",
+            "md5": "6cbd8bc7d25f1b54c1b16dff2c9894fa"
         },
         "firmware/sonoff/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.3/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.4/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "firmware/custom/firmware.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.3/native-firmware-0.2.3.bin",
-            "md5": "2cb271f023f1b197b4f0c23ddc0c48c8"
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.4/native-firmware-0.2.4.bin",
+            "md5": "6cbd8bc7d25f1b54c1b16dff2c9894fa"
         },
         "firmware/custom/data_file.bin": {
-            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.3/data_file.bin",
+            "url": "https://raw.githubusercontent.com/ALeXXBody/NSPanelCore/main/firmware/releases/v0.2.4/data_file.bin",
             "md5": "74d7ce6e39754a9bec2ae3a075620c49"
         },
         "tft/gui.tft": {

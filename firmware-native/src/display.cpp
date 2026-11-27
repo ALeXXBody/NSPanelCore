@@ -13,6 +13,7 @@
 #include "driver/uart.h"
 #include "touch_decode.h"
 #include "driver/gpio.h"
+#include "driver/rtc_io.h"  // P364b: the hold through resets
 #include <cstring>
 #include <cstdio>
 #include "esp_timer.h"
@@ -179,6 +180,15 @@ void nsp_display_init(void) {
     io.mode = GPIO_MODE_OUTPUT;
     gpio_config(&io);
     gpio_set_level(DISPLAY_POWER_PIN, 0);  // display POWERED — never cycle at boot (P122)
+    /* P364b (the bootloop root cause): during every ESP reset/bootloader
+     * phase the GPIO FLOATS — the display's supply browns out (the P122
+     * lesson: power-cycling browns out weak supplies) and a brownout at
+     * the wrong moment corrupts the display's config flash (the
+     * recurring System-Data-ERROR, always after a panel update). The
+     * RTC-domain hold keeps the level through the reset. GPIO4 is an RTC
+     * pad on the ESP32: the hold survives esp_restart. */
+    esp_err_t hold_err = rtc_gpio_hold_en(DISPLAY_POWER_PIN);
+    if (hold_err != ESP_OK) gpio_hold_en(DISPLAY_POWER_PIN);
 
     uart_config_t ucfg = {};
     ucfg.baud_rate = DISPLAY_BAUD;
