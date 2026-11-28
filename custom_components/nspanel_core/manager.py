@@ -167,6 +167,10 @@ class NSPanelCoreManager:
         self._light_unsubs: dict[str, object] = {}  # P279: per-entity listeners
         self._mqtt_unsubs: list = []
         self._last_telemetry: dict[str, dict] = {}
+        # P378: the panel's own OTA phase from the latest status report
+        # ("updating_fs"/"updating_fw"/"updating_tft" or "") — the
+        # delivery/OTA collision guard reads this.
+        self._last_panel_state: dict[str, str] = {}
         self._log_backlog: dict[str, list] = {}
         self._last_ota_trigger: dict[str, float] = {}
         self._ota_fail_streak: dict[str, int] = {}
@@ -1420,6 +1424,13 @@ class NSPanelCoreManager:
             if warnings or ip or temperature is not None:
                 last = self._last_telemetry.setdefault(panel.mac, {})
                 last["warnings"] = warnings
+            # P378: remember the panel's OTA phase — the Send path refuses a
+            # TFT delivery while the panel is running a system update (the
+            # concurrent fs rewrite corrupts the store bytes the delivery
+            # streams: the display wrote garbage and showed the System-Data
+            # error), and the OTA trigger defers while a delivery is armed.
+            self._last_panel_state[panel.mac] = state if state in (
+                "updating_fs", "updating_fw", "updating_tft") else ""
             # P135: every status report carries the running version — the
             # displayed version may never go stale again.
             reported_version = str(data.get("version") or "").strip()
@@ -1847,6 +1858,20 @@ class NSPanelCoreManager:
             # no map and no stored TFT: the design was never delivered to
             # this panel - the stock auto-update below is safe (the glass
             # is stock)
+        # P378: DEFER the fs/fw OTA while a dashboard delivery is armed for
+        # this panel - the fs rewrite churns the store bytes the delivery
+        # streams (the concurrent run corrupted the display's flash: the
+        # System-Data-ERROR). The delivery completes in ~a minute; the
+        # next register re-evaluates the OTA.
+        dash_slot = getattr(self, "dash", None)
+        if dash_slot is not None:
+            import time as _t78
+            for _slot_name in ("_serving", "_auto_serving"):
+                _slot = getattr(dash_slot, _slot_name, None)
+                if _slot and _slot.get("mac") == panel.mac and \
+                        _t78.time() - _slot.get("ts", 0) < 600:
+                    _LOGGER.info("OTA for %s deferred - a dashboard delivery is running", panel.name)
+                    return
         if tft_cooled and tft_md5 and (not report.get("md5_tft_file") or report["md5_tft_file"] != tft_md5):
             # P312: a panel whose display is not answering CANNOT take the
             # stream — triggering it wedged the user's panel (the delivery's

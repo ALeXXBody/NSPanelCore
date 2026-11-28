@@ -41,6 +41,7 @@ def _mgr():
     mgr.stomp = None
     mgr.dash = MagicMock()
     mgr._last_telemetry = {}
+    mgr._last_panel_state = {}  # P378: the OTA-phase store
     mgr._log_backlog = {}
     mgr._save_timer = None
     mgr._schedule_save = lambda: None  # no storage in the pure test harness

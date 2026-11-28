@@ -225,6 +225,16 @@ class DashboardService:
 
     async def async_send_to_panel(self, mac: str) -> dict:
         """Generate + compile + arm the serving slot + trigger the reflash."""
+        # P378 (user: "You've done it again... system data error"): a panel
+        # running a SYSTEM update (fs/fw) cannot serve a TFT delivery at
+        # the same time - the fs rewrite churns the very store bytes the
+        # delivery streams, the display wrote garbage, and its flash
+        # failed checksum at boot (the System-Data-ERROR). Refuse with the
+        # reason and the retry hint.
+        panel_ota = getattr(self.manager, "_last_panel_state", {}).get(mac, "")
+        if panel_ota in ("updating_fs", "updating_fw", "updating_tft"):
+            return {"error": "the panel is running a system update "
+                             f"({panel_ota}) - try Send again in a couple of minutes"}
         design = self._designs.get(mac)
         if design is None or not (design.pages or design.items):
             return {"error": "no design saved for this panel"}
